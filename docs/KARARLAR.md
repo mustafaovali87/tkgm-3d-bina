@@ -238,3 +238,14 @@
 - **Kapı kotu:** Oda ve BB deliği `zFloorTop + 10 mm` (K45a). LoD2 (T1) kapısı `zFloorTop`'tan başlar (Ornek6 ölçümü).
 - **BB küveti:** Alt yüz üretilmez (§5.6). Kapalılık denetiminde açık kenarlar yalnız `zFloorTop`'ta kabul edilir.
 - **Açıklık modeli:** `DesignBuilding.openings` isteğe bağlıdır. M4 proje dosyaları açılır; yoksa boş dizi varsayılır.
+
+## A.11 M6 Geometri Motoru II ve GML Üretimi (Claude, 08.11.2026)
+
+- **Yeni tasarım alanları:** `info`, `sectionInfo`, `cardinalDirections`, `balconies`, `roof`, `tic`. Hepsi isteğe bağlı; yoksa varsayılanlar kullanılır.
+- **Balkon:** BB döşemesiyle aynı taban kutusu. Korkuluk ortak olmayan kenar zinciri boyunca içe ofsetli; her yüz ayrı WallSurface (Ornek6). Korkuluk yüksekliği 0 = korkuluksuz.
+- **Çatı:** `manual` (GML'den çıkarma), `flat`, `gable`/`hip` (yalnız dikdörtgen plan). `roofProjectionArea` = max(yukarı bakan izdüşüm, aşağı bakan izdüşüm).
+- **LoD2:** Dış duvar kat başına kenar × [zFloorBottom, zCeiling], her poligon ayrı WallSurface; T1 kapı tabanı zFloorTop.
+- **Yazıcı:**
+  - Değeri olmayan sayısal öznitelik yazılmaz; boş metin `<gen:value/>`.
+  - `storeyUsage`: Ticari/Mesken + OA varsa 1003.
+- **Açıklık çıkarma:** LoD2 ↔ oda eşleşmesinde kot aralığı %50 örtüşmesi yeterli (Ornek4).

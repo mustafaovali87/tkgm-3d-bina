@@ -92,6 +92,61 @@ export interface Opening {
   readonly spansStoreys?: readonly string[]; // sahanlık penceresi (M5 kapsamı dışında)
 }
 
+export interface Pt3 {
+  readonly x: Mm;
+  readonly y: Mm;
+  readonly z: Mm;
+}
+
+/** M6: Mimari Bina öznitelikleri (§3.3, §4.2 Building). Kat sayıları, alanlar ve yükseklik dışındakiler kullanıcı girdisidir. */
+export interface BuildingInfo {
+  readonly maksIdentityNumber: number | null;
+  readonly maksIntegrationState: number; // varsayılan 1003
+  readonly buildingType: number; // varsayılan 1001
+  readonly geometrySuitability: readonly number[]; // varsayılan [1006]
+  readonly tenderRegistrationNumber: string;
+  readonly architecturalPlanID: string;
+  readonly additionalNote: string; // varsayılan "-"
+  readonly elevatorCount: number;
+  /** Projeden bina yüksekliği (m, 2 hane). Yoksa çatı tepesi − TIC üst kotu. */
+  readonly buildingHeight: number | null;
+  readonly architecturalProjectConfirmationDate: string; // YYYY-MM-DD
+}
+
+/** M6: Bağımsız bölüm (BB parçası) ek öznitelikleri (§3.6). */
+export interface SectionInfo {
+  readonly maksIdentityNumber: number | null;
+  readonly maksNumaratajIdentityNumber: number | null;
+  readonly maksIntegrationState: number; // varsayılan 1003
+  readonly integrationState: number; // varsayılan 1004
+  readonly geometrySuitability: number; // varsayılan 1001
+  readonly additionalNote: string;
+}
+
+/** M6: Balkon / Teras (§4.2 Balcony, §5.8). */
+export interface Balcony {
+  readonly id: string;
+  readonly kind: 'Balkon' | 'Teras';
+  readonly storeyId: string;
+  readonly sectionPartId: string | null; // teras: null → "-1"
+  readonly outline: Ring2; // dış sınır, CCW
+  /** Bina ile ortak kenarlar (korkuluk yok). Kenar, outline'ın ardışık iki köşesidir. */
+  readonly attachedEdges: readonly (readonly [Pt2, Pt2])[];
+  readonly parapetHeight: Mm; // varsayılan 1100
+  readonly parapetThickness: Mm; // varsayılan 100, ≥ 50
+  readonly planArea: number; // -1: yok
+}
+
+/** M6: Çatı (§4.2 Roof, §5.9). Düz/beşik/kırma parametrik; karmaşık planlarda elle (düzlemsel 3B yüzler). */
+export interface Roof {
+  readonly mode: 'flat' | 'gable' | 'hip' | 'manual';
+  readonly eaveOverhang: Mm; // saçak
+  readonly thickness: Mm; // saçak alın yüksekliği
+  readonly pitchDeg: number; // beşik/kırma eğimi
+  /** Elle çatı: yüzler (dış halka + delikler), dışa bakan normal, mm. */
+  readonly facets?: readonly { readonly outer: readonly Pt3[]; readonly holes: readonly (readonly Pt3[])[] }[];
+}
+
 export interface DesignBuilding {
   readonly id: string;
   readonly letter: string;
@@ -101,7 +156,32 @@ export interface DesignBuilding {
   readonly parts: readonly Part[];
   /** M5: açıklıklar. M4 proje dosyalarında yoktur; okuyucu boş dizi varsayar. */
   readonly openings?: readonly Opening[];
+  /** M6 alanları (eski proje dosyalarında yoktur; varsayılanlar kullanılır). */
+  readonly info?: BuildingInfo;
+  /** Bölüm kimliği → ek öznitelikler. */
+  readonly sectionInfo?: Readonly<Record<string, SectionInfo>>;
+  /** BB parçası kimliği → bakı (cardinalDirection) kodları. */
+  readonly cardinalDirections?: Readonly<Record<string, readonly number[]>>;
+  readonly balconies?: readonly Balcony[];
+  readonly roof?: Roof;
+  /** Aplikasyon (TIC) noktaları, kapalı değil; yazarken kapatılır. Yoksa en alt kat sınırı @ döşeme altı. */
+  readonly tic?: readonly Pt3[];
 }
+
+export const DEFAULT_BUILDING_INFO: BuildingInfo = {
+  maksIdentityNumber: null,
+  maksIntegrationState: 1003,
+  buildingType: 1001,
+  geometrySuitability: [1006],
+  tenderRegistrationNumber: '',
+  architecturalPlanID: '',
+  additionalNote: '-',
+  elevatorCount: 0,
+  buildingHeight: null,
+  architecturalProjectConfirmationDate: '',
+};
+export const DEFAULT_SECTION_INFO: SectionInfo = { maksIdentityNumber: null, maksNumaratajIdentityNumber: null, maksIntegrationState: 1003, integrationState: 1004, geometrySuitability: 1001, additionalNote: '-' };
+export const DEFAULT_ROOF: Roof = { mode: 'flat', eaveOverhang: 0, thickness: 200, pitchDeg: 30 };
 
 export interface DesignProject {
   readonly schemaVersion: 1;

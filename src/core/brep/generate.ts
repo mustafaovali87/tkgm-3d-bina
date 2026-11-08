@@ -18,6 +18,7 @@ import type {
   StoreyLevels,
 } from './types.ts';
 import { DEFAULT_BREP_OPTIONS } from './types.ts';
+import { generateShell } from './building.ts';
 
 const TOL = 1; // mm, kenar eşleştirme toleransı (§5.1 madde 3)
 const MAX_WALL = 1000; // mm, karşı yüz arama mesafesi (§5.4 madde 1)
@@ -43,7 +44,7 @@ interface Edge {
   readonly p: Pt2;
   readonly q: Pt2;
 }
-const ringEdges = (r: Ring2): Edge[] => r.map((p, i) => ({ p, q: r[(i + 1) % r.length] }));
+export const ringEdges = (r: Ring2): Edge[] => r.map((p, i) => ({ p, q: r[(i + 1) % r.length] }));
 const polyRings = (p: Poly2): Ring2[] => [p.outer, ...p.holes];
 const len = (e: Edge) => Math.hypot(e.q.x - e.p.x, e.q.y - e.p.y);
 const dirOf = (e: Edge) => {
@@ -63,7 +64,7 @@ function projOn(e: Edge, s: { x: number; y: number }): { t: number; d: number } 
 }
 
 /** [a, b] parçası kenarın üzerinde mi (doğrusal, uç noktalar kenar içinde; TOL)? */
-function edgeCovers(e: Edge, a: Pt2, b: Pt2): boolean {
+export function edgeCovers(e: Edge, a: Pt2, b: Pt2): boolean {
   const L = len(e);
   const pa = projOn(e, a);
   const pb = projOn(e, b);
@@ -73,8 +74,9 @@ function edgeCovers(e: Edge, a: Pt2, b: Pt2): boolean {
 // ---------------------------------------------------------------------------------------------
 // Duvar yüzü üretimi: dikey dörtgen, T-kavşaklarda bölünür (§5.1 madde 3, §5.5 madde 3), delikler eklenir.
 
-interface FaceHole {
+export interface FaceHole {
   readonly key: string; // açıklık temsil anahtarı
+  readonly kind?: 'door' | 'window'; // halka kimliği öneki (DoorLinearRing_/WindowLinearRing_)
   readonly a: Pt2;
   readonly b: Pt2;
   readonly zb: number;
@@ -91,7 +93,7 @@ interface WallFaceResult {
  * Kenar p→q boyunca [z0, z1] dikey yüz(ler)i. Normal, p→q yönünün sağına bakar (malzeme solda kalan halka için dışa).
  * Dış halka: [p@z0, q@z0, q@z1, p@z1]; delik: [A@zb, A@zt, B@zt, B@zb] (ters yön).
  */
-function wallFaces(
+export function wallFaces(
   e: Edge,
   z0: number,
   z1: number,
@@ -114,6 +116,7 @@ function wallFaces(
   const holeRings = new Map<string, Pt3[]>();
   const polygons: BrepPolygon[] = [];
   const pieceHoles: Pt3[][][] = ts.slice(1).map(() => []);
+  const pieceKinds: ('door' | 'window' | undefined)[][] = ts.slice(1).map(() => []);
   for (const h of holes) {
     const ta = projOn(e, h.a).t;
     const tb = projOn(e, h.b).t;
@@ -133,18 +136,19 @@ function wallFaces(
     const [A, B] = ta <= tb ? [h.a, h.b] : [h.b, h.a];
     const ring = [at(A, h.zb), at(A, h.zt), at(B, h.zt), at(B, h.zb)];
     pieceHoles[i].push(ring);
+    pieceKinds[i].push(h.kind);
     holeRings.set(h.key, ring);
   }
   for (let k = 0; k < ts.length - 1; k++) {
     const a = P(ts[k]);
     const b = P(ts[k + 1]);
-    polygons.push({ id: idOf(`${k}`), kind, outer: [at(a, z0), at(b, z0), at(b, z1), at(a, z1)], holes: pieceHoles[k] });
+    polygons.push({ id: idOf(`${k}`), kind, outer: [at(a, z0), at(b, z0), at(b, z1), at(a, z1)], holes: pieceHoles[k], ...(pieceHoles[k].length ? { holeKinds: pieceKinds[k] } : {}) });
   }
   return { polygons, holeRings };
 }
 
 /** Yatay yüz: normal yukarı ise halkalar olduğu gibi (dış CCW), aşağı ise ters çevrilir. */
-function horizontal(poly: Poly2, z: number, up: boolean, kind: BrepPolygonKind, id: string): BrepPolygon {
+export function horizontal(poly: Poly2, z: number, up: boolean, kind: BrepPolygonKind, id: string): BrepPolygon {
   const f = (r: Ring2) => (up ? r : reversed(r)).map((p) => at(p, z));
   return { id, kind, outer: f(poly.outer), holes: poly.holes.map(f) };
 }
@@ -340,7 +344,7 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
             .filter((f) => f.partId === part.id && edgeCovers(e, r.lines[f.line][0], r.lines[f.line][1]))
             .map((f) => ({ r, line: f.line })),
         );
-        const holes: FaceHole[] = reps.map(({ r, line }) => ({ key: `${r.opening.id}:${line}`, a: r.lines[line][0], b: r.lines[line][1], zb: r.zb, zt: r.zt }));
+        const holes: FaceHole[] = reps.map(({ r, line }) => ({ key: `${r.opening.id}:${line}`, a: r.lines[line][0], b: r.lines[line][1], zb: r.zb, zt: r.zt, kind: r.opening.kind }));
         const wf = wallFaces(e, z0, z1, splitPts, holes, kind, (role) => gid(kind, `${path}:duvar:${ri}:${ei}:${role}`), issues, part.id);
         const openings: BrepOpening[] = reps.flatMap(({ r, line }) => {
           const ring = wf.holeRings.get(`${r.opening.id}:${line}`);
@@ -399,7 +403,7 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
       ringEdges(ring).forEach((e, ei) => {
         const holes: FaceHole[] = [];
         for (const r of myResolved)
-          for (const k of [0, 1] as const) if (edgeCovers(e, r.lines[k][0], r.lines[k][1])) holes.push({ key: `${r.opening.id}:${k}`, a: r.lines[k][0], b: r.lines[k][1], zb: r.zb, zt: r.zt });
+          for (const k of [0, 1] as const) if (edgeCovers(e, r.lines[k][0], r.lines[k][1])) holes.push({ key: `${r.opening.id}:${k}`, a: r.lines[k][0], b: r.lines[k][1], zb: r.zb, zt: r.zt, kind: r.opening.kind });
         const zLow = outer && !options.emitSlabEdges ? zFB : zFT;
         wallPolys.push(...wallFaces(e, zLow, zC, splitPts, holes, 'Wall_', (role) => pid('Wall_', `yan:${ri}:${ei}:${role}`), issues, sp.id).polygons);
       });
@@ -454,7 +458,7 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
           const holes: FaceHole[] = [];
           for (const x of extResolved) {
             const k = x.extLine!;
-            if (edgeCovers(e, x.lines[k][0], x.lines[k][1])) holes.push({ key: `${x.opening.id}:T2`, a: x.lines[k][0], b: x.lines[k][1], zb: x.zb, zt: x.zt });
+            if (edgeCovers(e, x.lines[k][0], x.lines[k][1])) holes.push({ key: `${x.opening.id}:T2`, a: x.lines[k][0], b: x.lines[k][1], zb: x.zb, zt: x.zt, kind: x.opening.kind });
           }
           const zLow = options.storeyStyle === 'A' || !options.emitSlabEdges ? zFB : zFT;
           wallPolys.push(...wallFaces(e, zLow, zC, splitPts, holes, 'Wall_', (role) => pid('Wall_', `duvar:${pi}:${ri}:${ei}:${role}`), issues, s.id).polygons);
@@ -492,5 +496,9 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
       issues.push({ code: 'B-OP-09', severity: 'U', elementId: r.opening.id, message: 'Pencerenin kesiti bir BB parçasının duvar malzemesi (W) içinde değil; BB küvetinde deliği yok.' });
   }
 
-  return { designBuildingId: building.id, levels, storeys, sectionParts, rooms, lod2Openings, issues };
+  // M6: bina kabuğu, balkonlar, LoD0/1/2, çatı, TIC, Envelope
+  const extraPoints = [...storeys, ...sectionParts, ...rooms].flatMap((o) => o.surfaces.flatMap((s) => [...s.polygons.flatMap((p) => p.outer), ...s.openings.flatMap((x) => x.polygon.outer)]));
+  const shell = generateShell(building, lod2Openings, gid, issues, extraPoints);
+
+  return { designBuildingId: building.id, levels, storeys, sectionParts, rooms, lod2Openings, issues, shell };
 }

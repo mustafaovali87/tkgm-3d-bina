@@ -233,7 +233,8 @@ describe('M5 — yapay plan (§5.4 açıklık çözümleme, §5.6 küvet)', () =
     expect(w.extLine).toBe(1);
     expect(b.lod2Openings.length).toBe(1);
     expect(b.rooms.flatMap(t4Of).length).toBe(3);
-    expect(b.issues).toEqual([]);
+    // Yapay planda TIC girilmedi (M6 uyarısı B-TIC-01); başka uyarı yok
+    expect(b.issues.filter((i) => i.code !== 'B-TIC-01')).toEqual([]);
   });
   it('Kapı deliği zFloorTop + 10 mm (K45a): delik duvar alt kenarına değmez; eşik yüzü üretilir', () => {
     const roomA = b.rooms.find((r) => r.designId === 'A')!;

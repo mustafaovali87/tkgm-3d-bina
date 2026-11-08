@@ -14,6 +14,9 @@ import { generateBrep } from '../core/brep/generate.ts';
 import { checkShell } from '../core/brep/shellCheck.ts';
 import type { BrepBuilding, BrepOptions } from '../core/brep/types.ts';
 import { BrepPreview3D } from '../viewer3d/BrepPreview3D.tsx';
+import { writeCityGml } from '../core/gml/cityGmlWriter.ts';
+import { parseCityGmlModel } from '../core/gml/gmlReader.ts';
+import { validateCityGml } from '../core/validation/index.ts';
 
 export interface DesignEditor2DProps {
   readonly model: ImportedModel;
@@ -183,6 +186,27 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
     const a = document.createElement('a');
     a.href = url;
     a.download = `${state.project.name.replace(/[^\w\-ğüşıöçĞÜŞİÖÇ ]+/g, '_')}.tkgm3b`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  // M6: tasarımdan GML üretimi + kendi doğrulayıcısında denetim + indirme
+  const [gmlOut, setGmlOut] = useState<{ xml: string; fileName: string; counts: { H: number; U: number; B: number }; top: string[]; ms: number } | null>(null);
+  const runGml = () => {
+    const t0 = globalThis.performance.now();
+    const result = generateBrep(state.project, state.project.buildings[0], { storeyStyle: brepStyle, emitSlabEdges: brepStyle === 'B' });
+    const out = writeCityGml(state.project, result, codelists);
+    const parsed = parseCityGmlModel(out.xml, out.fileName, codelists);
+    const rep = validateCityGml(out.xml, out.fileName, parsed, codelists);
+    const top = rep.findings.filter((f) => f.severity !== 'B').slice(0, 30).map((f) => `${f.severity} ${f.ruleId}: ${f.message}`);
+    setGmlOut({ xml: out.xml, fileName: out.fileName, counts: rep.counts, top, ms: globalThis.performance.now() - t0 });
+    setBrep({ result, ms: 0, closedRooms: result.rooms.filter((r) => checkShell(r).closed).length });
+  };
+  const downloadGml = () => {
+    if (!gmlOut) return;
+    const url = URL.createObjectURL(new Blob([gmlOut.xml], { type: 'application/gml+xml;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = gmlOut.fileName;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -411,6 +435,20 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
             </select>
             <button type="button" onClick={runBrep} className="flex-1 px-1 py-0.5 rounded bg-sky-700 hover:bg-sky-600 text-white" title="Tasarımdan oda kabukları, BB küvetleri, kat kabukları ve açıklıkları üretir">3B üret</button>
           </div>
+          <button type="button" onClick={runGml} className="w-full px-1 py-0.5 rounded bg-indigo-700 hover:bg-indigo-600 text-white" title="Tasarımdan TKGM CityGML dosyası yazar ve kendi doğrulayıcısında denetler (M6)">GML üret ve doğrula</button>
+          {gmlOut && (
+            <div className="text-[10px] space-y-0.5" role="status">
+              <div className={gmlOut.counts.H > 0 ? 'text-red-300' : 'text-emerald-300'}>
+                {gmlOut.fileName} · {(gmlOut.xml.length / 1024).toFixed(0)} KB · H {gmlOut.counts.H} · U {gmlOut.counts.U} · B {gmlOut.counts.B} · {gmlOut.ms.toFixed(0)} ms
+              </div>
+              <ul className="max-h-24 overflow-y-auto space-y-0.5">
+                {gmlOut.top.map((t, i) => (
+                  <li key={i} className={`px-1 rounded ${t.startsWith('H') ? 'bg-red-950/60 text-red-200' : 'bg-amber-950/40 text-amber-200'}`}>{t}</li>
+                ))}
+              </ul>
+              <button type="button" onClick={downloadGml} className="w-full px-1 py-0.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white">GML'i kaydet</button>
+            </div>
+          )}
           {brep && (
             <div className="text-[10px] space-y-0.5" role="status">
               <div>

@@ -5,6 +5,20 @@
 
 ---
 
+## M6 — GEOMETRİ MOTORU II VE GML ÜRETİMİ (Claude, 08.11.2026)
+
+> Ayrıntı: `docs/M6_GML_URETIMI.md`.
+
+| Madde | Durum |
+|---|---|
+| `src/core/brep/building.ts`, `src/core/gml/cityGmlWriter.ts`; tasarım modeline bina bilgisi, balkon, çatı, TIC | YAPILDI |
+| Kabul: Ornek6 altın testi tam; kendi doğrulayıcısında sıfır hata | YAPILDI. Sayılar birebir (MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38); **0 HATA, 0 UYARI** (Biçim A ve B); öznitelikler kaynakla aynı |
+| Yapay bina (düz/beşik/kırma çatı) sıfırdan | YAPILDI. 3/3 dosya 0 HATA |
+| 9 resmi dosyadan çıkar → üret → doğrula | Ornek1, Ornek5, Ornek6: 0 HATA. Kalanlar: eksik MAKS numarası (kullanıcı girdisi), çatı arası (kapsam dışı), kaynak geometri farkları |
+| Arayüz | YAPILDI. "GML üret ve doğrula" + "GML'i kaydet"; tarayıcıda Ornek6: H 0 · U 0 · 67 ms |
+| Komutlar | `typecheck` 0 hata ✔, `npm test` 130/130 ✔ |
+---
+
 ## M5 — GEOMETRİ MOTORU I (Claude, 08.11.2026)
 
 > Ayrıntı: `docs/M5_GEOMETRI_MOTORU.md`.

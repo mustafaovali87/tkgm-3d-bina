@@ -11,8 +11,8 @@ export interface BrepPreview3DProps {
   readonly onClose: () => void;
 }
 
-type Layer = 'rooms' | 'tubs' | 'storeys' | 'openings';
-const LAYER_LABEL: Record<Layer, string> = { rooms: 'Kısımlar', tubs: 'BB küvetleri', storeys: 'Kat kabukları', openings: 'Açıklıklar' };
+type Layer = 'rooms' | 'tubs' | 'storeys' | 'openings' | 'shell';
+const LAYER_LABEL: Record<Layer, string> = { rooms: 'Kısımlar', tubs: 'BB küvetleri', storeys: 'Kat kabukları', openings: 'Açıklıklar', shell: 'Çatı ve balkonlar' };
 
 const COLOR: Record<BrepPolygon['kind'], number> = {
   Floor_: 0x94a3b8,
@@ -21,13 +21,20 @@ const COLOR: Record<BrepPolygon['kind'], number> = {
   InteriorWall_: 0xf8fafc,
   Door_: 0x92400e,
   Window_: 0x38bdf8,
+  Roof_: 0xb45309,
+  Ground_: 0x64748b,
+  OuterFloor_: 0x94a3b8,
+  OuterCeiling_: 0x94a3b8,
+  Lod0FootPrint_: 0x22c55e,
+  Lod0RoofEdge_: 0x22c55e,
+  Lod1Poligon_: 0xa3e635,
 };
 
 export const BrepPreview3D: React.FC<BrepPreview3DProps> = ({ brep, onClose }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const groupsRef = useRef<Partial<Record<Layer, THREE.Group>>>({});
   const renderRef = useRef<() => void>(() => undefined);
-  const [layers, setLayers] = useState<Record<Layer, boolean>>({ rooms: true, tubs: false, storeys: false, openings: true });
+  const [layers, setLayers] = useState<Record<Layer, boolean>>({ rooms: true, tubs: false, storeys: false, openings: true, shell: true });
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -77,11 +84,14 @@ export const BrepPreview3D: React.FC<BrepPreview3DProps> = ({ brep, onClose }) =
     const gTubs = mk('tubs');
     const gStoreys = mk('storeys');
     const gOps = mk('openings');
+    const gShell = mk('shell');
     for (const r of brep.rooms) for (const s of r.surfaces) for (const p of s.polygons) if (s.tag !== 'CeilingSurface') addPoly(gRooms, p, 1);
     for (const r of brep.rooms) for (const s of r.surfaces) for (const o of s.openings) addPoly(gOps, o.polygon, 1);
     for (const o of brep.lod2Openings) addPoly(gOps, o.polygon, 1);
     for (const b of brep.sectionParts) for (const s of b.surfaces) for (const p of s.polygons) addPoly(gTubs, p, 0.45);
     for (const k of brep.storeys) for (const s of k.surfaces) for (const p of s.polygons) addPoly(gStoreys, p, 0.25);
+    for (const s of brep.shell.lod2Surfaces) if (s.tag === 'RoofSurface') for (const p of s.polygons) addPoly(gShell, p, 1);
+    for (const b of brep.shell.balconies) for (const s of b.surfaces) for (const p of s.polygons) addPoly(gShell, p, 1);
 
     const box = new THREE.Box3().setFromObject(scene);
     const size = box.getSize(new THREE.Vector3()).length() || 20;

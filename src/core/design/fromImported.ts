@@ -4,7 +4,8 @@
 import type { ImportedCityObject, ImportedModel, ImportedPolygon } from '../gml/gmlReader.ts';
 import { uuidv5 } from '../hash/canonical.ts';
 import { normalizeOrientation, polyAreaM2, polyIntersectionAreaM2 } from './geometry2d.ts';
-import type { DesignProject, IndependentSection, Opening, Part, Poly2, Pt2, SectionPart, Storey } from './types.ts';
+import type { Balcony, BuildingInfo, DesignProject, IndependentSection, Opening, Part, Poly2, Pt2, Pt3, Roof, SectionInfo, SectionPart, Storey } from './types.ts';
+import { DEFAULT_BUILDING_INFO, DEFAULT_SECTION_INFO } from './types.ts';
 
 export interface ExtractionNote {
   readonly objectGmlId: string;
@@ -274,7 +275,13 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       sill = kind === 'door' ? Math.max(10, zb - base) : zb - base;
     }
     if (!storeyId) continue;
-    const dup = placed.find((x) => x.o.kind === kind && x.o.storeyId === storeyId && Math.abs(x.zt - zt) <= 2 && (kind === 'door' || Math.abs(x.zb - zb) <= 2) && sameWall(x.o, a, b));
+    // Oda ↔ oda: kotlar birebir. Bina (LoD2) ↔ oda: aynı duvar diliminde ve kot aralıkları %50'den fazla örtüşüyorsa
+    // aynı açıklıktır (bazı üreticiler LoD2 açıklığını farklı denizlik/tepe kotuyla yazıyor; Ornek4).
+    const zOverlap = (x: { zb: number; zt: number }) => Math.min(x.zt, zt) - Math.max(x.zb, zb) >= 0.5 * Math.min(x.zt - x.zb, zt - zb);
+    const fromRoom = isRoomHost(op);
+    const dup = placed.find(
+      (x) => x.o.kind === kind && x.o.storeyId === storeyId && sameWall(x.o, a, b) && (fromRoom ? Math.abs(x.zt - zt) <= 2 && (kind === 'door' || Math.abs(x.zb - zb) <= 2) : zOverlap(x)),
+    );
     if (dup) continue;
     const usage = Number((kind === 'door' ? op.attributesMap.doorUsage : op.attributesMap.windowUsage) ?? (kind === 'door' ? 1004 : 1001));
     const o: Opening = { id: nid('acik'), kind, usage, storeyId, anchor: { a, b }, sill, height: zt - (base + sill) };
@@ -282,6 +289,111 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
     openings.push(o);
     placed.push({ o, zb: base + sill, zt });
   }
+
+  // ---- M6: bina öznitelikleri, bölüm ek öznitelikleri, bakılar, balkonlar, çatı, TIC
+  const multi = (o: ImportedCityObject | undefined, name: string) => (o?.attributes ?? []).filter((x) => x.name === name).map((x) => Number(x.cleanValue)).filter((v) => Number.isFinite(v));
+  const intOrNull = (v: string | undefined) => (v !== undefined && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
+  const ma = mb?.attributesMap ?? {};
+  const info: BuildingInfo = {
+    maksIdentityNumber: intOrNull(ma.maksIdentityNumber),
+    maksIntegrationState: intOrNull(ma.maksIntegrationState) ?? DEFAULT_BUILDING_INFO.maksIntegrationState,
+    buildingType: intOrNull(ma.buildingType) ?? DEFAULT_BUILDING_INFO.buildingType,
+    geometrySuitability: multi(mb, 'geometrySuitability').length ? multi(mb, 'geometrySuitability') : DEFAULT_BUILDING_INFO.geometrySuitability,
+    tenderRegistrationNumber: ma.tenderRegistrationNumber ?? '',
+    architecturalPlanID: ma.architecturalPlanID ?? '',
+    additionalNote: ma.additionalNote ?? '-',
+    elevatorCount: intOrNull(ma.elevatorCount) ?? 0,
+    buildingHeight: ma.buildingHeight !== undefined && Number.isFinite(Number(ma.buildingHeight)) ? Number(ma.buildingHeight) : null,
+    architecturalProjectConfirmationDate: ma.architecturalProjectConfirmationDate ?? '',
+  };
+  const sectionInfo: Record<string, SectionInfo> = {};
+  const cardinalDirections: Record<string, number[]> = {};
+  for (const bb of model.objects.filter((o) => o.prefix === 'BB_')) {
+    const spId = spIdByGml.get(bb.gmlId);
+    const sp = sectionParts.find((s) => s.id === spId);
+    if (!sp) continue;
+    const a = bb.attributesMap;
+    sectionInfo[sp.sectionId] ??= {
+      maksIdentityNumber: intOrNull(a.maksIdentityNumber),
+      maksNumaratajIdentityNumber: intOrNull(a.maksNumaratajIdentityNumber),
+      maksIntegrationState: intOrNull(a.maksIntegrationState) ?? DEFAULT_SECTION_INFO.maksIntegrationState,
+      integrationState: intOrNull(a.integrationState) ?? DEFAULT_SECTION_INFO.integrationState,
+      geometrySuitability: intOrNull(a.geometrySuitability) ?? DEFAULT_SECTION_INFO.geometrySuitability,
+      additionalNote: a.additionalNote ?? '-',
+    };
+    const dirs = multi(bb, 'independentSectionCardinalDirection');
+    if (dirs.length) cardinalDirections[sp.id] = dirs;
+  }
+
+  // Balkon / teras: dış sınır = taban üst yüzü; bina ile ortak kenar = kat sınırı üzerindeki kenarlar
+  const balconies: Balcony[] = [];
+  const onSegment = (p: Pt2, a: Pt2, b: Pt2, tol: number) => {
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L < 1) return false;
+    const t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / L;
+    const d = Math.abs((p.x - a.x) * (b.y - a.y) - (p.y - a.y) * (b.x - a.x)) / L;
+    return d <= tol && t >= -tol && t <= L + tol;
+  };
+  const segDist = (p: Pt2, a: Pt2, b: Pt2) => {
+    const L2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+    const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / L2));
+    return Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y)));
+  };
+  for (const o of model.objects.filter((x) => x.prefix === 'BLKN_' || x.prefix === 'TRS_')) {
+    const ps = polysOf(o);
+    const floors = ps.filter((p) => p.prefix === 'Floor_' && p.maxZ - p.minZ < 0.001);
+    if (floors.length === 0) {
+      notes.push({ objectGmlId: o.gmlId, message: 'Balkon tabanı bulunamadı; atlandı.' });
+      continue;
+    }
+    const top = floors.reduce((a, b) => (b.minZ > a.minZ ? b : a));
+    const bottom = floors.reduce((a, b) => (b.minZ < a.minZ ? b : a));
+    const st = physicalStorey(Math.round(bottom.minZ * 1000));
+    if (!st) continue;
+    const outline = normalizeOrientation({ outer: toRing(top.exteriorRing.vertices), holes: [] }).outer;
+    const storeyEdges = st.outline.flatMap((pl) => [pl.outer, ...pl.holes].flatMap((r) => r.map((p, i) => [p, r[(i + 1) % r.length]] as const)));
+    const edges = outline.map((p, i) => [p, outline[(i + 1) % outline.length]] as const);
+    const attachedEdges = edges.filter(([a, b]) => storeyEdges.some(([c, d]) => onSegment(a, c, d, 2) && onSegment(b, c, d, 2)));
+    // Korkuluk tepesi: en yüksek Wall_ noktası; duvar yoksa korkuluksuz (0)
+    const wallsB = ps.filter((p) => p.prefix === 'Wall_');
+    const wallTop = wallsB.length ? Math.max(...wallsB.map((p) => p.maxZ)) : top.minZ;
+    const cap = wallsB.filter((p) => p.maxZ - p.minZ < 0.001 && Math.abs(p.minZ - wallTop) < 0.001).reduce<ImportedPolygon | undefined>((a, b) => (!a || b.areaM2 > a.areaM2 ? b : a), undefined);
+    const parapetHeight = Math.max(0, Math.round((wallTop - top.minZ) * 1000));
+    const free = edges.filter((e) => !attachedEdges.includes(e));
+    const ds = cap
+      ? toRing(cap.exteriorRing.vertices)
+          .filter((v) => edges.every(([a, b]) => segDist(v, a, b) > 5))
+          .map((v) => Math.min(...free.map(([a, b]) => segDist(v, a, b))))
+          .sort((a, b) => a - b)
+      : [];
+    const parapetThickness = ds.length ? Math.round(ds[Math.floor(ds.length / 2)]) : 100;
+    const ref = o.attributesMap.independentSectionObjectReference;
+    const id = nid(o.prefix === 'TRS_' ? 'teras' : 'balkon');
+    sourceIds.set(id, o.gmlId);
+    balconies.push({
+      id,
+      kind: o.prefix === 'TRS_' ? 'Teras' : 'Balkon',
+      storeyId: st.id,
+      sectionPartId: ref && ref !== '-1' ? (spIdByGml.get(ref) ?? null) : null,
+      outline,
+      attachedEdges,
+      parapetHeight,
+      parapetThickness,
+      planArea: Number(o.attributesMap.planArea ?? -1),
+    });
+  }
+
+  // Çatı: içe aktarılan Roof_ yüzleri elle çatı olarak (§4.2 Roof.mode = 'manual')
+  const toPt3 = (v: { e: number; n: number; z: number }): Pt3 => ({ x: Math.round((v.e - E0) * 1000), y: Math.round((v.n - N0) * 1000), z: Math.round(v.z * 1000) });
+  const toRing3 = (vs: readonly { e: number; n: number; z: number }[]) => {
+    const r = vs.map(toPt3);
+    if (r.length > 1 && r[0].x === r[r.length - 1].x && r[0].y === r[r.length - 1].y && r[0].z === r[r.length - 1].z) r.pop();
+    return r;
+  };
+  const roofPolys = mb ? polysOf(mb).filter((p) => p.prefix === 'Roof_') : [];
+  const roof: Roof | undefined = roofPolys.length ? { mode: 'manual', eaveOverhang: 0, thickness: 0, pitchDeg: 0, facets: roofPolys.map((p) => ({ outer: toRing3(p.exteriorRing.vertices), holes: p.interiorRings.map((h) => toRing3(h.vertices)) })) } : undefined;
+  if (model.ticLineStrings.length > 1) notes.push({ objectGmlId: mb?.gmlId ?? '', message: `TIC ${model.ticLineStrings.length} çizgiden oluşuyor; ilki alındı.` });
+  const tic = model.ticLineStrings[0] ? toRing3(model.ticLineStrings[0].vertices) : undefined;
 
   const epsgNum = Number(model.srsName.replace(/^EPSG:/, ''));
   const epsg = (EPSG as readonly number[]).includes(epsgNum) ? (epsgNum as DesignProject['georef']['epsg']) : 5254;
@@ -297,7 +409,23 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       parcelNumber: mb?.attributesMap.parcelNumber ?? '',
       takbisNeighbourhoodReference: Number(mb?.attributesMap.takbisNeighbourhoodReference ?? 0),
     },
-    buildings: [{ id: nid('bina'), letter: cid.split('-').pop() ?? 'A', storeys, sections, sectionParts, parts, openings }],
+    buildings: [
+      {
+        id: nid('bina'),
+        letter: cid.split('-').pop() ?? 'A',
+        storeys,
+        sections,
+        sectionParts,
+        parts,
+        openings,
+        info,
+        sectionInfo,
+        cardinalDirections,
+        balconies,
+        ...(roof ? { roof } : {}),
+        ...(tic ? { tic } : {}),
+      },
+    ],
   };
   return { project: { ...project, idSeq: seq }, sourceIds, notes };
 }

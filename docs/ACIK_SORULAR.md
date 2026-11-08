@@ -23,3 +23,13 @@
 4. **ACIK-04 — V-206 storeyUsage ↔ BB kullanım uyumu:** Uyum tablosu tanımlı değil.
 5. **ACIK-05 — V-165 "Mükerrer kullanım amacı":** TKGM mesajının tam anlamı doğrulanmalı (şartname notu).
 6. **ACIK-06 — V-126 BB alan tanımı:** Ornek1'de 70 BB'nin 62'sinde `independentSectionCalculatedArea`, alt taban alanından ~0,9 m² büyük. Hangi yüzeyin alanı olduğu belirlenmeli; şimdilik UYARI.
+
+## M6 ile açılan sorular (Claude, 08.11.2026)
+
+7. **ACIK-07 — storeyUsage 1003 "nitelikli ortak alan":** Rehber, katta nitelikli OA varsa 1003 eklenmesini söylüyor. Hangi `commonAreaUsage` kodlarının "nitelikli" sayıldığı kod listesinde yok.
+   - Yazıcı şimdilik katta herhangi bir OA varsa 1003 ekliyor.
+   - Ornek5 Kat -1'deki `1003,1002` ile uyumlu.
+8. **ACIK-08 — maksNumaratajIdentityNumber:** Eski kılavuz dosyalarında (Amasya, Sincan; rejim E) yok. Yeni dosyada (GroundSurface'li, rejim S) V-061 zorunlu sayıyor.
+   - Bu numaranın kaynağı MAKS. Kullanıcı girmeli.
+   - Kullanıcıya hangi ekranda sorulacağı belirlenecek (M7 sihirbazı).
+9. **ACIK-09 — Üretilen GML'in resmi kabulü (§10.6):** Ornek6'dan üretilen dosya kendi doğrulayıcımızda 0 HATA veriyor. Ancak 3dbinadogrula'ya yüklenip sınanmadı. Bu adımı kullanıcı yapacak: gerçek dosya yüklenecek ve çıkan her mesaj test vakasına dönüştürülecek.

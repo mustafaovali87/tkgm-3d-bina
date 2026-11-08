@@ -48,6 +48,19 @@ export function expectedObjectName(model: ImportedModel, codelists: CodelistRegi
       const lbl = label(codelists, 'commonAreaUsage', a.commonAreaUsage);
       return lbl ? `${lbl}_Ortak Alan` : null;
     }
+    case 'BBKIY_': {
+      const host = o.parentGmlId ? model.objectsById[o.parentGmlId] : undefined;
+      if (!host) return null;
+      const pre = bbNamePrefix(bbOf(host.referencedBbGmlId));
+      const lbl = label(codelists, 'partUsage', host.attributesMap.partUsage);
+      return pre && lbl ? `${pre}_${lbl}_İç Yapı` : null;
+    }
+    case 'OAIY_': {
+      const host = o.parentGmlId ? model.objectsById[o.parentGmlId] : undefined;
+      if (!host) return null;
+      const lbl = label(codelists, 'commonAreaUsage', host.attributesMap.commonAreaUsage);
+      return lbl ? `${lbl}_İç Yapı` : null;
+    }
     case 'BLKN_': {
       const pre = bbNamePrefix(bbOf(o.referencedBbGmlId));
       return pre ? `${pre}_Balkon` : null;

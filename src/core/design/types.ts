@@ -30,11 +30,17 @@ export interface Parcel {
 
 export interface Storey {
   readonly id: string;
-  readonly storeyNumber: string; // "Z" | "-1" | "1" | ...
+  readonly storeyNumber: string; // "Z" | "-1" | "1" | "CK_5" | ...
   readonly zBottom: Mm; // döşeme altı (mutlak)
   readonly height: Mm; // döşeme altından üst kat döşeme altına
   readonly slabThickness: Mm; // varsayılan 200
   readonly outline: readonly Poly2[]; // kat dış sınırı (birden fazla kütle olabilir)
+  /** M8 (§4.2, §4.3): Yalnız OA/eklenti olan çatı katında veya dubleks üst katında false ise K_ CityObjectGroup yazılmaz. Varsayılan true. */
+  readonly emitStoreyObject?: boolean;
+  /** M8 (§5.9): Çatı arası katı: true ise bu kattaki odalar, BB küvetleri ve kat duvarları eğik çatı düzlemleriyle kesilir. */
+  readonly clipToRoof?: boolean;
+  /** M8 (§5.9): Çatı arası katında saçak/parapet (dizlik duvarı) yüksekliği (oda tabanından çatı eğimi başlangıcına, mm). */
+  readonly kneeWallHeight?: Mm;
 }
 
 /** Liste beyandaki mülkiyet birimi (bağımsız bölüm). Malik bilgisi burada değil, proje dosyasında ayrı tutulur. */
@@ -56,10 +62,14 @@ export interface SectionPart {
   readonly id: string;
   readonly sectionId: string;
   readonly storeyId: string;
+  /** M8 (§4.2, §4.3): Dubleks/çoklu katta BB parçası giriş katının K_ grubuna (groupMember) bağlıysa o katın kimliği. Yoksa storeyId. */
+  readonly groupStoreyId?: string;
   readonly usage: 1001 | 1002 | 1003 | 1004 | 1005 | 1006;
   readonly outline: Poly2; // BB dış sınırı
   /** Asma kat vb.: BB tabanı katın döşeme altından farklı kottaysa mutlak kot (mm). Şartname §5.2 ÖNERİ. */
   readonly zFloorOverride?: Mm;
+  /** M8 (§5.9): Eğik çatı düzlemiyle kesilecek çatı arası BB parçası. */
+  readonly clipToRoof?: boolean;
 }
 
 /** Kısım (BBK) veya ortak alan (OA) = bldg:Room. Poligon net (iç yüz) alanıdır. */
@@ -75,6 +85,24 @@ export interface Part {
   readonly zFloorOverride?: Mm;
   /** Uzak kısım: BB'sine fiziksel bağlı değil (uzak depo/otopark; şartname §4.2 remote, H11a). §5.3 içerme denetimi uygulanmaz. */
   readonly remote?: boolean;
+  /** M8 (§5.9): Eğik çatı düzlemiyle kesilecek çatı arası odası. */
+  readonly clipToRoof?: boolean;
+  /** M8 (§5.9): İçe aktarılan GML'de eğik/çok düzlemli tavan yüzleri varsa (Ornek2 vb.). */
+  readonly ceilingFaces?: readonly { readonly outer: readonly Pt3[]; readonly holes: readonly (readonly Pt3[])[] }[];
+  /** M8 (§3.8, §5.5 #4): OA dış duvarının kalınlıklı (W_OA, T5) üretilmesi. */
+  readonly thickExteriorWall?: boolean;
+}
+
+/** M8: Kısım / Ortak Alan İç Yapısı — BBKIY / OAIY (§3.9, §4.2 RoomInstallation). */
+export interface RoomInstallation {
+  readonly id: string;
+  readonly partId: string; // hangi BBK veya OA içinde
+  readonly usage: 1001 | 1002 | 1003; // 1001 Merdiven, 1002 Sütun, 1003 Asansör
+  readonly polygon: Poly2;
+  /** İsteğe bağlı özel tavan kotu (mm). Yoksa bağlı olduğu odanın tavanı/çatı kesimi kullanılır. */
+  readonly zTopOverride?: Mm;
+  /** İçe aktarılan GML'de eğik/çok düzlemli tavan yüzleri varsa (Ornek2). */
+  readonly ceilingFaces?: readonly { readonly outer: readonly Pt3[]; readonly holes: readonly (readonly Pt3[])[] }[];
 }
 
 /**
@@ -89,7 +117,7 @@ export interface Opening {
   readonly anchor: { readonly a: Pt2; readonly b: Pt2 };
   readonly sill: Mm; // kısım tabanından (oda Floor_) yükseklik; kapıda 10 (K45a)
   readonly height: Mm;
-  readonly spansStoreys?: readonly string[]; // sahanlık penceresi (M5 kapsamı dışında)
+  readonly spansStoreys?: readonly string[]; // sahanlık penceresi (§5.4 #6, M8)
 }
 
 export interface Pt3 {
@@ -137,12 +165,14 @@ export interface Balcony {
   readonly planArea: number; // -1: yok
 }
 
-/** M6: Çatı (§4.2 Roof, §5.9). Düz/beşik/kırma parametrik; karmaşık planlarda elle (düzlemsel 3B yüzler). */
+/** M6/M8: Çatı (§4.2 Roof, §5.9). Düz/beşik/kırma/tek eğim parametrik; karmaşık planlarda elle (düzlemsel 3B yüzler). */
 export interface Roof {
-  readonly mode: 'flat' | 'gable' | 'hip' | 'manual';
+  readonly mode: 'flat' | 'gable' | 'hip' | 'shed' | 'manual';
   readonly eaveOverhang: Mm; // saçak
   readonly thickness: Mm; // saçak alın yüksekliği
-  readonly pitchDeg: number; // beşik/kırma eğimi
+  readonly pitchDeg: number; // beşik/kırma/tek eğim açısı
+  /** M8 (§5.9): Çatı arası kesiminde saçak alt kotu (mutlak mm). Belirtilmezse en üst kat tavanı veya çatı arası dizlik kotu. */
+  readonly eaveZ?: Mm;
   /** Elle çatı: yüzler (dış halka + delikler), dışa bakan normal, mm. */
   readonly facets?: readonly { readonly outer: readonly Pt3[]; readonly holes: readonly (readonly Pt3[])[] }[];
 }
@@ -156,6 +186,8 @@ export interface DesignBuilding {
   readonly parts: readonly Part[];
   /** M5: açıklıklar. M4 proje dosyalarında yoktur; okuyucu boş dizi varsayar. */
   readonly openings?: readonly Opening[];
+  /** M8 (§3.9, §4.2): Kısım / Ortak Alan iç yapıları (BBKIY / OAIY: merdiven, sütun, asansör). */
+  readonly installations?: readonly RoomInstallation[];
   /** M6 alanları (eski proje dosyalarında yoktur; varsayılanlar kullanılır). */
   readonly info?: BuildingInfo;
   /** Bölüm kimliği → ek öznitelikler. */

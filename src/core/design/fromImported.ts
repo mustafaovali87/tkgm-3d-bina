@@ -4,7 +4,7 @@
 import type { ImportedCityObject, ImportedModel, ImportedPolygon } from '../gml/gmlReader.ts';
 import { uuidv5 } from '../hash/canonical.ts';
 import { normalizeOrientation, polyAreaM2, polyIntersectionAreaM2 } from './geometry2d.ts';
-import type { Balcony, BuildingInfo, DesignProject, IndependentSection, Opening, Part, Poly2, Pt2, Pt3, Roof, SectionInfo, SectionPart, Storey } from './types.ts';
+import type { Balcony, BuildingInfo, DesignProject, IndependentSection, Opening, Part, Poly2, Pt2, Pt3, Roof, RoomInstallation, SectionInfo, SectionPart, Storey } from './types.ts';
 import { DEFAULT_BUILDING_INFO, DEFAULT_SECTION_INFO } from './types.ts';
 
 export interface ExtractionNote {
@@ -33,6 +33,12 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
     for (const p of r) if (!out.length || out[out.length - 1].x !== p.x || out[out.length - 1].y !== p.y) out.push(p);
     if (out.length > 1 && out[0].x === out[out.length - 1].x && out[0].y === out[out.length - 1].y) out.pop();
     return out;
+  };
+  const toPt3 = (v: { e: number; n: number; z: number }): Pt3 => ({ x: Math.round((v.e - E0) * 1000), y: Math.round((v.n - N0) * 1000), z: Math.round(v.z * 1000) });
+  const toRing3 = (vs: readonly { e: number; n: number; z: number }[]) => {
+    const r = vs.map(toPt3);
+    if (r.length > 1 && r[0].x === r[r.length - 1].x && r[0].y === r[r.length - 1].y && r[0].z === r[r.length - 1].z) r.pop();
+    return r;
   };
   const toPoly = (p: ImportedPolygon): Poly2 => normalizeOrientation({ outer: toRing(p.exteriorRing.vertices), holes: p.interiorRings.map((h) => toRing(h.vertices)) });
   const polysOf = (o: ImportedCityObject) => o.allPolygonIds.map((id) => model.polygonsById[id]).filter((p): p is ImportedPolygon => p !== undefined);
@@ -123,10 +129,12 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
     spIdByGml.set(bb.gmlId, id);
     sourceIds.set(id, bb.gmlId);
     const usage = Number(a.independentSectionUsage ?? 1001);
+    const grpStId = bb.storeyGmlId ? storeyIdByGml.get(bb.storeyGmlId) : undefined;
     sectionParts.push({
       id,
       sectionId,
       storeyId: st.id,
+      ...(grpStId && grpStId !== st.id ? { groupStoreyId: grpStId } : {}),
       usage: (usage >= 1001 && usage <= 1006 ? usage : 1001) as SectionPart['usage'],
       outline: toPoly(floor),
       ...(Math.abs(zMm - st.zBottom) > 1 ? { zFloorOverride: zMm } : {}),
@@ -156,6 +164,14 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       notes.push({ objectGmlId: r.gmlId, message: 'Odanın katı belirlenemedi; atlandı.' });
       continue;
     }
+    const ceilIds = r.surfaces.filter((s) => s.tag === 'CeilingSurface').flatMap((s) => [...s.polygonIds, ...s.xlinkHrefs.map((h) => h.replace(/^#/, ''))]);
+    const ceilPolys = ceilIds.map((cid) => model.polygonsById[cid]).filter((p): p is ImportedPolygon => p !== undefined);
+    const hasSlopedOrMultiCeil =
+      ceilPolys.some((p) => p.maxZ - p.minZ >= 0.001) ||
+      (ceilPolys.length > 1 && Math.max(...ceilPolys.map((p) => p.maxZ)) - Math.min(...ceilPolys.map((p) => p.minZ)) >= 0.001);
+    const ceilingFaces = hasSlopedOrMultiCeil
+      ? ceilPolys.map((p) => ({ outer: toRing3(p.exteriorRing.vertices), holes: p.interiorRings.map((h) => toRing3(h.vertices)) }))
+      : undefined;
     const id = nid(kind === 'BBK' ? 'bbk' : 'oa');
     sourceIds.set(id, r.gmlId);
     partFloorZ.set(id, zMm);
@@ -168,6 +184,7 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       usage: Number((kind === 'BBK' ? r.attributesMap.partUsage : r.attributesMap.commonAreaUsage) ?? 0),
       polygon: toPoly(floor),
       planArea: Number.isFinite(plan) ? plan : -1,
+      ...(ceilingFaces ? { ceilingFaces } : {}),
     });
   }
 
@@ -383,13 +400,40 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
     });
   }
 
+  // M8: İç yapılar (RoomInstallation: BBKIY_ ve OAIY_ — §3.9, §4.2)
+  const installations: RoomInstallation[] = [];
+  for (const iy of model.objects.filter((o) => o.prefix === 'BBKIY_' || o.prefix === 'OAIY_')) {
+    const floorIds = iy.surfaces.filter((s) => s.tag === 'FloorSurface').flatMap((s) => [...s.polygonIds, ...s.xlinkHrefs.map((h) => h.replace(/^#/, ''))]);
+    const floor = largest(iy, floorIds.map((id) => model.polygonsById[id]).filter((p): p is ImportedPolygon => p !== undefined), 'İç yapı tabanı');
+    if (!floor) continue;
+    const parentGml = iy.parentGmlId;
+    const partId = parentGml ? partIdByGml.get(parentGml) : undefined;
+    if (!partId) {
+      notes.push({ objectGmlId: iy.gmlId, message: 'İç yapının bağlı olduğu oda bulunamadı; atlandı.' });
+      continue;
+    }
+    const ceilIds = iy.surfaces.filter((s) => s.tag === 'CeilingSurface').flatMap((s) => [...s.polygonIds, ...s.xlinkHrefs.map((h) => h.replace(/^#/, ''))]);
+    const ceilPolys = ceilIds.map((cid) => model.polygonsById[cid]).filter((p): p is ImportedPolygon => p !== undefined);
+    const hasSlopedOrMultiCeil =
+      ceilPolys.some((p) => p.maxZ - p.minZ >= 0.001) ||
+      (ceilPolys.length > 1 && Math.max(...ceilPolys.map((p) => p.maxZ)) - Math.min(...ceilPolys.map((p) => p.minZ)) >= 0.001);
+    const ceilingFaces = hasSlopedOrMultiCeil
+      ? ceilPolys.map((p) => ({ outer: toRing3(p.exteriorRing.vertices), holes: p.interiorRings.map((h) => toRing3(h.vertices)) }))
+      : undefined;
+    const u = Number(iy.attributesMap.roomInstallationUsage ?? 1001);
+    const usage: RoomInstallation['usage'] = u === 1002 || u === 1003 ? u : 1001;
+    const id = nid(iy.prefix === 'BBKIY_' ? 'bbkiy' : 'oaiy');
+    sourceIds.set(id, iy.gmlId);
+    installations.push({
+      id,
+      partId,
+      usage,
+      polygon: toPoly(floor),
+      ...(ceilingFaces ? { ceilingFaces } : {}),
+    });
+  }
+
   // Çatı: içe aktarılan Roof_ yüzleri elle çatı olarak (§4.2 Roof.mode = 'manual')
-  const toPt3 = (v: { e: number; n: number; z: number }): Pt3 => ({ x: Math.round((v.e - E0) * 1000), y: Math.round((v.n - N0) * 1000), z: Math.round(v.z * 1000) });
-  const toRing3 = (vs: readonly { e: number; n: number; z: number }[]) => {
-    const r = vs.map(toPt3);
-    if (r.length > 1 && r[0].x === r[r.length - 1].x && r[0].y === r[r.length - 1].y && r[0].z === r[r.length - 1].z) r.pop();
-    return r;
-  };
   const roofPolys = mb ? polysOf(mb).filter((p) => p.prefix === 'Roof_') : [];
   const roof: Roof | undefined = roofPolys.length ? { mode: 'manual', eaveOverhang: 0, thickness: 0, pitchDeg: 0, facets: roofPolys.map((p) => ({ outer: toRing3(p.exteriorRing.vertices), holes: p.interiorRings.map((h) => toRing3(h.vertices)) })) } : undefined;
   if (model.ticLineStrings.length > 1) notes.push({ objectGmlId: mb?.gmlId ?? '', message: `TIC ${model.ticLineStrings.length} çizgiden oluşuyor; ilki alındı.` });
@@ -422,6 +466,7 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
         sectionInfo,
         cardinalDirections,
         balconies,
+        ...(installations.length ? { installations } : {}),
         ...(roof ? { roof } : {}),
         ...(tic ? { tic } : {}),
       },

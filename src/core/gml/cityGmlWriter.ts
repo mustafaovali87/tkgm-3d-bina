@@ -260,11 +260,12 @@ export function writeCityGml(project: DesignProject, brep: BrepBuilding, codelis
     const part = building.parts.find((p) => p.id === r.designId);
     if (!part) return;
     const polys = r.surfaces.flatMap((s) => s.polygons);
+    const sp0 = spById.get(part.sectionPartIds[0] ?? '');
+    const roomBaseName = part.kind === 'BBK' ? `${bbPrefix(sp0)}_${desc('partUsage', part.usage)}` : desc('commonAreaUsage', part.usage);
     w.open('<bldg:interiorRoom>');
     w.open(`<bldg:Room gml:id="${r.id}">`);
     if (part.kind === 'BBK') {
-      const sp = spById.get(part.sectionPartIds[0] ?? '');
-      w.line(`<gml:name>${esc(`${bbPrefix(sp)}_${desc('partUsage', part.usage)}`)}</gml:name>`);
+      w.line(`<gml:name>${esc(roomBaseName)}</gml:name>`);
       for (const spId of part.sectionPartIds) attr('string', 'independentSectionObjectReference', bbIdOf.get(spId) ?? '-1');
       attr('int', 'partUsage', part.usage);
       attr('int', 'geometrySuitability', 1001);
@@ -274,7 +275,7 @@ export function writeCityGml(project: DesignProject, brep: BrepBuilding, codelis
       attr('double', 'volume', fmt2(r.attributes.volume));
       w.line('<bldg:class>BagimsizBolumKisim</bldg:class>');
     } else {
-      w.line(`<gml:name>${esc(`${desc('commonAreaUsage', part.usage)}_Ortak Alan`)}</gml:name>`);
+      w.line(`<gml:name>${esc(`${roomBaseName}_Ortak Alan`)}</gml:name>`);
       attr('string', 'storeyObjectReference', kIdOf.get(part.storeyId) ?? '-1');
       attr('int', 'commonAreaUsage', part.usage);
       attr('double', 'calculatedArea', fmt2(r.attributes.calculatedArea));
@@ -284,14 +285,30 @@ export function writeCityGml(project: DesignProject, brep: BrepBuilding, codelis
     xlinks(polys);
     w.close('</bldg:lod4MultiSurface>');
     for (const s of r.surfaces) boundedBy(s, 'lod4');
+    for (const inst of r.installations ?? []) {
+      const dInst = (building.installations ?? []).find((x) => x.id === inst.designId);
+      const instUsage = dInst?.usage ?? inst.attributes.roomInstallationUsage ?? 1002;
+      const instPolys = inst.surfaces.flatMap((s) => s.polygons);
+      w.open('<bldg:roomInstallation>');
+      w.open(`<bldg:IntBuildingInstallation gml:id="${inst.id}">`);
+      w.line(`<gml:name>${esc(`${roomBaseName}_İç Yapı`)}</gml:name>`);
+      attr('int', 'roomInstallationUsage', instUsage);
+      w.line(`<bldg:class>${inst.prefix === 'BBKIY_' ? 'BagimsizBolumKisimIcYapi' : 'OrtakAlanIcYapi'}</bldg:class>`);
+      w.open('<bldg:lod4Geometry>');
+      xlinks(instPolys);
+      w.close('</bldg:lod4Geometry>');
+      for (const s of inst.surfaces) boundedBy(s, 'lod4');
+      w.close('</bldg:IntBuildingInstallation>');
+      w.close('</bldg:roomInstallation>');
+    }
     w.close('</bldg:Room>');
     w.close('</bldg:interiorRoom>');
   }
 
-  // ---- Katlar (§3.5)
+  // ---- Katlar (§3.5, §4.2 groupStoreyId)
   for (const k of brep.storeys) {
     const s = building.storeys.find((x) => x.id === k.designId)!;
-    const sps = building.sectionParts.filter((x) => x.storeyId === s.id);
+    const sps = building.sectionParts.filter((x) => (x.groupStoreyId ?? x.storeyId) === s.id);
     const usages = new Set<number>();
     for (const sp of sps) usages.add(sp.usage === 1002 ? 1002 : 1001);
     if (building.parts.some((p) => p.kind === 'OA' && p.storeyId === s.id)) usages.add(1003);

@@ -1,7 +1,23 @@
-# M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
+# M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 + M8 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
 
-> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma: DXF, Helmert, Raster, Liste Beyan + KONTROL-M7 R1–R9)`
-> **Durum:** `TAMAMLANDI (M0–M7 + KONTROL-M7 R1–R9 TAMAMI DOĞRULANDI, 146 / 146 Birim Test GEÇTİ, Ornek6 DXF + Helmert Altın Testi 0 HATA · 0 UYARI, TKGM 3dbinadogrula: başarılı, npm ci / typecheck / lint / docs:m2 0 Hata)`
+> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma + KONTROL-M7 R1–R9) + M8 (Çatı Arası ve Özel Durumlar)`
+> **Durum:** `TAMAMLANDI (M0–M8 TAMAMI DOĞRULANDI, 155 / 155 Birim Test GEÇTİ, Eğik Çatı Kesimi / BBKIY-OAIY / K71 İç Kısım / Dubleks / Kademeli Katlar 0 HATA, npm ci / typecheck / lint / docs:m2 0 Hata)`
+
+---
+
+## M8 — ÇATI ARASI VE ÖZEL DURUMLAR (`§3.5–§3.9`, `§4.2`, `§5.2`, `§5.4–§5.12`, `§11`) (08.11.2026)
+
+> Ayrıntı: `docs/M8_CATI_ARASI_VE_OZEL_DURUMLAR.md`.
+
+| Madde | Durum |
+|---|---|
+| `src/core/brep/atticClip.ts` (§5.9, §5.12 Çatı Arası Kesimi & Eğik Tavanlar) | YAPILDI. Parametrik (`gable`, `hip`, `shed`) ve `manual` eğik çatı düzlemleriyle oda (`BBK_`/`OA_`), iç yapı (`BBKIY_`/`OAIY_`), `BB_` küveti ve `K_` / `MB_` dış duvarlarının kesilmesi; sırt/mahya iz düşümü köşeleriyle su geçirmez manifold (`V-036`), `<= 1 mm` düzlemsellik (`V-032`), tek `CeilingSurface` (§5.9 #5) ve 3B ıraksama teoremi hacmi (`checkShell` / `V-158`) |
+| `RoomInstallation` (`BBKIY_` & `OAIY_`, §3.9, §4.2) | YAPILDI. Merdiven (`1001`), Sütun (`1002`), Asansör (`1003`) iç yapıları; oda tabanından delik açmadan (§3.9) kapalı B-Rep üretimi, `<bldg:roomInstallation><bldg:IntBuildingInstallation>` XML yazımı, `V-058` `<gml:name>` (`{BB}_{partUsage}_İç Yapı`, `{commonAreaUsage}_İç Yapı`) ve `designFromImportedModel` round-trip |
+| İç Kısım (`K71`, §5.3, §5.5 — Oda İçinde Oda) | YAPILDI. Dış odanın taban ve tavanında otomatik iç halka (delik) açılması, delik çevresi `InteriorWall_` yüzeyleri ve `BB_` küvetinde `V-039` iç içe delik yasağına uygun iç duvar adası üretimi |
+| Dubleks / Çoklu Kat (`groupStoreyId`, `emitStoreyObject`, `1003`/`1004`, §4.2, §4.3) | YAPILDI. Çok katlı `BB_` parçalarının giriş katı `K_` grubuna (`groupMember` ve `independentSectionCount`) bağlanması; `emitStoreyObject === false` çatı arası katlarda `K_` üretilmemesi ve `OA_` `storeyObjectReference = -1` yazımı |
+| Kademeli Katlar (`src/core/brep/polyBoolean2d.ts`, `OuterFloor_` & `OuterCeiling_`, §5.10) | YAPILDI. Saf TS 2B Boolean fark (`subtractPolygons2D`) ile `L.outline − U.outline` → `OuterFloorSurface` (`zCeiling(L)`) ve `U.outline − L.outline` → `OuterCeilingSurface` (`zFloorBottom(U)`) üretimi |
+| Asma Kat (`zFloorOverride`), Uzak Kısım (`remote`), Sahanlık Penceresi (`spansStoreys`), OA Dış Duvarı (`WallSurface`) | YAPILDI. Çok katlı sahanlık penceresi dilimleme, dış cepheye komşu ortak alanda duvar kalınlığı üzerinden `WallSurface` (`Wall_`) sınıflandırması (`V-163`), 2B editör (`iy` aracı ve M8 kontrolleri) ve 3B önizleme desteği |
+| Kabul (§11): Eğik çatılı çatı arası odalar, iç yapı (merdiven/sütun/asansör), iç kısım, dubleks; 0 HATA | YAPILDI. `src/core/__tests__/m8.test.ts` (9/9 test geçti) kendi doğrulayıcımızda **0 HATA**; toplam test **155/155** geçti |
 
 ---
 
@@ -147,7 +163,13 @@
 
 ---
 
-## 2. `M0`–`M6` Kapsamında Oluşturulan / Doğrulanan Dosyalar
+## 2. `M0`–`M8` Kapsamında Oluşturulan / Doğrulanan Dosyalar
+
+### M8 — Çatı Arası ve Özel Durumlar (`src/core/brep/atticClip.ts`, `src/core/brep/polyBoolean2d.ts`, `generate.ts`, `building.ts`, `cityGmlWriter.ts`, `fromImported.ts`)
+- `src/core/brep/atticClip.ts` (Eğik çatı zarfı `buildRoofEnvelope`, sırt/mahya köşe ekleme `insertSplitPointsIntoPoly`, düzlemsel eğik tavan üretimi `clipCapPolygonToRoof`)
+- `src/core/brep/polyBoolean2d.ts` (Saf TS 2B çokgen Boolean farkı `subtractPolygons2D` ve yarı-düzlem kırpma `clipRingByHalfPlane2D` — kademeli kat `OuterFloorSurface` ve `OuterCeilingSurface`)
+- `src/core/__tests__/m8.test.ts` (9 birim testi: `gable`/`hip`/`shed` çatı arası kesimi, `BBKIY_`/`OAIY_` iç yapı, `K71` iç kısım, dubleks `groupStoreyId` & `emitStoreyObject`, kademeli katlar, sahanlık penceresi, OA dış duvarı)
+- `docs/M8_CATI_ARASI_VE_OZEL_DURUMLAR.md`
 
 ### M6 — Geometri Motoru II ve Tam CityGML 2.0 Üretimi (`src/core/brep/building.ts`, `src/core/gml/cityGmlWriter.ts`)
 - `src/core/brep/building.ts` (`generateBuildingBrep`: U biçimli parapetli `BLKN_` / `TRS_` balkon B-Rep üretimi, manuel/düz/beşik/kırma çatı üretimi, LoD0 ayak izi, LoD1 dik prizma, LoD2 zarf yüzleri, TIC noktaları ve tam bina zarfı)
@@ -197,71 +219,74 @@ Kapsam tablosu güncellendi: 175 kural.
 
 ---
 
-## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0`..`m7` — 146 / 146 Test)
+## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0`..`m8` — 155 / 155 Test)
 
 ```text
 RUN  v5.1.0 /app/applet
 
- ✓ src/core/__tests__/m7.test.ts (16 tests) 1016ms
+ ✓ src/core/__tests__/m1.test.ts (10 tests) 2679ms
+   ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve KONTROL-M1-2 §4 Gerileme Testleri (R1–R3) (7)
+     ✓ KONTROL-M1-2 §4.1 (R3): Ornek6 altın değerlerini (polygons.length === 741, benzersiz gml:id, MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1, biçim A, ofset 10, profil A10) birebir doğrular 1101ms
+     ✓ KONTROL-M1 G1: Float64Array transferable poligon köşe paketleme ve geri yükleme (packModelPolygonVerticesFloat64 / hydrateModelPolygonVerticesFloat64) sıfır kayıpla çalışır 494ms
+   ✓ M1 Adım 2 — 3B Düzlemsel Poligon + İç Delik (DoorLinearRing_ / WindowLinearRing_) Üçgenleme (triangulate3d.ts) (2)
+     ✓ fixtures/ornek6.gml içindeki tüm iç delikli (DoorLinearRing_ / WindowLinearRing_) duvar poligonlarını sıfır kayıpla üçgenler 510ms
+   ✓ M1 Adım 3 — KARAR D-23.4: Kalıp (F5–F8) ve Panel Boyutu Değişiminin K89 CanonicalHash Üzerinde Etkisizliği (1)
+     ✓ D-23.4 / K89: F5 (Standart), F6 (Yan Yana), F7 (Çizim), F8 (Denetim) ve <1366px sekme modları CanonicalModelHash değerini asla değiştirmez 389ms
+ ✓ src/core/__tests__/m3.test.ts (16 tests) 4610ms
+   ✓ M3 — Gidiş-dönüş (şartname §11 kabul ölçütü) (6)
+     ✓ OY-02: Düzeltme kipi yalnız 3 haneden kısa değerleri tamamlar; bütün köşe değerleri ve öznitelikler sayısal olarak aynı 783ms
+     ✓ K70: düzenleme yoksa ve tamamlama kapalıysa çıktı girdiyle bayt bayt aynıdır (SHA-256 eşit) 311ms
+     ✓ K70: öznitelik düzenlemesi geometri metnine dokunmaz; yalnız istenen değerler değişir 391ms
+     ✓ K70: düzenlenen dosya doğrulayıcıda yine 0 HATA verir 397ms
+     ✓ Öznitelik ekleme ve silme: biçim korunur, geri alınınca dosya özgün haline döner 1005ms
+     ✓ Ad (gml:name) düzenlemesi yalnız nesnenin kendi adını değiştirir (yüzey adları değişmez) 492ms
+   ✓ M3 — Sayımlar ve adlar (3)
+     ✓ §7.7: bozulan partCount yeniden hesaplanır ve V-128 kaybolur 572ms
+     ✓ §7.7 / V-058: bozulan ad yeniden üretilir ve dosya özgün haline döner 410ms
+ ✓ src/core/__tests__/m6.test.ts (16 tests) 1896ms
+   ✓ M6 — Ornek6 altın testi, tam (§10.4) (10)
+     ✓ Kendi doğrulayıcısında sıfır HATA ve sıfır UYARI (Biçim A = Ornek6, Biçim B = varsayılan); üretim uyarısı yok 589ms
+     ✓ Biçim (§3.1, K70): CRLF, BOM yok, utf-8 bildirimi, posList, tam 3 ondalık; iki yazım bayt bayt aynı 584ms
+ ✓ src/core/__tests__/m8.test.ts (9 tests) 1404ms
+   ✓ M8 — Çatı Arası Kesimi (Gable, Hip, Shed, Manual) (§5.9, §5.11, §5.12) (4)
+     ✓ gable eğik çatı altında çatı arası katı: tek CeilingSurface, kapalı manifold kabuk, ıraksama hacmi ve 0 HATA 525ms
+ ✓ src/core/__tests__/m2.test.ts (26 tests) 8618ms
+   ✓ M2 — Ornek6 resmi kabul örneği (4)
+     ✓ V-105 / N19: Ornek6 Sürdürülebilirlik rejimindedir (GroundSurface var) 500ms
+   ✓ M2 — Ornek6 üzerinde tek hata ekleme (her kural gerçekten yakalıyor mu?) (18)
+     ✓ V-001: dosya adı M- ile başlamıyor → HATA 495ms
+     ✓ V-002: dosya adı constructionID ile uyuşmuyor → HATA 390ms
+     ✓ V-004: GML ad alanı 3.2 → HATA 410ms
+     ✓ V-014: srsName EPSG:4326 → HATA 396ms
+     ✓ V-021: poligonda srsName → HATA 509ms
+     ✓ V-033: halka kapanmıyor (son pos silindi) → HATA 605ms
+     ✓ V-050: aynı gml:id iki kez → HATA 395ms
+     ✓ V-056: WallSurface elemanında gml:id → HATA 504ms
+     ✓ V-057: kısım sınıf değeri yanlış → HATA 496ms
+     ✓ V-058: kat adı storeyNumber ile uyuşmuyor → HATA 495ms
+     ✓ V-059: yüzey adı yanlış → HATA 406ms
+     ✓ V-061: BB zorunlu partCount yok → HATA 479ms
+     ✓ V-072: bina geometrySuitability 1005 → HATA 406ms
+     ✓ V-202: ret paketi (bina geometrySuitability 1005) → HATA 504ms
+     ✓ V-112: kat parent bina değil → HATA 389ms
+     ✓ V-130: BB integrationState 1003 → HATA 411ms
+     ✓ V-160: kısım BB referansı yok → HATA 422ms
+     ✓ V-188: balkon BB referansı yok → HATA 389ms
+ ✓ src/core/__tests__/m7.test.ts (16 tests) 1017ms
    ✓ M7 — Konumlandırma Sihirbazı ve İçe Aktarma (DXF, Helmert, Raster, Liste Beyan) (16)
      ✓ 4. §11 M7 Altın Kabul Testi: Gerçek Proje (Ornek6) DXF İçe Aktarma + Helmert Konumlandırma + 0 HATA CityGML (2)
-       ✓ Ornek6 projesinin yerel/döndürülmüş CAD DXF çizimlerini Helmert ile konumlandırıp katman eşlemesiyle içe alır ve 0 HATA ile CityGML üretir 697ms
- ✓ src/core/__tests__/m1.test.ts (10 tests) 2696ms
-   ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve KONTROL-M1-2 §4 Gerileme Testleri (R1–R3) (7)
-     ✓ KONTROL-M1-2 §4.1 (R3): Ornek6 altın değerlerini (polygons.length === 741, benzersiz gml:id, MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1, biçim A, ofset 10, profil A10) birebir doğrular 982ms
-     ✓ KONTROL-M1 G1: Float64Array transferable poligon köşe paketleme ve geri yükleme (packModelPolygonVerticesFloat64 / hydrateModelPolygonVerticesFloat64) sıfır kayıpla çalışır 503ms
-   ✓ M1 Adım 2 — 3B Düzlemsel Poligon + İç Delik (DoorLinearRing_ / WindowLinearRing_) Üçgenleme (triangulate3d.ts) (2)
-     ✓ fixtures/ornek6.gml içindeki tüm iç delikli (DoorLinearRing_ / WindowLinearRing_) duvar poligonlarını sıfır kayıpla üçgenler 580ms
-   ✓ M1 Adım 3 — KARAR D-23.4: Kalıp (F5–F8) ve Panel Boyutu Değişiminin K89 CanonicalHash Üzerinde Etkisizliği (1)
-     ✓ D-23.4 / K89: F5 (Standart), F6 (Yan Yana), F7 (Çizim), F8 (Denetim) ve <1366px sekme modları CanonicalModelHash değerini asla değiştirmez 501ms
- ✓ src/core/__tests__/m3.test.ts (16 tests) 4818ms
-   ✓ M3 — Gidiş-dönüş (şartname §11 kabul ölçütü) (6)
-     ✓ OY-02: Düzeltme kipi yalnız 3 haneden kısa değerleri tamamlar; bütün köşe değerleri ve öznitelikler sayısal olarak aynı 720ms
-     ✓ K70: düzenleme yoksa ve tamamlama kapalıysa çıktı girdiyle bayt bayt aynıdır (SHA-256 eşit) 404ms
-     ✓ K70: öznitelik düzenlemesi geometri metnine dokunmaz; yalnız istenen değerler değişir 387ms
-     ✓ K70: düzenlenen dosya doğrulayıcıda yine 0 HATA verir 494ms
-     ✓ Öznitelik ekleme ve silme: biçim korunur, geri alınınca dosya özgün haline döner 1111ms
-     ✓ Ad (gml:name) düzenlemesi yalnız nesnenin kendi adını değiştirir (yüzey adları değişmez) 398ms
-   ✓ M3 — Sayımlar ve adlar (3)
-     ✓ §7.7: bozulan partCount yeniden hesaplanır ve V-128 kaybolur 607ms
-     ✓ §7.7 / V-058: bozulan ad yeniden üretilir ve dosya özgün haline döner 408ms
- ✓ src/core/__tests__/m5.test.ts (19 tests) 579ms
- ✓ src/core/__tests__/m2.test.ts (26 tests) 8792ms
-   ✓ M2 — Ornek6 resmi kabul örneği (4)
-     ✓ V-105 / N19: Ornek6 Sürdürülebilirlik rejimindedir (GroundSurface var) 410ms
-   ✓ M2 — Ornek6 üzerinde tek hata ekleme (her kural gerçekten yakalıyor mu?) (18)
-     ✓ V-001: dosya adı M- ile başlamıyor → HATA 493ms
-     ✓ V-002: dosya adı constructionID ile uyuşmuyor → HATA 485ms
-     ✓ V-004: GML ad alanı 3.2 → HATA 397ms
-     ✓ V-014: srsName EPSG:4326 → HATA 318ms
-     ✓ V-021: poligonda srsName → HATA 602ms
-     ✓ V-033: halka kapanmıyor (son pos silindi) → HATA 581ms
-     ✓ V-050: aynı gml:id iki kez → HATA 399ms
-     ✓ V-056: WallSurface elemanında gml:id → HATA 323ms
-     ✓ V-057: kısım sınıf değeri yanlış → HATA 677ms
-     ✓ V-058: kat adı storeyNumber ile uyuşmuyor → HATA 321ms
-     ✓ V-059: yüzey adı yanlış → HATA 486ms
-     ✓ V-061: BB zorunlu partCount yok → HATA 302ms
-     ✓ V-072: bina geometrySuitability 1005 → HATA 599ms
-     ✓ V-202: ret paketi (bina geometrySuitability 1005) → HATA 588ms
-     ✓ V-112: kat parent bina değil → HATA 406ms
-     ✓ V-130: BB integrationState 1003 → HATA 408ms
-     ✓ V-160: kısım BB referansı yok → HATA 503ms
-     ✓ V-188: balkon BB referansı yok → HATA 408ms
- ✓ src/core/__tests__/m6.test.ts (16 tests) 1712ms
-   ✓ M6 — Ornek6 altın testi, tam (§10.4) (10)
-     ✓ Kendi doğrulayıcısında sıfır HATA ve sıfır UYARI (Biçim A = Ornek6, Biçim B = varsayılan); üretim uyarısı yok 603ms
-     ✓ Biçim (§3.1, K70): CRLF, BOM yok, utf-8 bildirimi, posList, tam 3 ondalık; iki yazım bayt bayt aynı 489ms
- ✓ src/core/__tests__/m0.test.ts (23 tests) 323ms
- ✓ src/core/__tests__/m4.test.ts (20 tests) 29ms
+       ✓ Ornek6 projesinin yerel/döndürülmüş CAD DXF çizimlerini Helmert ile konumlandırıp katman eşlemesiyle içe alır ve 0 HATA ile CityGML üretir 792ms
+ ✓ src/core/__tests__/m0.test.ts (23 tests) 388ms
+ ✓ src/core/__tests__/m5.test.ts (19 tests) 409ms
+ ✓ src/core/__tests__/m4.test.ts (20 tests) 28ms
 
- Test Files  8 passed (8)
-      Tests  146 passed (146)
-   Start at  15:35:40
-   Duration  11.97s (tests 67%, import 29%, transform 4%, worker 1%)
+ Test Files  9 passed (9)
+      Tests  155 passed (155)
+   Start at  16:44:35
+   Duration  12.73s (tests 67%, import 30%, transform 2%, worker 1%)
 
-    Isolate  8 workers spawned · ~539ms startup each (spawn + environment, per file)
-             at least ~899ms faster with isolate: false — reuses workers across files instead of one per file
+    Isolate  9 workers spawned · ~570ms startup each (spawn + environment, per file)
+             at least ~1.14s faster with isolate: false — reuses workers across files instead of one per file
 ```
 
 ---
@@ -269,7 +294,7 @@ RUN  v5.1.0 /app/applet
 ## 5. `npm run verify:samples fixtures` (`G6`, `R1 / R3` & `M2` Doğrulama Özeti) Gerçek Çıktısı
 
 ```json
-{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":296,"memoryMB":26.3,"objectCount":108,"polygonCount":741,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"regime":"S","validationMs":67,"issueCounts":{"H":1,"U":0,"B":3},"topRules":["H:V-001x1"]}
+{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":265,"memoryMB":26.3,"objectCount":108,"polygonCount":741,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"regime":"S","validationMs":62,"issueCounts":{"H":1,"U":0,"B":3},"topRules":["H:V-001x1"]}
 ```
 
 ---
@@ -319,7 +344,7 @@ K67     | src/core/model/index.ts, src/core/validation/rulesFile.ts | -
 K68     | src/core/model/index.ts, src/core/validation/rulesExtra.ts | -
 K69     | src/core/importers/georefWizard.ts, src/core/math/helmert2d.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 K70     | src/core/gml/cityGmlWriter.ts, src/core/gml/gmlWriter.ts, src/core/model/index.ts | src/core/__tests__/m3.test.ts, src/core/__tests__/m6.test.ts
-K71     | src/core/importers/dxfImporter.ts, src/core/validation/rulesExtra.ts | -
+K71     | src/core/brep/generate.ts, src/core/brep/polyBoolean2d.ts, src/core/brep/shellCheck.ts, src/core/design/checks.ts, src/core/importers/dxfImporter.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m8.test.ts
 K76     | src/core/importers/dxfImporter.ts, src/core/importers/georefWizard.ts, src/core/importers/rasterCalib.ts, src/core/model/index.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 K78     | src/core/validation/rulesBuilding.ts, src/core/validation/rulesExtra.ts | -
 K79     | src/core/gml/gmlReader.ts, src/core/gml/readAttributes.ts, src/core/model/index.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
@@ -359,14 +384,14 @@ V-020   | src/core/importers/georefWizard.ts, src/core/math/helmert2d.ts, src/co
 V-021   | src/core/validation/rulesFile.ts       | src/core/__tests__/m2.test.ts
 V-030   | src/core/gml/gmlReader.ts, src/core/model/index.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m2.test.ts, src/core/__tests__/m3.test.ts
 V-031   | src/core/gml/gmlReader.ts, src/core/gml/triangulate3d.ts, src/core/math/ring.ts, src/core/validation/index.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
-V-032   | src/core/gml/gmlWriter.ts, src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
+V-032   | src/core/brep/atticClip.ts, src/core/gml/gmlWriter.ts, src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
 V-033   | src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m2.test.ts
 V-034   | src/core/design/checks.ts, src/core/design/editor.ts, src/core/importers/dxfImporter.ts, src/core/validation/geom.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m2.test.ts, src/core/__tests__/m4.test.ts
 V-035   | src/core/validation/geom.ts, src/core/validation/rulesFile.ts | -
 V-036   | src/core/validation/rulesFile.ts       | -
 V-037   | src/core/gml/triangulate3d.ts, src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
 V-038   | src/core/design/checks.ts, src/core/validation/rulesFile.ts | -
-V-039   | src/core/validation/rulesFile.ts       | -
+V-039   | src/core/brep/generate.ts, src/core/validation/rulesFile.ts | -
 V-040   | src/core/gml/triangulate3d.ts, src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
 V-041   | src/core/validation/rulesFile.ts       | -
 V-042a  | src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
@@ -453,8 +478,8 @@ V-139   | src/core/validation/rulesBb.ts         | -
 V-140   | src/core/validation/rulesBb.ts         | -
 V-141   | src/core/validation/rulesBb.ts         | -
 V-150   | src/core/validation/rulesBb.ts         | -
-V-151   | src/core/gml/gmlReader.ts, src/core/validation/rulesBb.ts | -
-V-152   | src/core/validation/rulesBb.ts         | -
+V-151   | src/core/design/checks.ts, src/core/gml/gmlReader.ts, src/core/validation/rulesBb.ts | src/core/__tests__/m8.test.ts
+V-152   | src/core/validation/rulesBb.ts         | src/core/__tests__/m8.test.ts
 V-153   | src/core/validation/rulesBb.ts         | -
 V-154   | src/core/gml/gmlReader.ts, src/core/validation/rulesBb.ts | -
 V-155   | src/core/gml/gmlWriter.ts, src/core/validation/rulesBb.ts | -
@@ -489,14 +514,14 @@ V-192   | src/core/validation/rulesBb.ts         | -
 V-193   | src/core/validation/rulesBb.ts         | -
 V-194   | src/core/validation/rulesBb.ts         | -
 V-195   | src/core/validation/rulesBb.ts         | src/core/__tests__/m2.test.ts
-V-196   | src/core/validation/rulesExtra.ts      | src/core/__tests__/m2.test.ts
+V-196   | src/core/validation/rulesExtra.ts      | src/core/__tests__/m2.test.ts, src/core/__tests__/m8.test.ts
 V-197   | src/core/validation/rulesExtra.ts      | -
 V-198   | src/core/math/landShare.ts, src/core/validation/index.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts, src/core/__tests__/m7.test.ts
 V-198a  | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 V-198b  | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
 V-199   | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 V-200   | src/core/validation/rulesExtra.ts      | -
-V-201   | src/core/importers/georefWizard.ts, src/core/validation/rulesExtra.ts | -
+V-201   | src/core/importers/georefWizard.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m8.test.ts
 V-202   | src/core/validation/rulesExtra.ts      | src/core/__tests__/m2.test.ts
 V-203   | src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | -
 V-204   | src/core/validation/rulesExtra.ts, src/core/validation/rulesFile.ts | -

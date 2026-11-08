@@ -1,5 +1,5 @@
-// M4 — Çizim anında 2B tasarım denetimleri (şartname §5.3 madde 2, §7.5). Her bulgu ilgili dosya kuralına bağlanır.
-import { isSimpleRing, minEdgeMm, polyAreaM2, polyIntersectionAreaM2, ringPerimeterM } from './geometry2d.ts';
+// M4 / M8 — Çizim anında 2B tasarım denetimleri (şartname §5.3 madde 2, §7.5). Her bulgu ilgili dosya kuralına bağlanır.
+import { isSimpleRing, minEdgeMm, polyAreaM2, polyIntersectionAreaM2, ringInsidePoly, ringPerimeterM } from './geometry2d.ts';
 import type { DesignProject, Poly2 } from './types.ts';
 
 /** §5.3 toleransları. */
@@ -55,6 +55,7 @@ export function checkDesign(project: DesignProject): DesignIssue[] {
     ...b.storeys.flatMap((s) => s.outline.map((o, i) => ({ id: `${s.id}#outline#${i}`, ring: o.outer }))),
     ...b.sectionParts.map((x) => ({ id: x.id, ring: x.outline.outer })),
     ...b.parts.map((x) => ({ id: x.id, ring: x.polygon.outer })),
+    ...(b.installations ?? []).map((x) => ({ id: x.id, ring: x.polygon.outer })),
   ];
   for (const r of allRings) {
     if (!isSimpleRing(r.ring)) add({ code: 'T-01', fileRule: 'V-034', severity: 'H', elementId: r.id, message: 'Çokgen kendini kesiyor veya ardışık eş nokta var.' });
@@ -90,7 +91,16 @@ export function checkDesign(project: DesignProject): DesignIssue[] {
     }
   }
 
-  // Aynı kattaki BB parçaları ve OA'lar birbiriyle; kısımlar birbiriyle örtüşmez (§5.3). Delik ilişkisi (iç kısım) hariç.
+  for (const iy of b.installations ?? []) {
+    const host = b.parts.find((p) => p.id === iy.partId);
+    if (!host) add({ code: 'T-08', fileRule: 'V-151', severity: 'H', elementId: iy.id, message: 'İç yapı geçerli bir odaya (BBK/OA) bağlı değil.' });
+    else {
+      const out = outsideAreaM2(iy.polygon, [host.polygon]);
+      if (out > OVERLAP_TOL_M2) add({ code: 'T-04', fileRule: 'V-151', severity: 'U', elementId: iy.id, message: `İç yapının ${out.toFixed(2)} m²'si bağlı olduğu odanın dışında.` });
+    }
+  }
+
+  // Aynı kattaki BB parçaları ve OA'lar birbiriyle; kısımlar birbiriyle örtüşmez (§5.3). Delik ilişkisi (iç kısım, K71) hariç.
   for (const st of b.storeys) {
     // Yalnız aynı taban kotundakiler karşılaştırılır (asma kat: zFloorOverride, şartname §5.2)
     const regions = [
@@ -108,7 +118,7 @@ export function checkDesign(project: DesignProject): DesignIssue[] {
       const c = parts[j];
       if ((a.zFloorOverride ?? null) !== (c.zFloorOverride ?? null)) continue;
       const isHole = (outer: typeof a, inner: typeof c) => outer.polygon.holes.some((h) => h.length === inner.polygon.outer.length && h.every((p) => inner.polygon.outer.some((q) => q.x === p.x && q.y === p.y)));
-      if (isHole(a, c) || isHole(c, a)) continue;
+      if (isHole(a, c) || isHole(c, a) || ringInsidePoly(a.polygon.outer, c.polygon) || ringInsidePoly(c.polygon.outer, a.polygon)) continue;
       const ov = polyIntersectionAreaM2(a.polygon, c.polygon);
       if (ov > OVERLAP_TOL_M2) add({ code: 'T-06', fileRule: 'V-162', severity: 'H', elementId: c.id, message: `Kısım başka bir kısımla ${ov.toFixed(2)} m² örtüşüyor (tolerans 0.1 m²).` });
     }

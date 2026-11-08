@@ -265,3 +265,13 @@
 - **Liste Beyan ve Malik Listesi (`src/core/importers/listeBeyan.ts`):**
   - CSV/TSV/Akıllı Yapıştırma verilerinde `KAT_TANIMI` (`registeredFloorDefinition`) olduğu gibi korunur (`OY-04`), `NITELIK` ve `EKLENTI` Türkçe büyük harfe çevrilir (`K61`), kullanıcı önizlemeyi onaylamadan (`OY-06`) projeye yazılmaz ve tüm alanlar serbestçe düzenlenebilir kalır (`K88-yeni`).
   - `Malik[]` listesi yalnızca `.tkgm3b` proje dosyasında saklanır; GML çıktısına asla yazılmaz (`K99`).
+
+## A.13 M8 Çatı Arası ve Özel Durumlar (08.11.2026)
+
+- **Çatı Arası Kesimi (`src/core/brep/atticClip.ts`, `§5.9`, `§5.12`):**
+  - Eğik çatı (`gable`, `hip`, `shed` ve `manual`) altındaki çatı arası katlarda (`clipToRoof: true`, `SectionPart.usage === 1004` veya `Roof.eaveZ`) tavan poligonları çatı düzlemleriyle kesilir; sırt/mahya iz düşümü halka kenarlarına köşe olarak eklenerek su geçirmez manifold (`V-036`) ve `<= 1 mm` düzlemsellik (`V-032`) korunur.
+  - Her odada tüm eğik ve yatay `Ceiling_` poligonları tek bir `<bldg:CeilingSurface>` altında toplanır (`§5.9 #5`); hacim 3B ıraksama teoremiyle (`checkShell` / `V-158`) hesaplanır.
+- **İç Yapı (`RoomInstallation`: `BBKIY_` ve `OAIY_`, `§3.9`, `§4.2`):**
+  - Merdiven (`1001`), sütun (`1002`) ve asansör (`1003`) iç yapıları bağlı olduğu odanın taban poligonundan delik olarak çıkarılmaz (`§3.9`); kendi `FloorSurface`, `InteriorWallSurface` ve `CeilingSurface` yüzeyleriyle `<bldg:roomInstallation><bldg:IntBuildingInstallation>` olarak yazılır.
+- **İç Kısım (`K71`), Dubleks (`groupStoreyId`, `emitStoreyObject`), Sahanlık Penceresi (`spansStoreys`), OA Dış Duvarı ve Kademeli Katlar (`§5.10`):**
+  - Oda içinde oda (`K71`) otomatik delik ve iç duvar adası üretir; kademeli katlarda `subtractPolygons2D` ile `L − U` için `OuterFloorSurface` (`OuterFloor_`) ve `U − L` için `OuterCeilingSurface` (`OuterCeiling_`) üretilir.

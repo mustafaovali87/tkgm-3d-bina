@@ -1,10 +1,10 @@
-// M4 — 2B tasarım editörünün saf durum makinesi (şartname §7.4). Arayüz yalnız bu reducer'ı çağırır.
+// M4 / M8 — 2B tasarım editörünün saf durum makinesi (şartname §7.4). Arayüz yalnız bu reducer'ı çağırır.
 // DOM yok; tüm koordinatlar mm tamsayı. Snap, arayüzde snapPoint ile yapılıp tıklamaya hazır nokta olarak gelir.
 import { uuidv5 } from '../hash/canonical.ts';
 import { isSimpleRing, normalizeOrientation, pointInPoly, polyAreaM2, ringCentroid, ringInsidePoly } from './geometry2d.ts';
-import type { DesignBuilding, DesignProject, IndependentSection, Part, Poly2, Pt2, SectionPart, Storey } from './types.ts';
+import type { DesignBuilding, DesignProject, IndependentSection, Part, Poly2, Pt2, Roof, RoomInstallation, SectionPart, Storey } from './types.ts';
 
-export type EditorTool = 'sec' | 'kat' | 'bb' | 'kisim' | 'oa' | 'olcu';
+export type EditorTool = 'sec' | 'kat' | 'bb' | 'kisim' | 'oa' | 'iy' | 'olcu';
 
 export interface EditorOptions {
   /** BB çizerken bağlanacak bağımsız bölüm (liste beyandan). */
@@ -15,6 +15,8 @@ export interface EditorOptions {
   readonly oaUsage: number;
   /** BB parçası kullanımı (1001 normal). */
   readonly sectionPartUsage: SectionPart['usage'];
+  /** İç yapı (BBKIY/OAIY) kullanımı: 1001 Merdiven, 1002 Sütun, 1003 Asansör (§3.9). */
+  readonly iyUsage: RoomInstallation['usage'];
 }
 
 export interface EditorState {
@@ -42,12 +44,15 @@ export type EditorAction =
   | { readonly type: 'options'; readonly patch: Partial<EditorOptions> }
   | { readonly type: 'addSection'; readonly section: Omit<IndependentSection, 'id'> }
   | { readonly type: 'addStorey'; readonly storey: Omit<Storey, 'id' | 'outline'> }
-  | { readonly type: 'updatePart'; readonly id: string; readonly patch: Partial<Pick<Part, 'usage' | 'planArea'>> }
-  | { readonly type: 'updateSectionPart'; readonly id: string; readonly patch: Partial<Pick<SectionPart, 'usage' | 'sectionId'>> }
+  | { readonly type: 'updateStorey'; readonly id: string; readonly patch: Partial<Pick<Storey, 'clipToRoof' | 'emitStoreyObject' | 'kneeWallHeight'>> }
+  | { readonly type: 'updateRoof'; readonly roof: Roof | undefined }
+  | { readonly type: 'updatePart'; readonly id: string; readonly patch: Partial<Pick<Part, 'usage' | 'planArea' | 'remote' | 'clipToRoof' | 'zFloorOverride'>> }
+  | { readonly type: 'updateSectionPart'; readonly id: string; readonly patch: Partial<Pick<SectionPart, 'usage' | 'sectionId' | 'groupStoreyId' | 'clipToRoof' | 'zFloorOverride'>> }
+  | { readonly type: 'updateInstallation'; readonly id: string; readonly patch: Partial<Pick<RoomInstallation, 'usage'>> }
   | { readonly type: 'load'; readonly project: DesignProject };
 
 /** partUsage.xml: 1001 = Oda, 1022 = Niteliksiz Ortak Alan (resources/codelists/partUsage.xml). */
-export const DEFAULT_OPTIONS: EditorOptions = { sectionId: null, partUsage: 1001, oaUsage: 1022, sectionPartUsage: 1001 };
+export const DEFAULT_OPTIONS: EditorOptions = { sectionId: null, partUsage: 1001, oaUsage: 1022, sectionPartUsage: 1001, iyUsage: 1001 };
 
 export function createEditorState(project: DesignProject): EditorState {
   return {
@@ -128,6 +133,18 @@ function finishDraft(s: EditorState): EditorState {
     return commit(s, withBuilding(project, (bb) => ({ ...bb, sectionParts: [...bb.sectionParts, sp] })), { kind: 'ok', text: `BB ${no} parçası eklendi (${fmtArea(area)}).` });
   }
 
+  if (s.tool === 'iy') {
+    const c = ringCentroid(poly.outer);
+    const host = b.parts.find((p) => p.storeyId === storeyId && ringInsidePoly(poly.outer, p.polygon) && pointInPoly(c, p.polygon) === 1);
+    if (!host) {
+      return { ...s, message: { kind: 'error', text: 'İç yapı (merdiven/sütun/asansör) bir kısmın veya ortak alanın içinde çizilmeli (§3.9).' } };
+    }
+    const { id, project } = newId(s.project, host.kind === 'BBK' ? 'bbkiy' : 'oaiy');
+    const iy: RoomInstallation = { id, partId: host.id, usage: s.options.iyUsage, polygon: poly };
+    const next = withBuilding(project, (bb) => ({ ...bb, installations: [...(bb.installations ?? []), iy] }));
+    return commit(s, next, { kind: 'ok', text: `İç yapı (${host.kind === 'BBK' ? 'BBKIY' : 'OAIY'}) eklendi (${fmtArea(area)}); oda tabanından delik açılmaz (§3.9).` });
+  }
+
   // Kısım (BBK) veya ortak alan (OA)
   const kind: Part['kind'] = s.tool === 'kisim' ? 'BBK' : 'OA';
   const c = ringCentroid(poly.outer);
@@ -151,13 +168,15 @@ function finishDraft(s: EditorState): EditorState {
   return commit(s, next, { kind: 'ok', text: `${kind === 'BBK' ? 'Kısım' : 'Ortak alan'} eklendi (${fmtArea(area)})${host ? '; dış kısma delik açıldı' : ''}.` });
 }
 
-/** Seçim: önce kısımlar, sonra BB parçaları, sonra kat sınırı; en küçük alanlı içeren eleman. */
+/** Seçim: önce iç yapılar, sonra kısımlar, sonra BB parçaları, sonra kat sınırı; en küçük alanlı içeren eleman. */
 function pick(s: EditorState, p: Pt2): string | null {
   const b = s.project.buildings[0];
   if (!b || !s.activeStoreyId) return null;
   const sid = s.activeStoreyId;
   const cands: Array<{ id: string; area: number }> = [];
-  for (const x of b.parts) if (x.storeyId === sid && pointInPoly(p, x.polygon) >= 0) cands.push({ id: x.id, area: polyAreaM2(x.polygon) });
+  const storeyPartIds = new Set(b.parts.filter((x) => x.storeyId === sid).map((x) => x.id));
+  for (const iy of b.installations ?? []) if (storeyPartIds.has(iy.partId) && pointInPoly(p, iy.polygon) >= 0) cands.push({ id: iy.id, area: polyAreaM2(iy.polygon) });
+  if (cands.length === 0) for (const x of b.parts) if (x.storeyId === sid && pointInPoly(p, x.polygon) >= 0) cands.push({ id: x.id, area: polyAreaM2(x.polygon) });
   if (cands.length === 0) for (const x of b.sectionParts) if (x.storeyId === sid && pointInPoly(p, x.outline) >= 0) cands.push({ id: x.id, area: polyAreaM2(x.outline) });
   if (cands.length === 0) {
     const st = b.storeys.find((x) => x.id === sid);
@@ -212,7 +231,12 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
       const b = s.project.buildings[0];
       const dependants = b?.parts.filter((p) => p.sectionPartIds.includes(id)).length ?? 0;
       if (dependants > 0) return { ...s, message: { kind: 'error', text: `Bu BB parçasına bağlı ${dependants} kısım var; önce onları silin.` } };
-      const project = withBuilding(s.project, (bb) => ({ ...bb, parts: bb.parts.filter((p) => p.id !== id), sectionParts: bb.sectionParts.filter((p) => p.id !== id) }));
+      const project = withBuilding(s.project, (bb) => ({
+        ...bb,
+        parts: bb.parts.filter((p) => p.id !== id),
+        sectionParts: bb.sectionParts.filter((p) => p.id !== id),
+        installations: (bb.installations ?? []).filter((iy) => iy.id !== id && iy.partId !== id),
+      }));
       return { ...commit(s, project, { kind: 'ok', text: 'Silindi.' }), selectedId: null };
     }
     case 'addSection': {
@@ -225,12 +249,32 @@ export function editorReducer(s: EditorState, a: EditorAction): EditorState {
       const next = withBuilding(project, (b) => ({ ...b, storeys: [...b.storeys, { ...a.storey, id, outline: [] }].sort((x, y) => x.zBottom - y.zBottom) }));
       return { ...commit(s, next, { kind: 'ok', text: `Kat_${a.storey.storeyNumber} eklendi.` }), activeStoreyId: id };
     }
+    case 'updateStorey': {
+      const project = withBuilding(s.project, (b) => ({ ...b, storeys: b.storeys.map((st) => (st.id === a.id ? { ...st, ...a.patch } : st)) }));
+      return commit(s, project, null);
+    }
+    case 'updateRoof': {
+      const project = withBuilding(s.project, (b) => {
+        const copy = { ...b };
+        if (a.roof) copy.roof = a.roof;
+        else delete (copy as { roof?: Roof }).roof;
+        return copy;
+      });
+      return commit(s, project, null);
+    }
     case 'updatePart': {
       const project = withBuilding(s.project, (b) => ({ ...b, parts: b.parts.map((p) => (p.id === a.id ? { ...p, ...a.patch } : p)) }));
       return commit(s, project, null);
     }
     case 'updateSectionPart': {
       const project = withBuilding(s.project, (b) => ({ ...b, sectionParts: b.sectionParts.map((p) => (p.id === a.id ? { ...p, ...a.patch } : p)) }));
+      return commit(s, project, null);
+    }
+    case 'updateInstallation': {
+      const project = withBuilding(s.project, (b) => ({
+        ...b,
+        installations: (b.installations ?? []).map((iy) => (iy.id === a.id ? { ...iy, ...a.patch } : iy)),
+      }));
       return commit(s, project, null);
     }
     case 'load':

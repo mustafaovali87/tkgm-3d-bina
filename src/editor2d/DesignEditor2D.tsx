@@ -31,8 +31,19 @@ const TOOLS: ReadonlyArray<{ id: EditorTool; label: string; key: string; title: 
   { id: 'bb', label: 'BB', key: 'B', title: 'BB parçası: listeden seçili bağımsız bölüme bağlanır (B)' },
   { id: 'kisim', label: 'Kısım', key: 'R', title: 'Kısım (BBK): BB parçasının içinde; kısmın içine çizilen kısım delik açar (R)' },
   { id: 'oa', label: 'Ortak alan', key: 'O', title: 'Ortak alan (OA) (O)' },
+  { id: 'iy', label: 'İç yapı', key: 'I', title: 'İç yapı (BBKIY/OAIY): merdiven (1001), sütun (1002), asansör (1003) (I)' },
   { id: 'olcu', label: 'Ölçü', key: 'M', title: 'Ölçü: uzunluk ve alan (M)' },
 ];
+
+const IY_LABELS: Record<1001 | 1002 | 1003, string> = { 1001: 'Merdiven', 1002: 'Sütun', 1003: 'Asansör' };
+const SP_USAGE_LABELS: Record<1001 | 1002 | 1003 | 1004 | 1005 | 1006, string> = {
+  1001: '1001 Normal',
+  1002: '1002 Eklenti',
+  1003: '1003 Dubleks',
+  1004: '1004 Çatı Arası',
+  1005: '1005 Tripleks',
+  1006: '1006 Çok Katlı',
+};
 
 const SNAP_LABEL: Record<SnapKind, string> = {
   kose: 'köşe',
@@ -117,10 +128,12 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
 
   const storeyRings: Ring2[] = useMemo(() => {
     if (!b || !sid) return [];
+    const partIds = new Set(b.parts.filter((x) => x.storeyId === sid).map((x) => x.id));
     return [
       ...(storey?.outline.flatMap((o) => [o.outer, ...o.holes]) ?? []),
       ...b.sectionParts.filter((x) => x.storeyId === sid).map((x) => x.outline.outer),
       ...b.parts.filter((x) => x.storeyId === sid).flatMap((x) => [x.polygon.outer, ...x.polygon.holes]),
+      ...(b.installations ?? []).filter((iy) => partIds.has(iy.partId)).map((iy) => iy.polygon.outer),
     ];
   }, [b, sid, storey]);
 
@@ -196,6 +209,7 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
   const selected = state.selectedId;
   const selPart = b?.parts.find((p) => p.id === selected);
   const selSp = b?.sectionParts.find((p) => p.id === selected);
+  const selIy = (b?.installations ?? []).find((iy) => iy.id === selected);
   const partOptions = codelists.getList('partUsage').entries;
 
   const saveProject = () => {
@@ -245,6 +259,7 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
   const draftWithCursor = cursor && state.tool !== 'sec' && state.draft.length > 0 ? [...state.draft, cursor.point] : state.draft;
   const draftArea = draftWithCursor.length >= 3 ? polyAreaM2({ outer: draftWithCursor, holes: [] }) : 0;
   const sw = view.mmPerPx; // 1 piksel çizgi kalınlığı (mm)
+  const storeyPartIds = useMemo(() => new Set((b?.parts ?? []).filter((x) => x.storeyId === sid).map((x) => x.id)), [b, sid]);
 
   return (
     <div className="flex h-full w-full text-xs" onKeyDown={onKeyDown} onKeyUp={(e) => e.key === 'Shift' && setShift(false)} tabIndex={0} aria-label="2B tasarım editörü">
@@ -322,6 +337,17 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
           {b?.parts.filter((x) => x.storeyId === sid).map((p) => (
             <path key={p.id} d={polyPath(p.polygon)} fillRule="evenodd" fill={p.kind === 'OA' ? '#fde68a' : '#e0f2fe'} fillOpacity={0.55} stroke={issueIds.has(p.id) ? '#dc2626' : selected === p.id ? '#f59e0b' : '#475569'} strokeWidth={(selected === p.id ? 2.5 : 1) * sw} />
           ))}
+          {/* M8: İç yapılar (BBKIY / OAIY) */}
+          {(b?.installations ?? []).filter((iy) => storeyPartIds.has(iy.partId)).map((iy) => {
+            const c = ringCentroid(iy.polygon.outer);
+            const fs = Math.max(9 * sw, 100);
+            return (
+              <g key={iy.id}>
+                <path d={polyPath(iy.polygon)} fillRule="evenodd" fill="#94a3b8" fillOpacity={0.65} stroke={selected === iy.id ? '#f59e0b' : '#1e293b'} strokeWidth={(selected === iy.id ? 2.5 : 1.2) * sw} strokeDasharray={`${3 * sw} ${1.5 * sw}`} />
+                <text x={c.x} y={-c.y} textAnchor="middle" fontSize={fs} fill="#0f172a" pointerEvents="none">{IY_LABELS[iy.usage]}</text>
+              </g>
+            );
+          })}
           {/* Etiketler: kullanım + canlı alan; plan alanından %10 sapma kırmızı (§7.5) */}
           {b?.parts.filter((x) => x.storeyId === sid).map((p) => {
             const c = ringCentroid(p.polygon.outer);
@@ -387,6 +413,39 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
             {b?.storeys.map((s) => <option key={s.id} value={s.id}>Kat_{s.storeyNumber} · {(s.zBottom / 1000).toFixed(3)} m</option>)}
           </select>
         </label>
+        {storey && (
+          <div className="space-y-1 p-1.5 rounded border border-slate-800 text-[10px]">
+            <label className="flex items-center gap-1.5" title="M8 (§5.9): Bu kattaki odaları ve duvarları eğik çatı düzlemleriyle kes">
+              <input type="checkbox" checked={Boolean(storey.clipToRoof)} onChange={(e) => dispatch({ type: 'updateStorey', id: storey.id, patch: { clipToRoof: e.target.checked } })} />
+              <span>Çatı arası kesimi (§5.9)</span>
+            </label>
+            <label className="flex items-center gap-1.5" title="M8 (§4.2): Kapatılırsa bu kat için K_ nesnesi üretilmez (dubleks çatı arası)">
+              <input type="checkbox" checked={storey.emitStoreyObject !== false} onChange={(e) => dispatch({ type: 'updateStorey', id: storey.id, patch: { emitStoreyObject: e.target.checked } })} />
+              <span>Kat (K_) nesnesi üret</span>
+            </label>
+            <label className="block">
+              <span className="text-slate-400">Çatı biçimi (§5.9 / §5.11)</span>
+              <select
+                value={b?.roof?.mode ?? 'flat'}
+                onChange={(e) => {
+                  const m = e.target.value as 'flat' | 'gable' | 'hip' | 'shed' | 'manual';
+                  if (m === 'manual' && b?.roof?.mode === 'manual') return;
+                  dispatch({
+                    type: 'updateRoof',
+                    roof: { mode: m === 'manual' ? 'flat' : m, eaveOverhang: b?.roof?.eaveOverhang ?? 0, thickness: b?.roof?.thickness ?? 0, pitchDeg: m === 'flat' ? 0 : (b?.roof?.pitchDeg || 25) },
+                  });
+                }}
+                className="w-full mt-0.5 bg-slate-900 border border-slate-700 rounded px-1 py-0.5"
+              >
+                <option value="flat">Teras (düz)</option>
+                <option value="gable">Beşik (iki eğimli)</option>
+                <option value="hip">Kırma (dört eğimli)</option>
+                <option value="shed">Tek eğim (sundurma)</option>
+                {b?.roof?.mode === 'manual' && <option value="manual">Elle (GML'den)</option>}
+              </select>
+            </label>
+          </div>
+        )}
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={showUnderlay} onChange={(e) => setShowUnderlay(e.target.checked)} />
           <span>Altlık: içe aktarılan GML planı</span>
@@ -412,15 +471,25 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
           M7 İçe Aktar / Konumlandır
         </button>
 
-        {(state.tool === 'bb' || state.tool === 'kisim' || state.tool === 'oa') && (
+        {(state.tool === 'bb' || state.tool === 'kisim' || state.tool === 'oa' || state.tool === 'iy') && (
           <div className="space-y-1.5 p-1.5 rounded border border-slate-800">
             {state.tool === 'bb' && (
-              <label className="block">
-                <span className="text-[10px] text-slate-400">Bağımsız bölüm (liste beyan)</span>
-                <select value={state.options.sectionId ?? ''} onChange={(e) => dispatch({ type: 'options', patch: { sectionId: e.target.value } })} className="w-full mt-0.5 bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
-                  {b?.sections.map((s) => <option key={s.id} value={s.id}>BB {s.number} · {s.registeredQuality || '—'}</option>)}
-                </select>
-              </label>
+              <>
+                <label className="block">
+                  <span className="text-[10px] text-slate-400">Bağımsız bölüm (liste beyan)</span>
+                  <select value={state.options.sectionId ?? ''} onChange={(e) => dispatch({ type: 'options', patch: { sectionId: e.target.value } })} className="w-full mt-0.5 bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
+                    {b?.sections.map((s) => <option key={s.id} value={s.id}>BB {s.number} · {s.registeredQuality || '—'}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-slate-400">BB parçası türü (usage)</span>
+                  <select value={state.options.sectionPartUsage} onChange={(e) => dispatch({ type: 'options', patch: { sectionPartUsage: Number(e.target.value) as 1001 | 1002 | 1003 | 1004 | 1005 | 1006 } })} className="w-full mt-0.5 bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
+                    {(Object.keys(SP_USAGE_LABELS) as unknown as Array<1001 | 1002 | 1003 | 1004 | 1005 | 1006>).map((k) => (
+                      <option key={k} value={k}>{SP_USAGE_LABELS[k]}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
             )}
             {state.tool === 'kisim' && (
               <label className="block">
@@ -438,13 +507,23 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
                 </select>
               </label>
             )}
+            {state.tool === 'iy' && (
+              <label className="block">
+                <span className="text-[10px] text-slate-400">İç yapı türü (roomInstallationUsage)</span>
+                <select value={state.options.iyUsage} onChange={(e) => dispatch({ type: 'options', patch: { iyUsage: Number(e.target.value) as 1001 | 1002 | 1003 } })} className="w-full mt-0.5 bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
+                  <option value={1001}>1001 Merdiven</option>
+                  <option value={1002}>1002 Sütun</option>
+                  <option value={1003}>1003 Asansör</option>
+                </select>
+              </label>
+            )}
           </div>
         )}
 
-        {(selPart || selSp) && (
+        {(selPart || selSp || selIy) && (
           <div className="space-y-1.5 p-1.5 rounded border border-amber-700/60">
-            <div className="font-semibold text-amber-300">{selPart ? (selPart.kind === 'BBK' ? 'Kısım' : 'Ortak alan') : 'BB parçası'}</div>
-            <div className="font-mono text-[11px]">Alan: {(metrics.get(selected ?? '')?.areaM2 ?? 0).toFixed(2)} m²</div>
+            <div className="font-semibold text-amber-300">{selPart ? (selPart.kind === 'BBK' ? 'Kısım' : 'Ortak alan') : selSp ? 'BB parçası' : 'İç yapı (BBKIY/OAIY)'}</div>
+            {!selIy && <div className="font-mono text-[11px]">Alan: {(metrics.get(selected ?? '')?.areaM2 ?? 0).toFixed(2)} m²</div>}
             {selPart && (
               <>
                 <select value={selPart.usage} onChange={(e) => dispatch({ type: 'updatePart', id: selPart.id, patch: { usage: Number(e.target.value) } })} className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
@@ -462,11 +541,37 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
                     className="w-full mt-0.5 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 font-mono"
                   />
                 </label>
+                {selPart.kind === 'BBK' && (
+                  <label className="flex items-center gap-1.5 text-[10px]">
+                    <input type="checkbox" checked={Boolean(selPart.remote)} onChange={(e) => dispatch({ type: 'updatePart', id: selPart.id, patch: { remote: e.target.checked } })} />
+                    <span>Uzak kısım (H11a)</span>
+                  </label>
+                )}
               </>
             )}
             {selSp && (
-              <select value={selSp.sectionId} onChange={(e) => dispatch({ type: 'updateSectionPart', id: selSp.id, patch: { sectionId: e.target.value } })} className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
-                {b?.sections.map((s) => <option key={s.id} value={s.id}>BB {s.number}</option>)}
+              <>
+                <select value={selSp.sectionId} onChange={(e) => dispatch({ type: 'updateSectionPart', id: selSp.id, patch: { sectionId: e.target.value } })} className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
+                  {b?.sections.map((s) => <option key={s.id} value={s.id}>BB {s.number}</option>)}
+                </select>
+                <select value={selSp.usage} onChange={(e) => dispatch({ type: 'updateSectionPart', id: selSp.id, patch: { usage: Number(e.target.value) as 1001 | 1002 | 1003 | 1004 | 1005 | 1006 } })} className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
+                  {(Object.keys(SP_USAGE_LABELS) as unknown as Array<1001 | 1002 | 1003 | 1004 | 1005 | 1006>).map((k) => (
+                    <option key={k} value={k}>{SP_USAGE_LABELS[k]}</option>
+                  ))}
+                </select>
+                <label className="block">
+                  <span className="text-[10px] text-slate-400">Dubleks grup katı (groupStoreyId)</span>
+                  <select value={selSp.groupStoreyId ?? selSp.storeyId} onChange={(e) => dispatch({ type: 'updateSectionPart', id: selSp.id, patch: { groupStoreyId: e.target.value === selSp.storeyId ? undefined : e.target.value } })} className="w-full mt-0.5 bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
+                    {b?.storeys.map((s) => <option key={s.id} value={s.id}>Kat_{s.storeyNumber}</option>)}
+                  </select>
+                </label>
+              </>
+            )}
+            {selIy && (
+              <select value={selIy.usage} onChange={(e) => dispatch({ type: 'updateInstallation', id: selIy.id, patch: { usage: Number(e.target.value) as 1001 | 1002 | 1003 } })} className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5">
+                <option value={1001}>1001 Merdiven</option>
+                <option value={1002}>1002 Sütun</option>
+                <option value={1003}>1003 Asansör</option>
               </select>
             )}
             <button type="button" onClick={() => dispatch({ type: 'delete' })} className="w-full px-1 py-0.5 rounded bg-red-900/60 border border-red-700 text-red-100">Sil (Delete)</button>

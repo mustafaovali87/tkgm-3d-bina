@@ -1,9 +1,11 @@
-// M6 — Geometri motoru II: balkon/teras (§5.8), çatı (§5.9), LoD2 bina kabuğu (§5.10), LoD0/LoD1/TIC/Envelope (§5.11).
+// M6/M8 — Geometri motoru II: balkon/teras (§5.8), çatı ve çatı arası (§5.9), LoD2 bina kabuğu + DışTaban/DışTavan (§5.10), LoD0/LoD1/TIC/Envelope (§5.11).
 // Saf TS. Koordinatlar tamsayı mm; kimlikler uuidv5 ile deterministik.
 import { polyAreaM2, ringAreaM2, signedArea2x } from '../design/geometry2d.ts';
 import type { Balcony, DesignBuilding, Poly2, Pt2, Ring2, Roof, Storey } from '../design/types.ts';
 import { DEFAULT_ROOF } from '../design/types.ts';
+import { buildRoofEnvelope, resolveRoofEdgeZ, roofRidgeSplitPointsOnRing } from './atticClip.ts';
 import { edgeCovers, horizontal, ringEdges, round2, storeyLevels, wallFaces, type FaceHole } from './generate.ts';
+import { subtractPolygons2D } from './polyBoolean2d.ts';
 import type { BrepIssue, BrepObject, BrepOpening, BrepPolygon, BrepPolygonKind, BrepShell, BrepSurface, Pt3, StoreyLevels } from './types.ts';
 
 type IdOf = (prefix: string, path: string) => string;
@@ -123,14 +125,11 @@ function balconyObject(b: Balcony, building: DesignBuilding, lv: StoreyLevels, s
 }
 
 // ---------------------------------------------------------------------------------------------
-// Çatı (§5.9): elle yüzler veya parametrik düz / beşik / kırma (dikdörtgen planda)
+// Çatı (§5.9): elle yüzler veya parametrik düz / beşik / kırma / tek eğim (dikdörtgen planda)
 
 function roofPolygons(roof: Roof, top: Storey, zRE: number, pid: (role: string) => string, issues: BrepIssue[], elementId: string): { polys: BrepPolygon[]; projectionArea: number } {
   if (roof.mode === 'manual') {
     const polys = (roof.facets ?? []).map((f, i) => ({ id: pid(`elle:${i}`), kind: 'Roof_' as const, outer: f.outer, holes: f.holes }));
-    // İzdüşüm alanı: en alttaki yatay, aşağı bakan yüzlerin alanı (saçak dahil çatı tabanı; Ornek6 120.79)
-    // Yatay izdüşüm: yukarı bakan yüzlerin izdüşüm alanları toplamı ile aşağı bakanlarınki (alt yüz) arasından büyüğü.
-    // Kapalı gövdede ikisi eşittir (Ornek6: 120.79); yalnız üst yüzlü veya ters yönlü çatılarda da doğru sonuç verir.
     const netArea = (p: { outer: readonly Pt3[]; holes: readonly (readonly Pt3[])[] }) => ringAreaM2(p.outer) - p.holes.reduce((h, r) => h + ringAreaM2(r), 0);
     const up = polys.filter((p) => signedArea2x(p.outer) > 0).reduce((s, p) => s + netArea(p), 0);
     const down = polys.filter((p) => signedArea2x(p.outer) < 0).reduce((s, p) => s + netArea(p), 0);
@@ -150,7 +149,7 @@ function roofPolygons(roof: Roof, top: Storey, zRE: number, pid: (role: string) 
     polys.push(horizontal({ outer: c, holes: [] }, z0, true, 'Roof_', pid('ust')));
     return { polys, projectionArea: ringAreaM2(c) };
   }
-  // Beşik / kırma: yalnız dikdörtgen (4 köşe, dik açılar ±1°)
+  // Beşik / kırma / tek eğim: yalnız dikdörtgen (4 köşe, dik açılar ±1°)
   const rightAngles = c.length === 4 && c.every((p, i) => {
     const a = unit(c[(i + 3) % 4], p);
     const b = unit(p, c[(i + 1) % 4]);
@@ -167,6 +166,18 @@ function roofPolygons(roof: Roof, top: Storey, zRE: number, pid: (role: string) 
   const k = L01 >= L12 ? c : [c[1], c[2], c[3], c[0]];
   const L = Math.max(L01, L12);
   const W = Math.min(L01, L12);
+  const K = k.map((p) => at(p, z0));
+  const face = (pts: Pt3[], role: string): BrepPolygon => {
+    const uniq = pts.filter((p, i) => pts.findIndex((q) => q.x === p.x && q.y === p.y && q.z === p.z) === i);
+    return { id: pid(role), kind: 'Roof_', outer: uniq, holes: [] };
+  };
+  if (roof.mode === 'shed') {
+    const hShed = Math.round(W * Math.tan((roof.pitchDeg * Math.PI) / 180));
+    const H2 = at(k[2], z0 + hShed);
+    const H3 = at(k[3], z0 + hShed);
+    polys.push(face([K[0], K[1], H2, H3], 'egim:0'), face([K[2], K[3], H3, H2], 'arka:0'), face([K[1], K[2], H2], 'uc:1'), face([K[3], K[0], H3], 'uc:0'));
+    return { polys, projectionArea: ringAreaM2(c) };
+  }
   const h = Math.round((W / 2) * Math.tan((roof.pitchDeg * Math.PI) / 180));
   const u = unit(k[0], k[1]);
   const mid30 = { x: (k[3].x + k[0].x) / 2, y: (k[3].y + k[0].y) / 2 };
@@ -174,11 +185,6 @@ function roofPolygons(roof: Roof, top: Storey, zRE: number, pid: (role: string) 
   const inset = roof.mode === 'hip' ? W / 2 : 0;
   const r0 = at(rnd({ x: mid30.x + u.x * inset, y: mid30.y + u.y * inset }), z0 + h);
   const r1 = at(rnd({ x: mid12.x - u.x * inset, y: mid12.y - u.y * inset }), z0 + h);
-  const K = k.map((p) => at(p, z0));
-  const face = (pts: Pt3[], role: string): BrepPolygon => {
-    const uniq = pts.filter((p, i) => pts.findIndex((q) => q.x === p.x && q.y === p.y && q.z === p.z) === i);
-    return { id: pid(role), kind: 'Roof_', outer: uniq, holes: [] };
-  };
   polys.push(face([K[0], K[1], r1, r0], 'egim:0'), face([K[2], K[3], r0, r1], 'egim:1'), face([K[1], K[2], r1], 'uc:1'), face([K[3], K[0], r0], 'uc:0'));
   if (L - W < 2 && roof.mode === 'hip') issues.push({ code: 'B-CAT-05', severity: 'B', elementId, message: 'Kare planda kırma çatı piramit olarak üretildi.' });
   return { polys, projectionArea: ringAreaM2(c) };
@@ -196,16 +202,17 @@ export function generateShell(building: DesignBuilding, lod2Openings: readonly B
   const top = storeys[storeys.length - 1];
   const lvTop = levels[levels.length - 1];
   const mbId = gid('MB_', path);
+  const zRoofEdge = resolveRoofEdgeZ(building);
 
   // TIC (§5.11): tasarımdan; yoksa en alt kat sınırı @ döşeme altı
   const tic: Pt3[] = building.tic && building.tic.length >= 3 ? [...building.tic] : (s0?.outline[0]?.outer ?? []).map((p) => at(p, levels[0]?.zFloorBottom ?? 0));
   if (!building.tic) issues.push({ code: 'B-TIC-01', severity: 'U', elementId: building.id, message: 'TIC (aplikasyon köşeleri) girilmedi; en alt kat sınırı döşeme altı kotunda kullanıldı.' });
   const zTIC = tic.length ? Math.max(...tic.map((p) => p.z)) : (levels[0]?.zFloorBottom ?? 0);
 
-  // LoD0: FootPrint = zTIC'e en yakın taban kotlu katın sınırı @ zTIC (normal yukarı); RoofEdge = en üst kat @ zCeiling
+  // LoD0: FootPrint = zTIC'e en yakın taban kotlu katın sınırı @ zTIC (normal yukarı); RoofEdge = en üst kat @ zRoofEdge
   const fpStorey = storeys.reduce((a, s) => (Math.abs(s.zBottom - zTIC) < Math.abs(a.zBottom - zTIC) ? s : a), s0);
   const lod0FootPrint = (fpStorey?.outline ?? []).map((pl, i) => horizontal(pl, zTIC, true, 'Lod0FootPrint_', pid('Lod0FootPrint_', `${i}`)));
-  const lod0RoofEdge = (top?.outline ?? []).map((pl, i) => horizontal(pl, lvTop.zCeiling, true, 'Lod0RoofEdge_', pid('Lod0RoofEdge_', `${i}`)));
+  const lod0RoofEdge = (top?.outline ?? []).map((pl, i) => horizontal(pl, zRoofEdge, true, 'Lod0RoofEdge_', pid('Lod0RoofEdge_', `${i}`)));
 
   // LoD1: [zTIC, zRoofEdge] prizması; FootPrint/RoofEdge'den alanı büyük olanın konturu
   const prism = (ring: Ring2, z0: number, z1: number, role: string): BrepPolygon[] => {
@@ -218,17 +225,17 @@ export function generateShell(building: DesignBuilding, lod2Openings: readonly B
   const fpRing = fpStorey?.outline[0]?.outer ?? [];
   const reRing = top?.outline[0]?.outer ?? [];
   const lod1Solids: BrepPolygon[][] = [];
-  if (fpRing.length >= 3 && reRing.length >= 3) lod1Solids.push(prism(ringAreaM2(fpRing) >= ringAreaM2(reRing) ? fpRing : reRing, zTIC, lvTop.zCeiling, 'ustu'));
+  if (fpRing.length >= 3 && reRing.length >= 3) lod1Solids.push(prism(ringAreaM2(fpRing) >= ringAreaM2(reRing) ? fpRing : reRing, zTIC, zRoofEdge, 'ustu'));
   if (s0 && levels[0].zFloorBottom < zTIC - 1) {
     const g = s0.outline[0]?.outer ?? [];
     lod1Solids.push(prism(ringAreaM2(fpRing) >= ringAreaM2(g) ? fpRing : g, levels[0].zFloorBottom, zTIC, 'alti'));
   }
   if ((fpStorey?.outline.length ?? 0) > 1 || (top?.outline.length ?? 0) > 1) issues.push({ code: 'B-LOD1-01', severity: 'U', elementId: building.id, message: 'Çok kütleli kat: LoD1 yalnız ilk kütle için üretildi.' });
 
-  // LoD2 (§5.10): dış duvarlar (kat başına kenar × [zFloorBottom, zCeiling], T1 açıklıklarıyla), zemin, çatı
+  // LoD2 (§5.10): dış duvarlar (kat başına kenar × [zFloorBottom, zCeiling], T1 açıklıklarıyla), DışTaban/DışTavan, zemin, çatı
   const lod2Surfaces: BrepSurface[] = [];
   const roof = building.roof ?? DEFAULT_ROOF;
-  const rp = roofPolygons(roof, top, lvTop.zCeiling, (role) => pid('Roof_', role), issues, building.id);
+  const rp = roofPolygons(roof, top, zRoofEdge, (role) => pid('Roof_', role), issues, building.id);
   lod2Surfaces.push({ id: pid('Roof_', 'yuzey'), tag: 'RoofSurface', polygons: rp.polys, openings: [] });
   lod2Surfaces.push({
     id: pid('Ground_', 'yuzey'),
@@ -239,30 +246,52 @@ export function generateShell(building: DesignBuilding, lod2Openings: readonly B
   const used = new Set<string>();
   storeys.forEach((s, si) => {
     const lv = levels[si];
+    const roofEnv = buildRoofEnvelope(building, s);
     s.outline.forEach((pl, pi) =>
-      [pl.outer, ...pl.holes].forEach((ring, ri) =>
+      [pl.outer, ...pl.holes].forEach((ring, ri) => {
+        const ridgeSplits = roofEnv ? roofRidgeSplitPointsOnRing(ring, roofEnv) : [];
         ringEdges(ring).forEach((e, ei) => {
           const ops = lod2Openings.filter((o) => {
             const r = o.polygon.outer;
             return !used.has(o.id) && r[0].z >= lv.zFloorBottom && r[1].z <= lv.zCeiling && edgeCovers(e, r[0], r[2]);
           });
           const holes: FaceHole[] = ops.map((o) => ({ key: o.id, a: o.polygon.outer[0], b: o.polygon.outer[2], zb: o.polygon.outer[0].z, zt: o.polygon.outer[1].z, kind: o.prefix === 'KAPI_' ? ('door' as const) : ('window' as const) }));
-          const wf = wallFaces(e, lv.zFloorBottom, lv.zCeiling, [], holes, 'Wall_', (x) => pid('Wall_', `lod2:${s.id}:${pi}:${ri}:${ei}:${x}`), issues, building.id);
+          const wf = wallFaces(e, lv.zFloorBottom, lv.zCeiling, ridgeSplits, holes, 'Wall_', (x) => pid('Wall_', `lod2:${s.id}:${pi}:${ri}:${ei}:${x}`), issues, building.id, roofEnv?.zAt);
           for (const o of ops) used.add(o.id);
           // Her poligon ayrı WallSurface (Ornek6: 16 eleman); açıklıklar delikli poligonun yüzeyine
           wf.polygons.forEach((p, k) => {
             const mine = ops.filter((o) => p.holes.some((h) => h[0].x === o.polygon.outer[0].x && h[0].y === o.polygon.outer[0].y && h[0].z === o.polygon.outer[0].z));
             lod2Surfaces.push({ id: pid('Wall_', `lod2yuzey:${s.id}:${pi}:${ri}:${ei}:${k}`), tag: 'WallSurface', polygons: [p], openings: mine });
           });
-        }),
-      ),
+        });
+      }),
     );
   });
   for (const o of lod2Openings) if (!used.has(o.id)) issues.push({ code: 'B-LOD2-01', severity: 'H', elementId: o.designOpeningId, message: 'LoD2 açıklığı bir dış duvar yüzüne yerleştirilemedi.' });
-  // Dış taban / dış tavan (L − U, U − L): ardışık katların sınırı farklıysa Boolean fark gerekir
+
+  // M8 (§5.10): Kademeli katlarda OuterFloorSurface (L − U @ zCeiling(L), normal yukarı) ve OuterCeilingSurface (U − L @ zFloorBottom(U), normal aşağı)
+  const outerFloorPolys: BrepPolygon[] = [];
+  const outerCeilingPolys: BrepPolygon[] = [];
   for (let i = 1; i < storeys.length; i++) {
-    const same = JSON.stringify(storeys[i].outline.map((p) => p.outer)) === JSON.stringify(storeys[i - 1].outline.map((p) => p.outer));
-    if (!same) issues.push({ code: 'B-LOD2-02', severity: 'U', elementId: storeys[i].id, message: `Kat_${storeys[i - 1].storeyNumber} ile Kat_${storeys[i].storeyNumber} sınırı farklı: DışTaban/DışTavan yüzeyleri (Boolean fark, Clipper2) henüz üretilmiyor.` });
+    const lower = storeys[i - 1];
+    const upper = storeys[i];
+    if (lower.outline.length === 0 || upper.outline.length === 0) continue;
+    const same = JSON.stringify(upper.outline.map((p) => p.outer)) === JSON.stringify(lower.outline.map((p) => p.outer));
+    if (same) continue;
+    const lMinusU = subtractPolygons2D(lower.outline, upper.outline);
+    lMinusU.forEach((poly, idx) => {
+      outerFloorPolys.push(horizontal(poly, levels[i - 1].zCeiling, true, 'OuterFloor_', pid('OuterFloor_', `${lower.id}:${idx}`)));
+    });
+    const uMinusL = subtractPolygons2D(upper.outline, lower.outline);
+    uMinusL.forEach((poly, idx) => {
+      outerCeilingPolys.push(horizontal(poly, levels[i].zFloorBottom, false, 'OuterCeiling_', pid('OuterCeiling_', `${upper.id}:${idx}`)));
+    });
+  }
+  if (outerFloorPolys.length > 0) {
+    lod2Surfaces.push({ id: pid('OuterFloor_', 'yuzey'), tag: 'OuterFloorSurface', polygons: outerFloorPolys, openings: [] });
+  }
+  if (outerCeilingPolys.length > 0) {
+    lod2Surfaces.push({ id: pid('OuterCeiling_', 'yuzey'), tag: 'OuterCeilingSurface', polygons: outerCeilingPolys, openings: [] });
   }
 
   // Balkonlar
@@ -286,7 +315,6 @@ export function generateShell(building: DesignBuilding, lod2Openings: readonly B
   lod1Solids.forEach(addPolys);
   for (const s of lod2Surfaces) addPolys(s.polygons);
   for (const b of balconies) for (const s of b.surfaces) addPolys(s.polygons);
-  // Döngüyle (büyük binalarda Math.min(...dizi) yığın taşırır; Ornek3)
   const min = { x: Infinity, y: Infinity, z: Infinity };
   const max = { x: -Infinity, y: -Infinity, z: -Infinity };
   for (const p of pts) {
@@ -301,6 +329,7 @@ export function generateShell(building: DesignBuilding, lod2Openings: readonly B
   let roofTop = lvTop.zCeiling;
   for (const p of rp.polys) for (const q of p.outer) if (q.z > roofTop) roofTop = q.z;
   const buildingHeight = building.info?.buildingHeight ?? round2((roofTop - zTIC) / 1000);
+  const emittedStoreys = storeys.filter((s) => s.emitStoreyObject !== false);
   return {
     id: mbId,
     mbgId: gid('MBG_', path),
@@ -313,7 +342,7 @@ export function generateShell(building: DesignBuilding, lod2Openings: readonly B
     envelope: { min, max },
     roofProjectionArea: round2(rp.projectionArea),
     buildingHeight,
-    storeysAboveGround: storeys.filter((s) => !isBelowGround(s)).length,
-    storeysBelowGround: storeys.filter(isBelowGround).length,
+    storeysAboveGround: emittedStoreys.filter((s) => !isBelowGround(s)).length,
+    storeysBelowGround: emittedStoreys.filter(isBelowGround).length,
   };
 }

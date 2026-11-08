@@ -53,14 +53,16 @@ export interface BrepSurface {
 
 export interface BrepObject {
   readonly id: string;
-  readonly prefix: 'K_' | 'BB_' | 'BBK_' | 'OA_' | 'BLKN_' | 'TRS_';
-  /** Kaynak tasarım nesnesi (Storey / SectionPart / Part). */
+  readonly prefix: 'K_' | 'BB_' | 'BBK_' | 'OA_' | 'BBKIY_' | 'OAIY_' | 'BLKN_' | 'TRS_';
+  /** Kaynak tasarım nesnesi (Storey / SectionPart / Part / RoomInstallation). */
   readonly designId: string;
   readonly storeyId: string;
   /** K_ ve BB_ için tüm poligonlar tek MultiSurface'tedir; yine de yüzey türüne göre gruplanır. */
   readonly surfaces: readonly BrepSurface[];
   /** calculatedArea, volume (kısım) / independentSectionCalculatedArea (BB). §5.12, 2 hane. */
   readonly attributes: Readonly<Record<string, number>>;
+  /** M8 (§3.9): Oda (BBK_/OA_) içindeki iç yapılar (BBKIY_/OAIY_). */
+  readonly installations?: readonly BrepObject[];
 }
 
 export interface StoreyLevels {
@@ -83,6 +85,8 @@ export interface BrepBuilding {
   readonly storeys: readonly BrepObject[];
   readonly sectionParts: readonly BrepObject[];
   readonly rooms: readonly BrepObject[];
+  /** M8 (§3.9): Tüm iç yapılar (BBKIY_ / OAIY_). Odaların kendi installations alanında da yer alır. */
+  readonly installations?: readonly BrepObject[];
   /** T1 temsilleri: LoD2 dış duvar açıklıkları. LoD2 duvarları M6'da üretilecek; burada konum ve sayı hazır. */
   readonly lod2Openings: readonly BrepOpening[];
   readonly issues: readonly BrepIssue[];

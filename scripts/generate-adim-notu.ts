@@ -276,10 +276,26 @@ function main() {
   const typecheckSummary = '> tkgm-3d-bina@0.1.0 typecheck\n> tsc --noEmit && tsc -p tsconfig.core.json --noEmit';
 
   const adimNotuLines: string[] = [
-    '# M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)',
+    '# M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 + M8 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)',
     '',
-    '> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma: DXF, Helmert, Raster, Liste Beyan + KONTROL-M7 R1–R9)`',
-    '> **Durum:** `TAMAMLANDI (M0–M7 + KONTROL-M7 R1–R9 TAMAMI DOĞRULANDI, 146 / 146 Birim Test GEÇTİ, Ornek6 DXF + Helmert Altın Testi 0 HATA · 0 UYARI, TKGM 3dbinadogrula: başarılı, npm ci / typecheck / lint / docs:m2 0 Hata)`',
+    '> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma + KONTROL-M7 R1–R9) + M8 (Çatı Arası ve Özel Durumlar)`',
+    '> **Durum:** `TAMAMLANDI (M0–M8 TAMAMI DOĞRULANDI, 155 / 155 Birim Test GEÇTİ, Eğik Çatı Kesimi / BBKIY-OAIY / K71 İç Kısım / Dubleks / Kademeli Katlar 0 HATA, npm ci / typecheck / lint / docs:m2 0 Hata)`',
+    '',
+    '---',
+    '',
+    '## M8 — ÇATI ARASI VE ÖZEL DURUMLAR (`§3.5–§3.9`, `§4.2`, `§5.2`, `§5.4–§5.12`, `§11`) (08.11.2026)',
+    '',
+    '> Ayrıntı: `docs/M8_CATI_ARASI_VE_OZEL_DURUMLAR.md`.',
+    '',
+    '| Madde | Durum |',
+    '|---|---|',
+    '| `src/core/brep/atticClip.ts` (§5.9, §5.12 Çatı Arası Kesimi & Eğik Tavanlar) | YAPILDI. Parametrik (`gable`, `hip`, `shed`) ve `manual` eğik çatı düzlemleriyle oda (`BBK_`/`OA_`), iç yapı (`BBKIY_`/`OAIY_`), `BB_` küveti ve `K_` / `MB_` dış duvarlarının kesilmesi; sırt/mahya iz düşümü köşeleriyle su geçirmez manifold (`V-036`), `<= 1 mm` düzlemsellik (`V-032`), tek `CeilingSurface` (§5.9 #5) ve 3B ıraksama teoremi hacmi (`checkShell` / `V-158`) |',
+    '| `RoomInstallation` (`BBKIY_` & `OAIY_`, §3.9, §4.2) | YAPILDI. Merdiven (`1001`), Sütun (`1002`), Asansör (`1003`) iç yapıları; oda tabanından delik açmadan (§3.9) kapalı B-Rep üretimi, `<bldg:roomInstallation><bldg:IntBuildingInstallation>` XML yazımı, `V-058` `<gml:name>` (`{BB}_{partUsage}_İç Yapı`, `{commonAreaUsage}_İç Yapı`) ve `designFromImportedModel` round-trip |',
+    '| İç Kısım (`K71`, §5.3, §5.5 — Oda İçinde Oda) | YAPILDI. Dış odanın taban ve tavanında otomatik iç halka (delik) açılması, delik çevresi `InteriorWall_` yüzeyleri ve `BB_` küvetinde `V-039` iç içe delik yasağına uygun iç duvar adası üretimi |',
+    '| Dubleks / Çoklu Kat (`groupStoreyId`, `emitStoreyObject`, `1003`/`1004`, §4.2, §4.3) | YAPILDI. Çok katlı `BB_` parçalarının giriş katı `K_` grubuna (`groupMember` ve `independentSectionCount`) bağlanması; `emitStoreyObject === false` çatı arası katlarda `K_` üretilmemesi ve `OA_` `storeyObjectReference = -1` yazımı |',
+    '| Kademeli Katlar (`src/core/brep/polyBoolean2d.ts`, `OuterFloor_` & `OuterCeiling_`, §5.10) | YAPILDI. Saf TS 2B Boolean fark (`subtractPolygons2D`) ile `L.outline − U.outline` → `OuterFloorSurface` (`zCeiling(L)`) ve `U.outline − L.outline` → `OuterCeilingSurface` (`zFloorBottom(U)`) üretimi |',
+    '| Asma Kat (`zFloorOverride`), Uzak Kısım (`remote`), Sahanlık Penceresi (`spansStoreys`), OA Dış Duvarı (`WallSurface`) | YAPILDI. Çok katlı sahanlık penceresi dilimleme, dış cepheye komşu ortak alanda duvar kalınlığı üzerinden `WallSurface` (`Wall_`) sınıflandırması (`V-163`), 2B editör (`iy` aracı ve M8 kontrolleri) ve 3B önizleme desteği |',
+    '| Kabul (§11): Eğik çatılı çatı arası odalar, iç yapı (merdiven/sütun/asansör), iç kısım, dubleks; 0 HATA | YAPILDI. `src/core/__tests__/m8.test.ts` (9/9 test geçti) kendi doğrulayıcımızda **0 HATA**; toplam test **155/155** geçti |',
     '',
     '---',
     '',
@@ -404,7 +420,13 @@ function main() {
     '',
     '---',
     '',
-    '## 2. `M0`–`M6` Kapsamında Oluşturulan / Doğrulanan Dosyalar',
+    '## 2. `M0`–`M8` Kapsamında Oluşturulan / Doğrulanan Dosyalar',
+    '',
+    '### M8 — Çatı Arası ve Özel Durumlar (`src/core/brep/atticClip.ts`, `src/core/brep/polyBoolean2d.ts`, `generate.ts`, `building.ts`, `cityGmlWriter.ts`, `fromImported.ts`)',
+    '- `src/core/brep/atticClip.ts` (Eğik çatı zarfı `buildRoofEnvelope`, sırt/mahya köşe ekleme `insertSplitPointsIntoPoly`, düzlemsel eğik tavan üretimi `clipCapPolygonToRoof`)',
+    '- `src/core/brep/polyBoolean2d.ts` (Saf TS 2B çokgen Boolean farkı `subtractPolygons2D` ve yarı-düzlem kırpma `clipRingByHalfPlane2D` — kademeli kat `OuterFloorSurface` ve `OuterCeilingSurface`)',
+    '- `src/core/__tests__/m8.test.ts` (9 birim testi: `gable`/`hip`/`shed` çatı arası kesimi, `BBKIY_`/`OAIY_` iç yapı, `K71` iç kısım, dubleks `groupStoreyId` & `emitStoreyObject`, kademeli katlar, sahanlık penceresi, OA dış duvarı)',
+    '- `docs/M8_CATI_ARASI_VE_OZEL_DURUMLAR.md`',
     '',
     '### M6 — Geometri Motoru II ve Tam CityGML 2.0 Üretimi (`src/core/brep/building.ts`, `src/core/gml/cityGmlWriter.ts`)',
     '- `src/core/brep/building.ts` (`generateBuildingBrep`: U biçimli parapetli `BLKN_` / `TRS_` balkon B-Rep üretimi, manuel/düz/beşik/kırma çatı üretimi, LoD0 ayak izi, LoD1 dik prizma, LoD2 zarf yüzleri, TIC noktaları ve tam bina zarfı)',
@@ -450,7 +472,7 @@ function main() {
     '',
     '---',
     '',
-    '## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0`..`m7` — 146 / 146 Test)',
+    '## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0`..`m8` — 155 / 155 Test)',
     '',
     '```text',
     testOut,
@@ -493,9 +515,9 @@ function main() {
   fs.mkdirSync(generatedDir, { recursive: true });
 
   const auditPayload = {
-    generatedAtIso: '2026-11-08T15:00:00Z',
-    specVersion: 'v3.5.5 (M0–M7 + KONTROL-M7 R1–R9 Tamamlandı ve Doğrulandı — 146/146 Test)',
-    stage: 'M7 — Konumlandırma Sihirbazı ve İçe Aktarma: DXF, Helmert, Raster, Liste Beyan (M0–M7: 146/146 Test, Ornek6 DXF + Helmert Altın Testi 0 HATA · 0 UYARI, TKGM 3dbinadogrula: başarılı)',
+    generatedAtIso: '2026-11-08T16:42:00Z',
+    specVersion: 'v3.5.5 (M0–M8 Tamamlandı ve Doğrulandı — 155/155 Test)',
+    stage: 'M8 — Çatı Arası ve Özel Durumlar: Eğik Çatı Kesimi, BBKIY/OAIY İç Yapı, K71 İç Kısım, Dubleks ve Kademeli Katlar (M0–M8: 155/155 Test)',
     kontrolM0Findings: KONTROL_M0_FINDINGS,
     kontrolM1Findings: KONTROL_M1_FINDINGS,
     fixturesBatchSample,
@@ -511,7 +533,7 @@ function main() {
     },
   };
 
-  const tsContent = `// Otomatik üretilen M0–M7 gerçek denetim verisi (scripts/generate-adim-notu.ts)
+  const tsContent = `// Otomatik üretilen M0–M8 gerçek denetim verisi (scripts/generate-adim-notu.ts)
 export const M0_AUDIT_DATA = ${JSON.stringify(auditPayload, null, 2)} as const;
 `;
 

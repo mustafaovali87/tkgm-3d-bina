@@ -86,11 +86,12 @@ export const BrepPreview3D: React.FC<BrepPreview3DProps> = ({ brep, onClose }) =
     const gOps = mk('openings');
     const gShell = mk('shell');
     for (const r of brep.rooms) for (const s of r.surfaces) for (const p of s.polygons) if (s.tag !== 'CeilingSurface') addPoly(gRooms, p, 1);
+    for (const iy of brep.installations ?? []) for (const s of iy.surfaces) for (const p of s.polygons) if (s.tag !== 'CeilingSurface') addPoly(gRooms, p, 1);
     for (const r of brep.rooms) for (const s of r.surfaces) for (const o of s.openings) addPoly(gOps, o.polygon, 1);
     for (const o of brep.lod2Openings) addPoly(gOps, o.polygon, 1);
     for (const b of brep.sectionParts) for (const s of b.surfaces) for (const p of s.polygons) addPoly(gTubs, p, 0.45);
     for (const k of brep.storeys) for (const s of k.surfaces) for (const p of s.polygons) addPoly(gStoreys, p, 0.25);
-    for (const s of brep.shell.lod2Surfaces) if (s.tag === 'RoofSurface') for (const p of s.polygons) addPoly(gShell, p, 1);
+    for (const s of brep.shell.lod2Surfaces) if (s.tag === 'RoofSurface' || s.tag === 'OuterFloorSurface' || s.tag === 'OuterCeilingSurface') for (const p of s.polygons) addPoly(gShell, p, 1);
     for (const b of brep.shell.balconies) for (const s of b.surfaces) for (const p of s.polygons) addPoly(gShell, p, 1);
 
     const box = new THREE.Box3().setFromObject(scene);

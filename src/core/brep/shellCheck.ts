@@ -86,15 +86,20 @@ export function checkShell(o: BrepObject): ShellCheck {
       openEdgeZ.add(p === q ? p : Number.NaN);
     } else if (c > 2) overusedEdges++;
   }
-  // Hacim: açıklık poligonları hariç, duvarların delikleri yok sayılır (delik kapalı ⇒ dış halka yeterli)
+  // Hacim: açıklık poligonları hariç, duvarların açıklık delikleri yok sayılır (delik kapalı ⇒ dış halka yeterli),
+  // ancak iç kısım (K71) gibi yapısal delikler (holeKinds tanımsız olanlar) hesaba katılır.
   // Kesinlik için yerel kökene taşınır (z mutlak ~1e6 mm; çarpımlar 2^53'ü aşmasın).
   const solid = o.surfaces.flatMap((s) => s.polygons);
   const c = solid[0]?.outer[0] ?? { x: 0, y: 0, z: 0 };
   let v6 = 0;
   for (const p of solid) {
-    const r = p.outer.map((q) => ({ x: q.x - c.x, y: q.y - c.y, z: q.z - c.z }));
-    const n = newell(r);
-    v6 += n.x * r[0].x + n.y * r[0].y + n.z * r[0].z;
+    const structHoles = p.holes.filter((_, hi) => !p.holeKinds?.[hi]);
+    for (const ring of [p.outer, ...structHoles]) {
+      if (ring.length < 3) continue;
+      const r = ring.map((q) => ({ x: q.x - c.x, y: q.y - c.y, z: q.z - c.z }));
+      const n = newell(r);
+      v6 += n.x * r[0].x + n.y * r[0].y + n.z * r[0].z;
+    }
   }
   return { closed: openEdges === 0 && overusedEdges === 0, openEdges, overusedEdges, openEdgeZ: [...openEdgeZ].sort((a, b) => a - b), volumeM3: v6 / 6 / 1e9 };
 }

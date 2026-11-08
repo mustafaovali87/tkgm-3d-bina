@@ -9,6 +9,7 @@ import {
   buildRoofEnvelope,
   clipCapPolygonToRoof,
   insertSplitPointsIntoPoly,
+  prepareExplicitCeilingForPoly,
   roofRidgeSplitPointsOnRing,
   zAtExplicitCeilingFaces,
   type RoofEnvelope,
@@ -82,7 +83,7 @@ export function edgeCovers(e: Edge, a: Pt2, b: Pt2): boolean {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Duvar yüzü üretimi: dikey dörtgen/yamuk, T-kavşaklarda bölünür (§5.1 madde 3, §5.5 madde 3), delikler eklenir.
+// Duvar yüzü üretimi: dikey dörtgen/yamuk/çokgen, T-kavşaklarda bölünür (§5.1 madde 3, §5.5 madde 3), delikler eklenir.
 
 export interface FaceHole {
   readonly key: string; // açıklık temsil anahtarı
@@ -100,9 +101,9 @@ interface WallFaceResult {
 }
 
 /**
- * Kenar p→q boyunca [z0, z1] (veya çatı kesiminde zTopAt(p)) dikey yüz(ler)i.
+ * Kenar p→q boyunca [z0, z1] (veya çatı kesiminde zTopAt(p) / topProfileAt(a,b)) dikey yüz(ler)i.
  * Normal, p→q yönünün sağına bakar (malzeme solda kalan halka için dışa).
- * Dış halka: [p@z0, q@z0, q@zTop(q), p@zTop(p)]; delik: [A@zb, A@zt, B@zt, B@zb] (ters yön).
+ * Dış halka: [p@z0, q@z0, ...topProfile(q→p)]; delik: [A@zb, A@zt, B@zt, B@zb] (ters yön).
  */
 export function wallFaces(
   e: Edge,
@@ -115,19 +116,36 @@ export function wallFaces(
   issues: BrepIssue[],
   ownerId: string,
   zTopAt?: (p: Pt2) => number,
+  topProfileAt?: (a: Pt2, b: Pt2) => Pt3[],
 ): WallFaceResult {
   const L = len(e);
   const u = dirOf(e);
   const P = (t: number): Pt2 => (t <= 0 ? e.p : t >= L ? e.q : rnd({ x: e.p.x + u.x * t, y: e.p.y + u.y * t }));
+  const holeSpans = holes.map((h) => {
+    const ta = projOn(e, h.a).t;
+    const tb = projOn(e, h.b).t;
+    return { lo: Math.min(ta, tb), hi: Math.max(ta, tb) };
+  });
   const cuts = new Set<number>();
+  const skippedTopCuts = new Set<number>();
   for (const s of splitPts) {
     const pr = projOn(e, s);
-    if (pr.d <= TOL && pr.t > TOL && pr.t < L - TOL) cuts.add(Math.round(pr.t));
+    if (pr.d <= TOL && pr.t > TOL && pr.t < L - TOL) {
+      const rt = Math.round(pr.t);
+      // Bir açıklığın yatay açıklık aralığının içine düşen T-kavşağı / mahya noktası duvarı dikey bölmesin (deliği keser);
+      // bunun yerine çatı kesimi varsa üst kenar profiline (topChain) tepe köşesi olarak eklensin.
+      if (holeSpans.some((sp) => rt > sp.lo - TOL && rt < sp.hi + TOL)) {
+        if (zTopAt) skippedTopCuts.add(rt);
+        continue;
+      }
+      cuts.add(rt);
+    }
   }
   const ts = [0, ...[...cuts].sort((a, b) => a - b), L];
   const holeRings = new Map<string, Pt3[]>();
   const polygons: BrepPolygon[] = [];
   const pieceHoles: Pt3[][][] = ts.slice(1).map(() => []);
+  const pieceHoleBoxes: { lo: number; hi: number; zb: number; zt: number }[][] = ts.slice(1).map(() => []);
   const pieceKinds: ('door' | 'window' | undefined)[][] = ts.slice(1).map(() => []);
   for (const h of holes) {
     const ta = projOn(e, h.a).t;
@@ -144,21 +162,54 @@ export function wallFaces(
       issues.push({ code: 'B-OP-02', severity: 'H', elementId: ownerId, message: `Açıklık deliği duvar yüzünün alt/üst kenarına değiyor (${h.zb}–${h.zt} mm, yüz ${z0}–${zCeilLim} mm): ${h.key}. Delik dış halkaya değerse poligon geçersiz olur (§5.6, K45a).` });
       continue;
     }
+    // R4: Aynı duvar parçasında mevcut bir delikle çakışan veya değen deliği atla (V-035 / V-039 önlemi)
+    const overlapsExisting = pieceHoleBoxes[i].some(
+      (b) => Math.min(b.hi, hi) - Math.max(b.lo, lo) >= -1 && Math.min(b.zt, h.zt) - Math.max(b.zb, h.zb) >= -1,
+    );
+    if (overlapsExisting) {
+      issues.push({ code: 'B-OP-10', severity: 'U', elementId: ownerId, message: `Aynı duvar yüzünde başka bir açıklık deliğiyle çakışan delik atlandı: ${h.key}.` });
+      continue;
+    }
     const [A, B] = ta <= tb ? [h.a, h.b] : [h.b, h.a];
     const ring = [at(A, h.zb), at(A, h.zt), at(B, h.zt), at(B, h.zb)];
     pieceHoles[i].push(ring);
+    pieceHoleBoxes[i].push({ lo, hi, zb: h.zb, zt: h.zt });
     pieceKinds[i].push(h.kind);
     holeRings.set(h.key, ring);
   }
+  const sortedSkipped = [...skippedTopCuts].sort((m, n) => n - m);
   for (let k = 0; k < ts.length - 1; k++) {
-    const a = P(ts[k]);
-    const b = P(ts[k + 1]);
-    const za = zTopAt ? Math.max(z0 + 1, Math.min(z1, zTopAt(a))) : z1;
-    const zbTop = zTopAt ? Math.max(z0 + 1, Math.min(z1, zTopAt(b))) : z1;
+    const t0 = ts[k];
+    const t1 = ts[k + 1];
+    const a = P(t0);
+    const b = P(t1);
+    let topChain: Pt3[];
+    if (topProfileAt) {
+      topChain = topProfileAt(a, b).map((p) => ({ x: p.x, y: p.y, z: Math.max(z0 + 1, Math.min(z1, p.z)) }));
+    } else {
+      const clampZ = (pt: Pt2) => (zTopAt ? Math.max(z0 + 1, Math.min(z1, zTopAt(pt))) : z1);
+      const midTops = sortedSkipped
+        .filter((rt) => rt > t0 + TOL && rt < t1 - TOL)
+        .map((rt) => {
+          const mp = P(rt);
+          return at(mp, clampZ(mp));
+        });
+      topChain = [at(b, clampZ(b)), ...midTops, at(a, clampZ(a))];
+    }
+    const rawOuter: Pt3[] = [at(a, z0), at(b, z0), ...topChain];
+    const outer: Pt3[] = [];
+    for (const pt of rawOuter) {
+      if (!outer.length || outer[outer.length - 1].x !== pt.x || outer[outer.length - 1].y !== pt.y || outer[outer.length - 1].z !== pt.z) {
+        outer.push(pt);
+      }
+    }
+    if (outer.length > 1 && outer[0].x === outer[outer.length - 1].x && outer[0].y === outer[outer.length - 1].y && outer[0].z === outer[outer.length - 1].z) {
+      outer.pop();
+    }
     polygons.push({
       id: idOf(`${k}`),
       kind,
-      outer: [at(a, z0), at(b, z0), at(b, zbTop), at(a, za)],
+      outer,
       holes: pieceHoles[k],
       ...(pieceHoles[k].length ? { holeKinds: pieceKinds[k] } : {}),
     });
@@ -231,6 +282,53 @@ function partFloorZ(p: Part, lv: StoreyLevels): number {
   return p.zFloorOverride ?? lv.zFloorTop;
 }
 
+function partTopZ(p: Part, ctx: StoreyCtx): number {
+  const z0 = partFloorZ(p, ctx.lv);
+  if (p.ceilingFaces && p.ceilingFaces.length > 0) {
+    let maxC = z0 + 100;
+    for (const f of p.ceilingFaces) {
+      for (const v of f.outer) {
+        if (v.z > maxC) maxC = v.z;
+      }
+    }
+    return Math.max(maxC, p.zTopOverride ?? maxC);
+  }
+  if (p.zTopOverride !== undefined) return Math.max(z0 + 100, p.zTopOverride);
+  if (z0 >= ctx.lv.zCeiling - 1) {
+    return Math.max(ctx.roofEnv?.zCeiling ?? 0, z0 + (ctx.storey.height - ctx.storey.slabThickness));
+  }
+  return ctx.lv.zCeiling;
+}
+
+function partShouldClipToRoof(p: Part, ctx: StoreyCtx, poly: Poly2, z0: number, z1: number): boolean {
+  if (p.ceilingFaces && p.ceilingFaces.length > 0) return false;
+  if (!ctx.roofEnv) return false;
+  if (p.clipToRoof || ctx.storey.clipToRoof || ctx.storey.kneeWallHeight !== undefined || z0 >= ctx.lv.zCeiling - 1) return true;
+  return polyRings(poly).some((r) => r.some((pt) => ctx.roofEnv!.zAt(pt) < z1 - 1));
+}
+
+function spFloorBottomZ(sp: SectionPart, lv: StoreyLevels): number {
+  return sp.zFloorOverride ?? lv.zFloorBottom;
+}
+
+function spTopZ(sp: SectionPart, ctx: StoreyCtx): number {
+  const zFB = spFloorBottomZ(sp, ctx.lv);
+  const zFT = zFB + ctx.storey.slabThickness;
+  const myParts = ctx.parts.filter((p) => p.sectionPartIds.includes(sp.id));
+  const maxPartTop = myParts.reduce((m, p) => Math.max(m, partTopZ(p, ctx)), 0);
+  if (sp.zTopOverride !== undefined) return Math.max(zFT + 100, sp.zTopOverride, maxPartTop);
+  if (sp.usage === 1004 || sp.clipToRoof || zFB >= ctx.lv.zCeiling - 1) {
+    return Math.max(ctx.roofEnv?.zCeiling ?? 0, maxPartTop, zFB + ctx.storey.height);
+  }
+  return Math.max(ctx.lv.zCeiling, maxPartTop);
+}
+
+function spShouldClipToRoof(sp: SectionPart, ctx: StoreyCtx, zFB: number, zC: number): boolean {
+  if (!ctx.roofEnv) return false;
+  if (sp.clipToRoof || sp.usage === 1004 || ctx.storey.clipToRoof || ctx.storey.kneeWallHeight !== undefined || zFB >= ctx.lv.zCeiling - 1) return true;
+  return polyRings(sp.outline).some((r) => r.some((pt) => ctx.roofEnv!.zAt(pt) < zC - 1));
+}
+
 /** Sahanlık penceresi (§5.4 #6): spansStoreys doluysa her katın Z aralığına kırpılmış alt açıklıklara açar. */
 function expandSpannedOpenings(building: DesignBuilding, lvOf: ReadonlyMap<string, StoreyLevels>): Opening[] {
   const out: Opening[] = [];
@@ -244,7 +342,7 @@ function expandSpannedOpenings(building: DesignBuilding, lvOf: ReadonlyMap<strin
       out.push(o);
       continue;
     }
-    const zbFull = baseLv.zFloorTop + o.sill;
+    const zbFull = (o.zBaseOverride ?? baseLv.zFloorTop) + o.sill;
     const ztFull = zbFull + o.height;
     for (const sid of o.spansStoreys) {
       const lv = lvOf.get(sid);
@@ -286,8 +384,13 @@ function resolveOpening(o: Opening, ctx: StoreyCtx, issues: BrepIssue[]): Resolv
   const probe = (s: number) => ({ x: mid.x + left.x * s, y: mid.y + left.y * s });
   const polyOf = (p: Part) => ctx.effectivePolys.get(p.id) ?? p.polygon;
 
-  // Çizim yüzü: bir kısım kenarı (öncelikli) veya kat dış sınırı
-  const anchorPart = ctx.parts.find((p) => polyRings(polyOf(p)).some((r) => ringEdges(r).some((e) => edgeCovers(e, a, b))));
+  // Çizim yüzü: varsa hostPartId, yoksa kotu uyumlu bir kısım kenarı (öncelikli) veya kat dış sınırı
+  const coveringParts = ctx.parts.filter((p) => polyRings(polyOf(p)).some((r) => ringEdges(r).some((e) => edgeCovers(e, a, b))));
+  const anchorPart =
+    (o.hostPartId ? coveringParts.find((p) => p.id === o.hostPartId) : undefined) ??
+    (o.zBaseOverride !== undefined ? coveringParts.find((p) => Math.abs(partFloorZ(p, ctx.lv) - o.zBaseOverride!) <= 50) : undefined) ??
+    coveringParts.find((p) => o.zBaseOverride === undefined && p.zFloorOverride === undefined) ??
+    coveringParts[0];
   const anchorOutline = ctx.storey.outline.find((pl) => polyRings(pl).some((r) => ringEdges(r).some((e) => edgeCovers(e, a, b))));
   let side: 1 | -1;
   if (anchorPart) side = pointInPoly(probe(5), polyOf(anchorPart)) === 1 ? -1 : 1;
@@ -297,8 +400,19 @@ function resolveOpening(o: Opening, ctx: StoreyCtx, issues: BrepIssue[]): Resolv
     return null;
   }
 
+  // Z aralığı (§5.4 madde 3): taban = oda tabanı + sill
+  const base = o.zBaseOverride ?? (anchorPart ? partFloorZ(anchorPart, ctx.lv) : ctx.lv.zFloorTop);
+  const zb = base + o.sill;
+  const zt = zb + o.height;
+
   // Karşı yüz: malzeme tarafında, paralel, en yakın, ≤ 1000 mm, [a, b] aralığıyla örtüşen kenar
-  const allRings: Ring2[] = [...ctx.parts.flatMap((p) => polyRings(polyOf(p))), ...ctx.storey.outline.flatMap(polyRings), ...ctx.sps.flatMap((s) => polyRings(s.outline))];
+  const levelParts = ctx.parts.filter((p) => zb >= partFloorZ(p, ctx.lv) - 50 && zt <= partTopZ(p, ctx) + 50);
+  const levelSps = ctx.sps.filter((s) => zb >= spFloorBottomZ(s, ctx.lv) - 50 && zt <= spTopZ(s, ctx) + 50);
+  const allRings: Ring2[] = [
+    ...(levelParts.length > 0 ? levelParts : ctx.parts).flatMap((p) => polyRings(polyOf(p))),
+    ...ctx.storey.outline.flatMap(polyRings),
+    ...(levelSps.length > 0 ? levelSps : ctx.sps).flatMap((s) => polyRings(s.outline)),
+  ];
   const W = len(ab);
   const n = { x: left.x * side, y: left.y * side };
   const stepTo = (e: Edge, s: { x: number; y: number }): number => {
@@ -332,7 +446,7 @@ function resolveOpening(o: Opening, ctx: StoreyCtx, issues: BrepIssue[]): Resolv
   const rect0: Pt2[] = [a, b, b1, a1];
   const rect = signedArea2x(rect0) < 0 ? reversed(rect0) : rect0;
 
-  // Yüzlerdeki kısımlar (T4) ve dış cephe (T1/T2)
+  // Yüzlerdeki kısımlar (T4): yalnız kot aralığı açıklıkla uyumlu olan kısımlara bağlanır
   const lines: [[Pt2, Pt2], [Pt2, Pt2]] = [
     [a, b],
     [a1, b1],
@@ -341,22 +455,40 @@ function resolveOpening(o: Opening, ctx: StoreyCtx, issues: BrepIssue[]): Resolv
   let extLine: 0 | 1 | null = null;
   for (const k of [0, 1] as const) {
     const [la, lb] = lines[k];
-    for (const p of ctx.parts) if (polyRings(polyOf(p)).some((r) => ringEdges(r).some((e) => edgeCovers(e, la, lb)))) partFaces.push({ partId: p.id, line: k });
+    for (const p of ctx.parts) {
+      const pz0 = partFloorZ(p, ctx.lv);
+      const pz1 = partTopZ(p, ctx);
+      if (zb < pz0 - 50 || zt > pz1 + 50) continue;
+      if (polyRings(polyOf(p)).some((r) => ringEdges(r).some((e) => edgeCovers(e, la, lb)))) {
+        partFaces.push({ partId: p.id, line: k });
+      }
+    }
     if (extLine === null && ctx.storey.outline.some((pl) => polyRings(pl).some((r) => ringEdges(r).some((e) => edgeCovers(e, la, lb))))) extLine = k;
   }
-  // T3: kesit merkezi bir BB parçasının içinde ve kısımlarının dışında
+  // T3: kesit merkezi aynı kot aralığındaki bir BB parçasının içinde ve o kottaki kısımlarının dışında
   const c = { x: mid.x + (n.x * t) / 2, y: mid.y + (n.y * t) / 2 };
-  const sp = ctx.sps.find((s) => pointInPoly(c, s.outline) === 1 && !ctx.parts.some((p) => p.sectionPartIds.includes(s.id) && pointInPoly(c, polyOf(p)) === 1));
+  const sp = ctx.sps.find((s) => {
+    const sFB = spFloorBottomZ(s, ctx.lv);
+    const sTop = spTopZ(s, ctx);
+    if (zb < sFB - 50 || zt > sTop + 50) return false;
+    return (
+      pointInPoly(c, s.outline) === 1 &&
+      !ctx.parts.some(
+        (p) =>
+          p.sectionPartIds.includes(s.id) &&
+          zb >= partFloorZ(p, ctx.lv) - 50 &&
+          zt <= partTopZ(p, ctx) + 50 &&
+          pointInPoly(c, polyOf(p)) === 1,
+      )
+    );
+  });
 
-  // Z aralığı (§5.4 madde 3): taban = oda tabanı + sill
-  const base = anchorPart ? partFloorZ(anchorPart, ctx.lv) : ctx.lv.zFloorTop;
-  const zb = base + o.sill;
-  const zt = zb + o.height;
+  const pTop = anchorPart ? partTopZ(anchorPart, ctx) : Math.max(ctx.lv.zCeiling, ctx.roofEnv?.zCeiling ?? ctx.lv.zCeiling);
   const zCeilMax = anchorPart?.ceilingFaces?.length
-    ? Math.min(zAtExplicitCeilingFaces(a, anchorPart.ceilingFaces, ctx.lv.zCeiling), zAtExplicitCeilingFaces(b, anchorPart.ceilingFaces, ctx.lv.zCeiling))
-    : ctx.roofEnv
-      ? Math.min(ctx.lv.zCeiling, ctx.roofEnv.zAt(a), ctx.roofEnv.zAt(b))
-      : ctx.lv.zCeiling;
+    ? Math.min(zAtExplicitCeilingFaces(a, anchorPart.ceilingFaces, pTop), zAtExplicitCeilingFaces(b, anchorPart.ceilingFaces, pTop))
+    : anchorPart && partShouldClipToRoof(anchorPart, ctx, polyOf(anchorPart), partFloorZ(anchorPart, ctx.lv), pTop) && ctx.roofEnv
+      ? Math.min(pTop, ctx.roofEnv.zAt(a), ctx.roofEnv.zAt(b))
+      : pTop;
   if (zt > zCeilMax - 1) issues.push({ code: 'B-OP-06', severity: 'H', elementId: o.id, message: `Açıklık tepesi (${zt} mm) tavanı kesiyor; en çok zCeiling − 1 mm (${zCeilMax - 1}) olmalı (§5.4 madde 3).` });
   if (partFaces.length === 0 && extLine === null) issues.push({ code: 'B-OP-07', severity: 'U', elementId: o.id, message: 'Açıklık hiçbir kısım yüzüne veya dış cepheye bağlanmadı.' });
   return { opening: o, lines, rect, zb, zt, partFaces, extLine, sectionPartId: sp?.id ?? null };
@@ -396,6 +528,9 @@ function isOaExteriorEdge(e: Edge, extEdges: readonly Edge[], ctx: StoreyCtx, oa
   // CCW dış halkada malzeme (dış duvar) kenarın sağındadır: (u.y, -u.x)
   const right = { x: u.y, y: -u.x };
   const mid = { x: (e.p.x + e.q.x) / 2, y: (e.p.y + e.q.y) / 2 };
+  const oaPart = ctx.parts.find((p) => p.id === oaPartId);
+  const oaZ0 = oaPart ? partFloorZ(oaPart, ctx.lv) : ctx.lv.zFloorTop;
+  const oaZ1 = oaPart ? partTopZ(oaPart, ctx) : ctx.lv.zCeiling;
   for (const ext of extEdges) {
     if (len(ext) < 10) continue;
     const v = dirOf(ext);
@@ -410,8 +545,17 @@ function isOaExteriorEdge(e: Edge, extEdges: readonly Edge[], ctx: StoreyCtx, oa
     const t2 = (ext.q.x - e.p.x) * u.x + (ext.q.y - e.p.y) * u.y;
     if (Math.min(t1, t2) > W - TOL || Math.max(t1, t2) < TOL) continue;
     const probeMid = { x: mid.x + right.x * (off / 2), y: mid.y + right.y * (off / 2) };
-    const blockedByOtherPart = ctx.parts.some((p) => p.id !== oaPartId && pointInPoly(probeMid, ctx.effectivePolys.get(p.id) ?? p.polygon) === 1);
-    const blockedBySp = ctx.sps.some((sp) => pointInPoly(probeMid, sp.outline) === 1);
+    const blockedByOtherPart = ctx.parts.some(
+      (p) =>
+        p.id !== oaPartId &&
+        Math.min(oaZ1, partTopZ(p, ctx)) > Math.max(oaZ0, partFloorZ(p, ctx.lv)) &&
+        pointInPoly(probeMid, ctx.effectivePolys.get(p.id) ?? p.polygon) === 1,
+    );
+    const blockedBySp = ctx.sps.some(
+      (sp) =>
+        Math.min(oaZ1, spTopZ(sp, ctx)) > Math.max(oaZ0, spFloorBottomZ(sp, ctx.lv)) &&
+        pointInPoly(probeMid, sp.outline) === 1,
+    );
     if (!blockedByOtherPart && !blockedBySp) return true;
   }
   return false;
@@ -456,15 +600,21 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
   const openingPrefix = (o: Opening): 'KAPI_' | 'PEN_' => (o.kind === 'door' ? 'KAPI_' : 'PEN_');
   const polyKindOf = (o: Opening): BrepPolygonKind => (o.kind === 'door' ? 'Door_' : 'Window_');
 
-  // T-kavşak noktaları: kattaki tüm halka köşeleri + çatı arası mahya/omuz kesişimleri (§5.1 madde 3, §5.9)
-  const splitPtsOf = (ctx: StoreyCtx): Pt2[] => {
+  // T-kavşak noktaları: aynı Z aralığını paylaşan halka köşeleri + çatı arası mahya/omuz kesişimleri (§5.1 madde 3, §5.9)
+  const splitPtsOf = (ctx: StoreyCtx, zRange?: { z0: number; z1: number }, useRoofRidge = false): Pt2[] => {
+    const relevantParts = zRange
+      ? ctx.parts.filter((p) => Math.min(zRange.z1, partTopZ(p, ctx)) - Math.max(zRange.z0, partFloorZ(p, ctx.lv)) > 50)
+      : ctx.parts;
+    const relevantSps = zRange
+      ? ctx.sps.filter((s) => Math.min(zRange.z1, spTopZ(s, ctx)) - Math.max(zRange.z0, spFloorBottomZ(s, ctx.lv)) > 50)
+      : ctx.sps;
     const allRings = [
-      ...ctx.parts.flatMap((p) => polyRings(ctx.effectivePolys.get(p.id) ?? p.polygon)),
-      ...ctx.sps.flatMap((s) => polyRings(s.outline)),
+      ...relevantParts.flatMap((p) => polyRings(ctx.effectivePolys.get(p.id) ?? p.polygon)),
+      ...relevantSps.flatMap((s) => polyRings(s.outline)),
       ...ctx.storey.outline.flatMap((pl) => polyRings(pl)),
     ];
     const basePts = allRings.flat();
-    if (!ctx.roofEnv) return basePts;
+    if (!useRoofRidge || !ctx.roofEnv) return basePts;
     const ridgePts = allRings.flatMap((r) => roofRidgeSplitPointsOnRing(r, ctx.roofEnv!));
     return [...basePts, ...ridgePts];
   };
@@ -482,20 +632,18 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
     if (!ctx) continue;
     const prefix = hostPart.kind === 'BBK' ? 'BBKIY_' : 'OAIY_';
     const z0 = partFloorZ(hostPart, ctx.lv);
-    const z1 = inst.zTopOverride ?? ctx.lv.zCeiling;
-    const path = `icyapi:${inst.id}`;
     const hasExplicitCeil = Boolean(inst.ceilingFaces && inst.ceilingFaces.length > 0);
-    const useRoofEnv = !hasExplicitCeil && ctx.roofEnv !== null;
-    const ridgePts = useRoofEnv
-      ? polyRings(inst.polygon).flatMap((r) => roofRidgeSplitPointsOnRing(r, ctx.roofEnv!))
-      : hasExplicitCeil
-        ? inst.ceilingFaces!.flatMap((f) => f.outer.map((v) => ({ x: v.x, y: v.y })))
-        : [];
+    const maxInstCeil = hasExplicitCeil ? Math.max(...inst.ceilingFaces!.flatMap((f) => f.outer.map((v) => v.z))) : 0;
+    const z1 = Math.max(z0 + 100, inst.zTopOverride ?? (hasExplicitCeil ? maxInstCeil : partTopZ(hostPart, ctx)));
+    const path = `icyapi:${inst.id}`;
+    const useRoofEnv = !hasExplicitCeil && partShouldClipToRoof(hostPart, ctx, inst.polygon, z0, z1);
+    const ridgePts = useRoofEnv && ctx.roofEnv ? polyRings(inst.polygon).flatMap((r) => roofRidgeSplitPointsOnRing(r, ctx.roofEnv!)) : [];
     const instPoly = ridgePts.length > 0 ? insertSplitPointsIntoPoly(inst.polygon, ridgePts) : inst.polygon;
-    const zTopAt = hasExplicitCeil
-      ? (pt: Pt2) => zAtExplicitCeilingFaces(pt, inst.ceilingFaces!, z1)
-      : useRoofEnv
-        ? ctx.roofEnv!.zAt
+    const explicitPrep = hasExplicitCeil ? prepareExplicitCeilingForPoly(instPoly, inst.ceilingFaces!, z1) : null;
+    const zTopAt = explicitPrep
+      ? explicitPrep.zAt
+      : useRoofEnv && ctx.roofEnv
+        ? ctx.roofEnv.zAt
         : undefined;
 
     const instSurfaces: BrepSurface[] = [];
@@ -507,14 +655,26 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
     });
     polyRings(instPoly).forEach((ring, ri) => {
       ringEdges(ring).forEach((e, ei) => {
-        const wf = wallFaces(e, z0, z1, ridgePts, [], 'InteriorWall_', (role) => gid('InteriorWall_', `${path}:duvar:${ri}:${ei}:${role}`), issues, inst.id, zTopAt);
+        const wf = wallFaces(
+          e,
+          z0,
+          z1,
+          ridgePts,
+          [],
+          'InteriorWall_',
+          (role) => gid('InteriorWall_', `${path}:duvar:${ri}:${ei}:${role}`),
+          issues,
+          inst.id,
+          zTopAt,
+          explicitPrep?.topProfileForEdge,
+        );
         instSurfaces.push({ id: gid('InteriorWall_', `${path}:yuzey:${ri}:${ei}`), tag: 'InteriorWallSurface', polygons: wf.polygons, openings: [] });
       });
     });
-    const ceilPolys: BrepPolygon[] = hasExplicitCeil
-      ? inst.ceilingFaces!.map((f, fi) => ({ id: gid('Ceiling_', `${path}:tavan:${fi}`), kind: 'Ceiling_', outer: f.outer, holes: f.holes }))
-      : useRoofEnv
-        ? clipCapPolygonToRoof(instPoly, ctx.roofEnv!, z0 + 1, 'Ceiling_', (role) => gid('Ceiling_', `${path}:tavan:${role}`))
+    const ceilPolys: BrepPolygon[] = explicitPrep
+      ? explicitPrep.alignedFaces.map((f, fi) => ({ id: gid('Ceiling_', `${path}:tavan:${fi}`), kind: 'Ceiling_', outer: f.outer, holes: f.holes }))
+      : useRoofEnv && ctx.roofEnv
+        ? clipCapPolygonToRoof(instPoly, ctx.roofEnv, z0 + 1, 'Ceiling_', (role) => gid('Ceiling_', `${path}:tavan:${role}`), z1)
         : [horizontal(instPoly, z1, true, 'Ceiling_', gid('Ceiling_', `${path}:tavan`))];
     instSurfaces.push({ id: gid('Ceiling_', `${path}:yuzey:tavan`), tag: 'CeilingSurface', polygons: ceilPolys, openings: [] });
 
@@ -542,18 +702,33 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
     }
     const prefix = part.kind === 'BBK' ? 'BBK_' : 'OA_';
     const z0 = partFloorZ(part, ctx.lv);
-    const z1 = ctx.lv.zCeiling;
+    const z1 = partTopZ(part, ctx);
     const basePoly = ctx.effectivePolys.get(part.id) ?? part.polygon;
     const hasExplicitCeil = Boolean(part.ceilingFaces && part.ceilingFaces.length > 0);
-    const useRoofEnv = !hasExplicitCeil && ctx.roofEnv !== null;
-    const splitPts = splitPtsOf(ctx);
-    const extraCeilPts = hasExplicitCeil ? part.ceilingFaces!.flatMap((f) => f.outer.map((v) => ({ x: v.x, y: v.y }))) : [];
-    const allSplitPts = extraCeilPts.length > 0 ? [...splitPts, ...extraCeilPts] : splitPts;
-    const roomPoly = useRoofEnv || hasExplicitCeil ? insertSplitPointsIntoPoly(basePoly, allSplitPts) : basePoly;
-    const zTopAt = hasExplicitCeil
-      ? (pt: Pt2) => zAtExplicitCeilingFaces(pt, part.ceilingFaces!, z1)
-      : useRoofEnv
-        ? ctx.roofEnv!.zAt
+    const useRoofEnv = partShouldClipToRoof(part, ctx, basePoly, z0, z1);
+    const splitPts = hasExplicitCeil ? [] : splitPtsOf(ctx, { z0, z1 }, useRoofEnv);
+    // Açıklıkların üzerine düşen kesim noktaları oda halkasına da eklenmesin (kapı/pencere kenarını bölmesin)
+    const partOpenings = resolved.filter((r) => r.partFaces.some((f) => f.partId === part.id));
+    const safeSplitPts = splitPts.filter(
+      (s) =>
+        !partOpenings.some((r) =>
+          r.partFaces.some((f) => {
+            if (f.partId !== part.id) return false;
+            const [la, lb] = r.lines[f.line];
+            const e: Edge = { p: la, q: lb };
+            if (len(e) < 1) return false;
+            const pr = projOn(e, s);
+            return pr.d <= TOL && pr.t >= -TOL && pr.t <= len(e) + TOL;
+          }),
+        ),
+    );
+    const roomPoly = useRoofEnv ? insertSplitPointsIntoPoly(basePoly, safeSplitPts) : basePoly;
+    const roomCapPoly = useRoofEnv ? insertSplitPointsIntoPoly(basePoly, splitPts) : roomPoly;
+    const explicitPrep = hasExplicitCeil ? prepareExplicitCeilingForPoly(roomPoly, part.ceilingFaces!, z1) : null;
+    const zTopAt = explicitPrep
+      ? explicitPrep.zAt
+      : useRoofEnv && ctx.roofEnv
+        ? ctx.roofEnv.zAt
         : undefined;
 
     const path = `oda:${part.id}`;
@@ -571,7 +746,19 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
             .map((f) => ({ r, line: f.line })),
         );
         const holes: FaceHole[] = reps.map(({ r, line }) => ({ key: `${r.opening.id}:${line}`, a: r.lines[line][0], b: r.lines[line][1], zb: r.zb, zt: r.zt, kind: r.opening.kind }));
-        const wf = wallFaces(e, z0, z1, allSplitPts, holes, kind, (role) => gid(kind, `${path}:duvar:${ri}:${ei}:${role}`), issues, part.id, zTopAt);
+        const wf = wallFaces(
+          e,
+          z0,
+          z1,
+          splitPts,
+          holes,
+          kind,
+          (role) => gid(kind, `${path}:duvar:${ri}:${ei}:${role}`),
+          issues,
+          part.id,
+          zTopAt,
+          explicitPrep?.topProfileForEdge,
+        );
         const openings: BrepOpening[] = reps.flatMap(({ r, line }) => {
           const ring3 = wf.holeRings.get(`${r.opening.id}:${line}`);
           if (!ring3) return [];
@@ -583,10 +770,10 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
       });
     });
 
-    const ceilPolys: BrepPolygon[] = hasExplicitCeil
-      ? part.ceilingFaces!.map((f, fi) => ({ id: gid('Ceiling_', `${path}:tavan:${fi}`), kind: 'Ceiling_', outer: f.outer, holes: f.holes }))
-      : useRoofEnv
-        ? clipCapPolygonToRoof(roomPoly, ctx.roofEnv!, z0 + 1, 'Ceiling_', (role) => gid('Ceiling_', `${path}:tavan:${role}`))
+    const ceilPolys: BrepPolygon[] = explicitPrep
+      ? explicitPrep.alignedFaces.map((f, fi) => ({ id: gid('Ceiling_', `${path}:tavan:${fi}`), kind: 'Ceiling_', outer: f.outer, holes: f.holes }))
+      : useRoofEnv && ctx.roofEnv
+        ? clipCapPolygonToRoof(roomCapPoly, ctx.roofEnv, z0 + 1, 'Ceiling_', (role) => gid('Ceiling_', `${path}:tavan:${role}`), z1)
         : [horizontal(roomPoly, z1, true, 'Ceiling_', gid('Ceiling_', `${path}:tavan`))];
     surfaces.push({ id: gid('Ceiling_', `${path}:yuzey:tavan`), tag: 'CeilingSurface', polygons: ceilPolys, openings: [] });
 
@@ -619,19 +806,33 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
       issues.push({ code: 'B-BB-01', severity: 'H', elementId: sp.id, message: 'BB parçasının katı bulunamadı.' });
       continue;
     }
-    const zFB = sp.zFloorOverride ?? ctx.lv.zFloorBottom;
+    const zFB = spFloorBottomZ(sp, ctx.lv);
     const zFT = zFB + ctx.storey.slabThickness;
-    const zC = ctx.lv.zCeiling;
+    const zC = spTopZ(sp, ctx);
     if (zC - zFT < 1500) issues.push({ code: 'B-BB-02', severity: 'U', elementId: sp.id, message: `BB parçası iç yüksekliği ${zC - zFT} mm.` });
     const path = `bb:${sp.id}`;
     const pid = (kind: BrepPolygonKind, role: string) => gid(kind, `${path}:${role}`);
-    const splitPts = splitPtsOf(ctx);
-    const useRoofEnv = ctx.roofEnv !== null;
-    const spOutline = useRoofEnv ? insertSplitPointsIntoPoly(sp.outline, splitPts) : sp.outline;
+    const useRoofEnv = spShouldClipToRoof(sp, ctx, zFB, zC);
+    const myResolved = resolved.filter((r) => r.sectionPartId === sp.id);
+    const splitPts = splitPtsOf(ctx, { z0: zFB, z1: zC }, useRoofEnv);
+    const safeSpSplitPts = splitPts.filter(
+      (s) =>
+        !myResolved.some((r) =>
+          ([0, 1] as const).some((k) => {
+            const [la, lb] = r.lines[k];
+            const e: Edge = { p: la, q: lb };
+            if (len(e) < 1) return false;
+            const pr = projOn(e, s);
+            return pr.d <= TOL && pr.t >= -TOL && pr.t <= len(e) + TOL;
+          }),
+        ),
+    );
+    const spOutline = useRoofEnv ? insertSplitPointsIntoPoly(sp.outline, safeSpSplitPts) : sp.outline;
+    const spCapOutline = useRoofEnv ? insertSplitPointsIntoPoly(sp.outline, splitPts) : sp.outline;
 
     const floorPolys: BrepPolygon[] = [horizontal(spOutline, zFB, false, 'Floor_', pid('Floor_', 'alt')), horizontal(spOutline, zFT, true, 'Floor_', pid('Floor_', 'ust'))];
     if (options.emitSlabEdges) {
-      polyRings(spOutline).forEach((r, ri) => ringEdges(r).forEach((e, ei) => floorPolys.push(...wallFaces(e, zFB, zFT, splitPts, [], 'Floor_', (role) => pid('Floor_', `kenar:${ri}:${ei}:${role}`), issues, sp.id).polygons)));
+      polyRings(spOutline).forEach((r, ri) => ringEdges(r).forEach((e, ei) => floorPolys.push(...wallFaces(e, zFB, zFT, safeSpSplitPts, [], 'Floor_', (role) => pid('Floor_', `kenar:${ri}:${ei}:${role}`), issues, sp.id).polygons)));
     }
     // Duvar malzemesi W = outline − ⋃ kısımlar (§5.3 madde 3).
     // K71 iç kısım durumunda: başka bir kısmın dış halkası içinde kalan iç kısımlar ana delik listesine (mainWHoles) eklenmez (V-039 iç içe delik yasağı).
@@ -641,6 +842,13 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
     );
     const mainWHoles: Ring2[] = [
       ...spOutline.holes,
+      ...topLevelParts.map((p) => {
+        const r = reversed(p.polygon.outer);
+        return useRoofEnv ? insertSplitPointsIntoPoly({ outer: r, holes: [] }, safeSpSplitPts).outer : r;
+      }),
+    ];
+    const mainWCapHoles: Ring2[] = [
+      ...spCapOutline.holes,
       ...topLevelParts.map((p) => {
         const r = reversed(p.polygon.outer);
         return useRoofEnv ? insertSplitPointsIntoPoly({ outer: r, holes: [] }, splitPts).outer : r;
@@ -667,7 +875,6 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
     }
 
     const wallPolys: BrepPolygon[] = [];
-    const myResolved = resolved.filter((r) => r.sectionPartId === sp.id);
     const wRings: { ring: Ring2; outer: boolean }[] = [
       { ring: spOutline.outer, outer: true },
       ...mainWHoles.map((ring) => ({ ring, outer: false })),
@@ -683,10 +890,10 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
       });
     });
     // Üst kapak: W @ zCeiling (veya çatı zarfı eğik yüzleri), normal yukarı
-    if (useRoofEnv) {
-      wallPolys.push(...clipCapPolygonToRoof({ outer: spOutline.outer, holes: mainWHoles }, ctx.roofEnv!, zFT + 1, 'Wall_', (role) => pid('Wall_', `kapak:${role}`)));
+    if (useRoofEnv && ctx.roofEnv) {
+      wallPolys.push(...clipCapPolygonToRoof({ outer: spCapOutline.outer, holes: mainWCapHoles }, ctx.roofEnv, zFT + 1, 'Wall_', (role) => pid('Wall_', `kapak:${role}`), zC));
       innerIslands.forEach((isl, ii) => {
-        wallPolys.push(...clipCapPolygonToRoof(isl, ctx.roofEnv!, zFT + 1, 'Wall_', (role) => pid('Wall_', `kapak_ada:${ii}:${role}`)));
+        wallPolys.push(...clipCapPolygonToRoof(isl, ctx.roofEnv!, zFT + 1, 'Wall_', (role) => pid('Wall_', `kapak_ada:${ii}:${role}`), zC));
       });
     } else {
       wallPolys.push({ id: pid('Wall_', 'kapak'), kind: 'Wall_', outer: spOutline.outer.map((p) => at(p, zC)), holes: mainWHoles.map((h) => h.map((p) => at(p, zC))) });
@@ -724,12 +931,13 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
   const lod2Openings: BrepOpening[] = [];
   for (const s of building.storeys) {
     const ctx = ctxOf.get(s.id)!;
-    const { zFloorBottom: zFB, zFloorTop: zFT, zCeiling: zC } = ctx.lv;
+    const { zFloorBottom: zFB, zFloorTop: zFT, zCeiling: zCBase } = ctx.lv;
+    const zC = Math.max(zCBase, ctx.roofEnv?.zCeiling ?? zCBase);
     const path = `kat:${s.id}`;
     const pid = (kind: BrepPolygonKind, role: string) => gid(kind, `${path}:${role}`);
     const floorPolys: BrepPolygon[] = [];
     const wallPolys: BrepPolygon[] = [];
-    const splitPts = splitPtsOf(ctx);
+    const splitPts = splitPtsOf(ctx, { z0: zFB, z1: zC }, Boolean(ctx.roofEnv));
     const extResolved = resolved.filter((r) => r.opening.storeyId === s.id && r.extLine !== null);
     s.outline.forEach((pl, pi) => {
       floorPolys.push(horizontal(pl, zFB, false, 'Floor_', pid('Floor_', `alt:${pi}`)));
@@ -746,14 +954,14 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
           }
           const zLow = options.storeyStyle === 'A' || !options.emitSlabEdges ? zFB : zFT;
           wallPolys.push(...wallFaces(e, zLow, zC, splitPts, holes, 'Wall_', (role) => pid('Wall_', `duvar:${pi}:${ri}:${ei}:${role}`), issues, s.id, ctx.roofEnv?.zAt).polygons);
-          // T1: LoD2 dış yüz açıklığı. Kapı tabanı zFloorTop (Ornek6 ölçümü: LoD2 duvarı daha aşağıdan başlar), pencere oda kotuyla aynı.
+          // T1: LoD2 dış yüz açıklığı. Kapı tabanı kendi kat/oda döşeme üstü (Ornek6 ölçümü: LoD2 duvarı daha aşağıdan başlar), pencere oda kotuyla aynı.
           for (const x of extResolved) {
             const k = x.extLine!;
             if (!edgeCovers(e, x.lines[k][0], x.lines[k][1])) continue;
             const ta = projOn(e, x.lines[k][0]).t;
             const tb = projOn(e, x.lines[k][1]).t;
             const [A, B] = ta <= tb ? [x.lines[k][0], x.lines[k][1]] : [x.lines[k][1], x.lines[k][0]];
-            const zb = x.opening.kind === 'door' ? zFT : x.zb;
+            const zb = x.opening.kind === 'door' && x.opening.sill <= 50 ? x.zb - x.opening.sill : x.zb;
             const p = openingPrefix(x.opening);
             const opPath = `acik:${x.opening.id}:T1`;
             lod2Openings.push({ id: gid(p, opPath), prefix: p, usage: x.opening.usage, designOpeningId: x.opening.id, representation: 'T1', polygon: { id: gid(polyKindOf(x.opening), opPath), kind: polyKindOf(x.opening), outer: [at(A, zb), at(A, x.zt), at(B, x.zt), at(B, zb)], holes: [] } });

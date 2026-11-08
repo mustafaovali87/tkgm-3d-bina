@@ -10,6 +10,9 @@ import { FILE_RULES } from './rulesFile.ts';
 import type { FileRegime, Finding, RuleContext, RuleDefinition, ValidationReport } from './types.ts';
 
 export type { Finding, ValidationReport, RuleDefinition, FileRegime } from './types.ts';
+export * from './val3dity.ts';
+export * from './submissionPackage.ts';
+
 
 export const ALL_RULES: readonly RuleDefinition[] = [...FILE_RULES, ...BUILDING_RULES, ...BB_RULES, ...EXTRA_RULES];
 

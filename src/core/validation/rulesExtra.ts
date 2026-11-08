@@ -1,5 +1,5 @@
-// M2 — Ek kurallar V-196…V-216 (GEMINI13 şartname tablosu, KARARLAR)
-import { newellNormal, uniqueRing } from './geom.ts';
+// M2 — Ek kurallar V-196…V-217 (GEMINI13 şartname tablosu, KARARLAR, KONTROL-M8 R3)
+import { checkRoomShellClosure, newellNormal, uniqueRing } from './geom.ts';
 import type { RuleDefinition } from './types.ts';
 
 export const EXTRA_RULES: readonly RuleDefinition[] = [
@@ -132,4 +132,47 @@ export const EXTRA_RULES: readonly RuleDefinition[] = [
       if (/<bldg:lod2Solid\b/.test(ctx.xml)) emit({ message: 'bldg:lod2Solid yazılmış (yazılmamalı).' });
     },
   },
+  {
+    id: 'V-217',
+    severity: 'H',
+    source: 'Şartname §5.5 madde 6, KONTROL-M8 R3 (ACIK-10; val3dity 3B oda kabuğu kapalılığı)',
+    status: 'uygulandi',
+    run: (ctx, emit) => {
+      for (const r of [...ctx.byPrefix('BBK_'), ...ctx.byPrefix('OA_')]) {
+        const fl = r.surfaces.some((s) => s.tag === 'FloorSurface');
+        const ce = r.surfaces.some((s) => s.tag === 'CeilingSurface');
+        const wl = r.surfaces.some((s) => s.tag === 'InteriorWallSurface' || s.tag === 'WallSurface');
+        if (!fl || !ce || !wl) continue; // V-154 / V-166 zaten raporlar
+        const polyIds = new Set(r.surfaces.flatMap((s) => [...s.polygonIds, ...s.xlinkHrefs.map((h) => h.replace(/^#/, ''))]));
+        const rings: (readonly import('../model/index.ts').Point3D[])[] = [];
+        for (const pid of polyIds) {
+          const p = ctx.poly(pid);
+          if (!p) continue;
+          rings.push(p.exteriorRing.vertices);
+          if (p.surfaceTag === 'FloorSurface' || p.surfaceTag === 'CeilingSurface') {
+            for (const h of p.interiorRings) rings.push(h.vertices);
+          }
+        }
+        if (rings.length < 4) continue;
+        const c10 = checkRoomShellClosure(rings, 10);
+        if (!c10.closed) {
+          emit({
+            message: `${r.gmlName}: oda 3B kabuğu kapalı değil (${c10.openEdges} açık kenar, 10 mm tolerans).`,
+            targetGmlId: r.gmlId,
+            tkgmMessage: 'Oda (Room) geometrisi kapalı bir 3B kabuk oluşturmuyor (val3dity açık kenar hatası).',
+          });
+        } else {
+          const c1 = checkRoomShellClosure(rings, 1);
+          if (!c1.closed) {
+            emit({
+              severity: 'B',
+              message: `${r.gmlName}: oda kabuğu 10 mm toleransla kapalı, 1 mm toleransta ${c1.openEdges} açık kenar.`,
+              targetGmlId: r.gmlId,
+            });
+          }
+        }
+      }
+    },
+  },
 ];
+

@@ -99,7 +99,7 @@ Ertelenen her kural bir gerekçeyle kayıtlı (aşağıdaki tablo, `npm run docs
 
 <!-- KAPSAM-TABLOSU:BASLA -->
 
-Toplam 175 kural: Uygulandı 136, Ertelendi 16, Kısmi (K) 3, Okuyucuda 13, Sunucu (T) 7.
+Toplam 176 kural: Uygulandı 137, Ertelendi 16, Kısmi (K) 3, Okuyucuda 13, Sunucu (T) 7.
 
 | Kural | Düzey | Durum | Kaynak | Not |
 |---|---|---|---|---|
@@ -278,5 +278,6 @@ Toplam 175 kural: Uygulandı 136, Ertelendi 16, Kısmi (K) 3, Okuyucuda 13, Sunu
 | V-214 | B | Okuyucuda | KONTROL-M1 G5 | gmlReader.parseGenericAttributesFromNode |
 | V-215 | B | Okuyucuda | K55, K79, K87 | gmlReader.resolveProducerProfileFromFormAndOffset |
 | V-216 | U | Uygulandı | K68, Ek-A §A.3 |  |
+| V-217 | H | Uygulandı | Şartname §5.5 madde 6, KONTROL-M8 R3 (ACIK-10; val3dity 3B oda kabuğu kapalılığı) |  |
 
 <!-- KAPSAM-TABLOSU:BITIR -->

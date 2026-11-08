@@ -115,7 +115,8 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
         planGrossArea: Number(a.independentSectionPlanGrossArea ?? -1),
       });
     }
-    const floor = largest(bb, lowestHorizontal(polysOf(bb).filter((p) => p.prefix === 'Floor_')), 'BB alt tabanı');
+    const bbPolys = polysOf(bb);
+    const floor = largest(bb, lowestHorizontal(bbPolys.filter((p) => p.prefix === 'Floor_')), 'BB alt tabanı');
     if (!floor) continue;
     // Fiziksel kat taban kotundan bulunur. GML'de çok katlı BB parçası giriş katının grubuna bağlıdır (groupMember),
     // bu yüzden bb.storeyGmlId fiziksel katı göstermeyebilir (Ornek4: BB 1'in iki parçası).
@@ -125,6 +126,7 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       notes.push({ objectGmlId: bb.gmlId, message: 'BB parçasının katı taban kotundan belirlenemedi; atlandı.' });
       continue;
     }
+    const zMaxMm = bbPolys.length > 0 ? Math.round(Math.max(...bbPolys.map((p) => p.maxZ)) * 1000) : st.zBottom + st.height;
     const id = nid('bb');
     spIdByGml.set(bb.gmlId, id);
     sourceIds.set(id, bb.gmlId);
@@ -138,6 +140,7 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       usage: (usage >= 1001 && usage <= 1006 ? usage : 1001) as SectionPart['usage'],
       outline: toPoly(floor),
       ...(Math.abs(zMm - st.zBottom) > 1 ? { zFloorOverride: zMm } : {}),
+      ...(Math.abs(zMaxMm - (st.zBottom + st.height)) > 1 ? { zTopOverride: zMaxMm } : {}),
     });
   }
 
@@ -160,15 +163,16 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
     const spZ = (s: SectionPart) => s.zFloorOverride ?? storeys.find((x) => x.id === s.storeyId)?.zBottom ?? 0;
     const candidates = sameSectionParts.filter((s) => s.storeyId === storeyId && spZ(s) <= zMm + 1).sort((a, b) => spZ(b) - spZ(a));
     const spId = candidates[0]?.id ?? sameSectionParts.find((s) => s.storeyId === storeyId)?.id ?? (bbGml ? spIdByGml.get(bbGml) : undefined);
-    if (!storeyId) {
+    if (!storeyId || !st) {
       notes.push({ objectGmlId: r.gmlId, message: 'Odanın katı belirlenemedi; atlandı.' });
       continue;
     }
     const ceilIds = r.surfaces.filter((s) => s.tag === 'CeilingSurface').flatMap((s) => [...s.polygonIds, ...s.xlinkHrefs.map((h) => h.replace(/^#/, ''))]);
     const ceilPolys = ceilIds.map((cid) => model.polygonsById[cid]).filter((p): p is ImportedPolygon => p !== undefined);
+    const zCeilMaxMm = ceilPolys.length > 0 ? Math.round(Math.max(...ceilPolys.map((p) => p.maxZ)) * 1000) : undefined;
     const hasSlopedOrMultiCeil =
       ceilPolys.some((p) => p.maxZ - p.minZ >= 0.001) ||
-      (ceilPolys.length > 1 && Math.max(...ceilPolys.map((p) => p.maxZ)) - Math.min(...ceilPolys.map((p) => p.minZ)) >= 0.001);
+      ceilPolys.length > 1;
     const ceilingFaces = hasSlopedOrMultiCeil
       ? ceilPolys.map((p) => ({ outer: toRing3(p.exteriorRing.vertices), holes: p.interiorRings.map((h) => toRing3(h.vertices)) }))
       : undefined;
@@ -185,6 +189,7 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       polygon: toPoly(floor),
       planArea: Number.isFinite(plan) ? plan : -1,
       ...(ceilingFaces ? { ceilingFaces } : {}),
+      ...(zCeilMaxMm !== undefined && Math.abs(zCeilMaxMm - (st.zBottom + st.height)) > 1 ? { zTopOverride: zCeilMaxMm } : {}),
     });
   }
 
@@ -234,21 +239,27 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
     const h = hostOf(o);
     return h !== undefined && (h.prefix === 'BBK_' || h.prefix === 'OA_');
   };
-  const sameWall = (o: Opening, a: Pt2, b: Pt2): boolean => {
+  const wallProjection = (o: Opening, a: Pt2, b: Pt2): { sameSlice: boolean; L: number; M: number; tA: number; tB: number; lo: number; hi: number } => {
     const ux = o.anchor.b.x - o.anchor.a.x;
     const uy = o.anchor.b.y - o.anchor.a.y;
     const L = Math.hypot(ux, uy);
     const vx = b.x - a.x;
     const vy = b.y - a.y;
     const M = Math.hypot(vx, vy);
-    if (L < 1 || M < 1) return false;
-    if (Math.abs(ux * vy - uy * vx) / (L * M) > Math.sin((0.5 * Math.PI) / 180)) return false;
+    if (L < 1 || M < 1) return { sameSlice: false, L, M, tA: 0, tB: 0, lo: 0, hi: 0 };
+    if (Math.abs(ux * vy - uy * vx) / (L * M) > Math.sin((0.5 * Math.PI) / 180)) return { sameSlice: false, L, M, tA: 0, tB: 0, lo: 0, hi: 0 };
     const dist = Math.abs((a.x - o.anchor.a.x) * uy - (a.y - o.anchor.a.y) * ux) / L;
-    if (dist > 1000) return false;
+    if (dist > 1000) return { sameSlice: false, L, M, tA: 0, tB: 0, lo: 0, hi: 0 };
     const t = (p: Pt2) => ((p.x - o.anchor.a.x) * ux + (p.y - o.anchor.a.y) * uy) / L;
-    const lo = Math.max(0, Math.min(t(a), t(b)));
-    const hi = Math.min(L, Math.max(t(a), t(b)));
-    return hi - lo >= 0.5 * Math.min(L, M);
+    const tA = t(a);
+    const tB = t(b);
+    const lo = Math.max(0, Math.min(tA, tB));
+    const hi = Math.min(L, Math.max(tA, tB));
+    return { sameSlice: true, L, M, tA, tB, lo, hi };
+  };
+  const sameWall = (o: Opening, a: Pt2, b: Pt2): boolean => {
+    const pr = wallProjection(o, a, b);
+    return pr.sameSlice && pr.hi - pr.lo >= 0.5 * Math.min(pr.L, pr.M);
   };
   const srcOpenings = model.objects.filter((o) => o.prefix === 'KAPI_' || o.prefix === 'PEN_');
   const ordered = [...srcOpenings.filter(isRoomHost), ...srcOpenings.filter((o) => !isRoomHost(o))];
@@ -272,6 +283,8 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
     const zt = Math.round(poly.maxZ * 1000);
     const host = hostOf(op);
     let storeyId: string | undefined;
+    let hostPartId: string | undefined;
+    let zBaseOverride: number | undefined;
     let base: number;
     let sill: number;
     if (host && isRoomHost(op)) {
@@ -282,29 +295,92 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
         continue;
       }
       storeyId = part.storeyId;
+      hostPartId = part.id;
       base = partFloorZ.get(part.id)!;
-      sill = zb - base;
+      zBaseOverride = part.zFloorOverride;
+      // N20 / K45a: Kaynak GML'de oda kapısı tabandan (zb === base) başlıyorsa delik tabanı +10 mm alınır
+      sill = kind === 'door' && zb <= base ? 10 : Math.max(1, zb - base);
     } else {
       const st = physicalStorey(zb);
       storeyId = st?.id;
-      base = (st?.zBottom ?? 0) + (st?.slabThickness ?? 200);
+      const defaultBase = (st?.zBottom ?? 0) + (st?.slabThickness ?? 200);
+      // Eğer LoD2 açıklığı çatı arası / asma kat kotundaysa o kottaki odaya hizala
+      const matchingAtticPart = st
+        ? parts.find((p) => p.storeyId === st.id && p.zFloorOverride !== undefined && zb >= p.zFloorOverride - 50 && zt <= (p.zTopOverride ?? st.zBottom + st.height) + 50)
+        : undefined;
+      base = matchingAtticPart?.zFloorOverride ?? defaultBase;
+      zBaseOverride = matchingAtticPart?.zFloorOverride;
       // LoD2 kapısı zFloorTop'tan başlar; odadaki karşılığı +10 mm (K45a)
-      sill = kind === 'door' ? Math.max(10, zb - base) : zb - base;
+      sill = kind === 'door' ? Math.max(10, zb - base) : Math.max(1, zb - base);
     }
     if (!storeyId) continue;
-    // Oda ↔ oda: kotlar birebir. Bina (LoD2) ↔ oda: aynı duvar diliminde ve kot aralıkları %50'den fazla örtüşüyorsa
+    const zbEff = base + sill;
+    if (zt - zbEff < 50) continue;
+
+    // Oda ↔ oda: kotlar yakın (±60 mm, N20). Bina (LoD2) ↔ oda: aynı duvar diliminde ve kot aralıkları %50'den fazla örtüşüyorsa
     // aynı açıklıktır (bazı üreticiler LoD2 açıklığını farklı denizlik/tepe kotuyla yazıyor; Ornek4).
-    const zOverlap = (x: { zb: number; zt: number }) => Math.min(x.zt, zt) - Math.max(x.zb, zb) >= 0.5 * Math.min(x.zt - x.zb, zt - zb);
+    const zOverlap = (x: { zb: number; zt: number }) => Math.min(x.zt, zt) - Math.max(x.zb, zbEff) >= 0.5 * Math.min(x.zt - x.zb, zt - zbEff);
     const fromRoom = isRoomHost(op);
     const dup = placed.find(
-      (x) => x.o.kind === kind && x.o.storeyId === storeyId && sameWall(x.o, a, b) && (fromRoom ? Math.abs(x.zt - zt) <= 2 && (kind === 'door' || Math.abs(x.zb - zb) <= 2) : zOverlap(x)),
+      (x) =>
+        x.o.kind === kind &&
+        x.o.storeyId === storeyId &&
+        sameWall(x.o, a, b) &&
+        (fromRoom ? Math.abs(x.zt - zt) <= 2 && (kind === 'door' ? Math.abs(x.zb - zbEff) <= 60 : Math.abs(x.zb - zbEff) <= 2) : zOverlap(x)),
     );
     if (dup) continue;
+
+    // R4: Aynı duvar diliminde ve çakışan Z aralığında başka bir açıklık (ör. birleşik balkon kapısı + pencere, Ornek2) varsa
+    // yatay aralığı örtüşmeyecek biçimde kırp veya tamamen içeride kalıyorsa atla (V-035 / V-039 önlemi).
+    let skipOverlapping = false;
+    for (const x of placed) {
+      if (x.o.storeyId !== storeyId) continue;
+      if (Math.min(x.zt, zt) - Math.max(x.zb, zbEff) <= -10) continue;
+      const pr = wallProjection(x.o, a, b);
+      if (!pr.sameSlice || pr.hi - pr.lo <= -10) continue;
+      const vx = b.x - a.x;
+      const vy = b.y - a.y;
+      const M = Math.hypot(vx, vy);
+      if (M < 1) {
+        skipOverlapping = true;
+        break;
+      }
+      // Mevcut açıklığın [0, L] aralığını yeni açıklığın [0, M] parametresine izdüşür
+      const sOnNew = (p: Pt2) => ((p.x - a.x) * vx + (p.y - a.y) * vy) / M;
+      const xLo = Math.min(sOnNew(x.o.anchor.a), sOnNew(x.o.anchor.b)) - 10;
+      const xHi = Math.max(sOnNew(x.o.anchor.a), sOnNew(x.o.anchor.b)) + 10;
+      const leftSpan = Math.max(0, Math.min(M, xLo));
+      const rightSpan = Math.max(0, M - Math.max(0, xHi));
+      if (leftSpan >= rightSpan && leftSpan >= 150) {
+        b = { x: Math.round(a.x + (vx / M) * leftSpan), y: Math.round(a.y + (vy / M) * leftSpan) };
+        notes.push({ objectGmlId: op.gmlId, message: `Aynı duvar dilimindeki ${sourceIds.get(x.o.id) ?? x.o.id} açıklığıyla çakışmaması için kırpıldı.` });
+      } else if (rightSpan > leftSpan && rightSpan >= 150) {
+        const startS = Math.max(0, xHi);
+        a = { x: Math.round(a.x + (vx / M) * startS), y: Math.round(a.y + (vy / M) * startS) };
+        notes.push({ objectGmlId: op.gmlId, message: `Aynı duvar dilimindeki ${sourceIds.get(x.o.id) ?? x.o.id} açıklığıyla çakışmaması için kırpıldı.` });
+      } else {
+        skipOverlapping = true;
+        notes.push({ objectGmlId: op.gmlId, message: `Aynı duvar diliminde ${sourceIds.get(x.o.id) ?? x.o.id} ile üst üste bindiği için atlandı.` });
+        break;
+      }
+    }
+    if (skipOverlapping) continue;
+
     const usage = Number((kind === 'door' ? op.attributesMap.doorUsage : op.attributesMap.windowUsage) ?? (kind === 'door' ? 1004 : 1001));
-    const o: Opening = { id: nid('acik'), kind, usage, storeyId, anchor: { a, b }, sill, height: zt - (base + sill) };
+    const o: Opening = {
+      id: nid('acik'),
+      kind,
+      usage,
+      storeyId,
+      anchor: { a, b },
+      sill,
+      height: zt - zbEff,
+      ...(hostPartId ? { hostPartId } : {}),
+      ...(zBaseOverride !== undefined ? { zBaseOverride } : {}),
+    };
     sourceIds.set(o.id, op.gmlId);
     openings.push(o);
-    placed.push({ o, zb: base + sill, zt });
+    placed.push({ o, zb: zbEff, zt });
   }
 
   // ---- M6: bina öznitelikleri, bölüm ek öznitelikleri, bakılar, balkonlar, çatı, TIC
@@ -414,9 +490,10 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
     }
     const ceilIds = iy.surfaces.filter((s) => s.tag === 'CeilingSurface').flatMap((s) => [...s.polygonIds, ...s.xlinkHrefs.map((h) => h.replace(/^#/, ''))]);
     const ceilPolys = ceilIds.map((cid) => model.polygonsById[cid]).filter((p): p is ImportedPolygon => p !== undefined);
+    const zCeilMaxMm = ceilPolys.length > 0 ? Math.round(Math.max(...ceilPolys.map((p) => p.maxZ)) * 1000) : undefined;
     const hasSlopedOrMultiCeil =
       ceilPolys.some((p) => p.maxZ - p.minZ >= 0.001) ||
-      (ceilPolys.length > 1 && Math.max(...ceilPolys.map((p) => p.maxZ)) - Math.min(...ceilPolys.map((p) => p.minZ)) >= 0.001);
+      ceilPolys.length > 1;
     const ceilingFaces = hasSlopedOrMultiCeil
       ? ceilPolys.map((p) => ({ outer: toRing3(p.exteriorRing.vertices), holes: p.interiorRings.map((h) => toRing3(h.vertices)) }))
       : undefined;
@@ -430,6 +507,7 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       usage,
       polygon: toPoly(floor),
       ...(ceilingFaces ? { ceilingFaces } : {}),
+      ...(zCeilMaxMm !== undefined ? { zTopOverride: zCeilMaxMm } : {}),
     });
   }
 

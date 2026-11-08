@@ -43,6 +43,9 @@ import type { GenericAttributeType } from './core/model/index.ts';
 import { FloorPlanPreview2D } from './viewer3d/FloorPlanPreview2D.tsx';
 import { DesignEditor2D } from './editor2d/DesignEditor2D.tsx';
 import { parseCityGmlInWorker } from './workers/gmlWorkerClient.ts';
+import { parseParcelKmlOrGeoJson, type ImportedParcelBoundary, validateParcelAndMultiBuilding } from './core/importers/parcelImporter.ts';
+import { evaluateSubmissionReadiness, generateSubmissionReportHtml, generateMalikIrtifakReportHtml } from './core/validation/submissionPackage.ts';
+import { designFromImportedModel } from './core/design/fromImported.ts';
 
 interface WorkerReadState {
   fileName: string;
@@ -107,6 +110,8 @@ export function App() {
   >('kontrol_m1');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const parcelInputRef = useRef<HTMLInputElement | null>(null);
+  const [parcelBoundary, setParcelBoundary] = useState<ImportedParcelBoundary | null>(null);
 
   useEffect(() => {
     const onResize = () => setWindowWidth(window.innerWidth);
@@ -365,6 +370,68 @@ export function App() {
 
   const handleResetToOrnek6 = () => {
     void loadGmlViaWorker(ORNEK6_RAW_XML, 'M-70125626-A.gml');
+  };
+
+  const handleParcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      e.target.value = '';
+      const parsed = parseParcelKmlOrGeoJson(text);
+      setParcelBoundary(parsed);
+      const report = validateParcelAndMultiBuilding(model, { parcel: parsed });
+      const hCount = report.findings.filter((f) => f.severity === 'H').length;
+      const uCount = report.findings.filter((f) => f.severity === 'U').length;
+      setEditMessage({
+        kind: hCount > 0 ? 'error' : uCount > 0 ? 'info' : 'ok',
+        text: `Parsel içe aktarıldı (${parsed.sourceFormat.toUpperCase()}, EPSG:${parsed.epsg}, ${parsed.areaM2.toFixed(1)} m²). Taban ∩ parsel: %${((report.parcelOverlapRatio ?? 1) * 100).toFixed(1)} (H ${hCount}, U ${uCount}).`,
+      });
+    } catch (err) {
+      setEditMessage({ kind: 'error', text: `Parsel okuma hatası: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  };
+
+  const handleExportSubmissionReport = () => {
+    const readiness = evaluateSubmissionReadiness({
+      xml: sourceXml,
+      fileName: currentFileName,
+      model,
+      codelists: getOfflineCodelistRegistry(),
+      parcel: parcelBoundary ?? undefined,
+    });
+    const html = generateSubmissionReportHtml(readiness, model);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Teslim_Raporu_${currentFileName.replace(/\.gml$/i, '')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setEditMessage({
+      kind: readiness.readyForTkgmUpload ? 'ok' : 'info',
+      text: `${a.download} indirildi (${readiness.readyForTkgmUpload ? 'TESLİME HAZIR: 0 HATA' : `${readiness.totalErrors} Hata`}).`,
+    });
+  };
+
+  const handleExportMalikReport = () => {
+    const project = designFromImportedModel(model).project;
+    const html = generateMalikIrtifakReportHtml(project, malikler);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Malik_Irtifak_Listesi_${currentFileName.replace(/\.gml$/i, '')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setEditMessage({
+      kind: 'ok',
+      text: `${a.download} indirildi (${malikler.length} malik kaydı).`,
+    });
   };
 
   // M2: Panel, doğrulayıcının tüm bulgularını gösterir (okuyucu + arsa payı + §6 kuralları).
@@ -670,6 +737,37 @@ export function App() {
               className="px-2 py-1 text-[11px] font-medium rounded bg-emerald-600 hover:bg-emerald-500 text-white"
             >
               💾 Kaydet
+            </button>
+            <input
+              ref={parcelInputRef}
+              type="file"
+              accept=".kml,.geojson,.json"
+              onChange={handleParcelUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => parcelInputRef.current?.click()}
+              title="M9: KML veya GeoJSON parsel sınırı içe aktar (V-019, V-193 taban kesişim denetimi)"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-sky-300 border border-sky-800/60"
+            >
+              🗺️ Parsel
+            </button>
+            <button
+              type="button"
+              onClick={handleExportSubmissionReport}
+              title="M9: TKGM 3dbinadogrula Teslim ve Teknik Doğrulama Raporu (HTML)"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-800/60"
+            >
+              📄 Teslim Raporu
+            </button>
+            <button
+              type="button"
+              onClick={handleExportMalikReport}
+              title="M9: Kat İrtifakı ve Malik Listesi Tablosu (HTML, K88-yeni)"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-800/60"
+            >
+              📑 Kat İrtifakı
             </button>
           </div>
         </div>

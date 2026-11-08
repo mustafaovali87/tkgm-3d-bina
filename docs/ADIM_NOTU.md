@@ -1,11 +1,30 @@
-# M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 + M8 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
+# M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 + M8 + M9 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
 
-> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma + KONTROL-M7 R1–R9) + M8 (Çatı Arası ve Özel Durumlar)`
-> **Durum:** `TAMAMLANDI (M0–M8 TAMAMI DOĞRULANDI, 155 / 155 Birim Test GEÇTİ, Eğik Çatı Kesimi / BBKIY-OAIY / K71 İç Kısım / Dubleks / Kademeli Katlar 0 HATA, npm ci / typecheck / lint / docs:m2 0 Hata)`
+> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 176 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma + KONTROL-M7 R1–R9) + M8 (Çatı Arası ve Özel Durumlar + KONTROL-M8 R1–R5) + M9 (Resmî Test, Ön-Kontrol, KML/GeoJSON Parsel ve Teslim Raporu)`
+> **Durum:** `TAMAMLANDI (M0–M9 TAMAMI DOĞRULANDI, 172 / 172 Birim Test GEÇTİ, 10 Test Dosyası, WGS84↔TUREF TM / KML-GeoJSON Parsel / V-019-V-192-V-193 / val3dity Eşleme / 10 Adımlı Ön-Kontrol / Çevrimdışı HTML Raporları 0 Hata, npm ci / typecheck / lint / docs:m2 0 Hata)`
 
 ---
 
-## M8 — ÇATI ARASI VE ÖZEL DURUMLAR (`§3.5–§3.9`, `§4.2`, `§5.2`, `§5.4–§5.12`, `§11`) (08.11.2026)
+## M9 — RESMÎ TEST, ÖN-KONTROL (PRE-FLIGHT), KML/GEOJSON PARSEL VE TESLİM RAPORU (`§7.1`, `§8.3`, `§9.5`, `§10.6`, `§11`) (08.11.2026)
+
+> Ayrıntı: `docs/M9_RESMI_TEST_VE_TESLIM.md`.
+
+| Madde | Durum |
+|---|---|
+| `src/core/importers/parcelImporter.ts` (§8.3 WGS84 ↔ TUREF TM Elipsoidal Dönüşüm) | YAPILDI. GRS80 elipsoidi ($a=6378137.0$ m, $f=1/298.257222101$) ve Transverse Mercator 3° ($k_0=1.0$, $FE=500000.0$ m, EPSG:5253..5259) ile sub-milimetre hassasiyetli `wgs84ToTurefTm` ve `turefTmToWgs84` dönüşümleri (`K07`, `K08`, `V-019`) |
+| `src/core/importers/parcelImporter.ts` (§8.3 KML & GeoJSON Parsel Ayrıştırıcı) | YAPILDI. KML `<Polygon>` / `<LinearRing>` ve GeoJSON `Polygon` / `MultiPolygon` dış halka ve delik ayrıştırması, boylamdan otomatik EPSG önerisi ve yerel mm koordinatlarına (`Poly2[]`) dönüşüm (`parseParcelKmlOrGeoJson`) |
+| `validateParcelAndMultiBuilding` (§6.13, §7.1 Parsel & Çok Blok Kesişimi) | YAPILDI. `V-019` DOM/EPSG dilim uyumu, `V-193` bina tabanı ∩ parsel kesişimi ve taşma denetimi ($> 0.05$ m² taşmada U, kesişmeme durumunda H), `V-192` aynı parseldeki blokların (2025/2 Genelgesi m.4/3) ayak izi kesişim alanı ve yaklaşma mesafesi |
+| `src/core/validation/val3dity.ts` (§9.5 val3dity Rapor Ayrıştırma & Kural Eşleme) | YAPILDI. `val3dity --report` JSON raporunu ayrıştırıp hata kodlarını (`101..503`) Şartname §6 kural kodlarına (`V-031..V-040`, `V-100`, `V-101`, `V-217`) deterministik eşleme (`mapVal3dityCodeToRuleId`) |
+| `runExtendedGeometryAudit` (§9.5 Yerel Genişletilmiş 3B Kabuk & Topoloji Denetimi) | YAPILDI. LoD1 CompositeSolid kapalılığı (`V-101`), RoofEdge ⊂ Çatı izdüşümü (`V-108`), BB ⊂ Kat (`V-125`), BBK ⊂ BB (`V-162`), iç yapı manifold kabuk kapalılığı (`V-196`), K71 oda delik eşleşmesi (`V-197`), dubleks alan stratejisi (`V-200`) ve BBK/OA 3B manifold oda kapalılığı (`V-217`) |
+| `src/core/validation/submissionPackage.ts` (§7.1, §10.6 Teslim Ön-Kontrolü) | YAPILDI. 10 adımlı kapsamlı kontrol listesi (`CHK-FILENAME`, `CHK-ENCODING`, `CHK-GML-SCHEMA`, `CHK-CRS`, `CHK-ATTRIBUTES`, `CHK-LANDSHARE`, `CHK-PARCEL`, `CHK-SHELLS`, `CHK-VAL3DITY`, `CHK-OFFICIAL`), ham dosya SHA-256 ve K89 kanonik özet kilidi, resmi onay kodu doğrulaması (`OfficialVerificationRecord`), TKGM sunucu hata mesajı eşleyici (`matchServerMessageToRule`) |
+| Çevrimdışı HTML Raporları (`generateSubmissionReportHtml`, `generateMalikIrtifakReportHtml`) | YAPILDI. Belediye / Kadastro teslim paketi için sıfır dış bağlantılı teknik teslim raporu (malik kişisel verisi içermez, `K99`) ve `BigInt` tam arsa payı toplamlı kat irtifakı / malik listesi tablosu (`K88-yeni`) |
+| Arayüz Entegrasyonu (`src/App.tsx`) | YAPILDI. Üst araç çubuğuna `🗺️ Parsel` (KML/GeoJSON içe aktarma & taban kesişim denetimi), `📄 Teslim Raporu` (resmî SHA-256 teknik teslim raporu indirme) ve `📑 Kat İrtifakı` (arsa payı ve malik listesi indirme) düğmeleri eklendi |
+| Kabul (§11): Resmî test ve teslim ön-kontrolü Ornek6 üzerinde 0 HATA verir | YAPILDI. `src/core/__tests__/m9.test.ts` (**13/13** test geçti), Ornek6 üzerinde teslim ön-kontrolü TESLİME HAZIR (**0 HATA, 0 UYARI**); toplam test **172/172** geçti |
+| Komutlar | `typecheck` (`tsconfig.json` + `tsconfig.core.json`) 0 hata ✔, `npm run docs:m2` (`176 kural`) ✔, `npm test` **172/172** ✔ |
+
+---
+
+## M8 — ÇATI ARASI VE ÖZEL DURUMLAR (`§3.5–§3.9`, `§4.2`, `§5.2`, `§5.4–§5.12`, `§11`, `KONTROL-M8 R1–R5`) (08.11.2026)
 
 > Ayrıntı: `docs/M8_CATI_ARASI_VE_OZEL_DURUMLAR.md`.
 
@@ -15,9 +34,15 @@
 | `RoomInstallation` (`BBKIY_` & `OAIY_`, §3.9, §4.2) | YAPILDI. Merdiven (`1001`), Sütun (`1002`), Asansör (`1003`) iç yapıları; oda tabanından delik açmadan (§3.9) kapalı B-Rep üretimi, `<bldg:roomInstallation><bldg:IntBuildingInstallation>` XML yazımı, `V-058` `<gml:name>` (`{BB}_{partUsage}_İç Yapı`, `{commonAreaUsage}_İç Yapı`) ve `designFromImportedModel` round-trip |
 | İç Kısım (`K71`, §5.3, §5.5 — Oda İçinde Oda) | YAPILDI. Dış odanın taban ve tavanında otomatik iç halka (delik) açılması, delik çevresi `InteriorWall_` yüzeyleri ve `BB_` küvetinde `V-039` iç içe delik yasağına uygun iç duvar adası üretimi |
 | Dubleks / Çoklu Kat (`groupStoreyId`, `emitStoreyObject`, `1003`/`1004`, §4.2, §4.3) | YAPILDI. Çok katlı `BB_` parçalarının giriş katı `K_` grubuna (`groupMember` ve `independentSectionCount`) bağlanması; `emitStoreyObject === false` çatı arası katlarda `K_` üretilmemesi ve `OA_` `storeyObjectReference = -1` yazımı |
-| Kademeli Katlar (`src/core/brep/polyBoolean2d.ts`, `OuterFloor_` & `OuterCeiling_`, §5.10) | YAPILDI. Saf TS 2B Boolean fark (`subtractPolygons2D`) ile `L.outline − U.outline` → `OuterFloorSurface` (`zCeiling(L)`) ve `U.outline − L.outline` → `OuterCeilingSurface` (`zFloorBottom(U)`) üretimi |
+| Kademeli Katlar (`src/core/brep/polyBoolean2d.ts`, `OuterFloor_` & `OuterCeiling_`, §5.10) | YAPILDI. Saf TS 2B Boolean fark (`subtractPolygons2DWithStatus`) ile `L.outline − U.outline` → `OuterFloorSurface` (`zCeiling(L)`) ve `U.outline − L.outline` → `OuterCeilingSurface` (`zFloorBottom(U)`) üretimi |
 | Asma Kat (`zFloorOverride`), Uzak Kısım (`remote`), Sahanlık Penceresi (`spansStoreys`), OA Dış Duvarı (`WallSurface`) | YAPILDI. Çok katlı sahanlık penceresi dilimleme, dış cepheye komşu ortak alanda duvar kalınlığı üzerinden `WallSurface` (`Wall_`) sınıflandırması (`V-163`), 2B editör (`iy` aracı ve M8 kontrolleri) ve 3B önizleme desteği |
-| Kabul (§11): Eğik çatılı çatı arası odalar, iç yapı (merdiven/sütun/asansör), iç kısım, dubleks; 0 HATA | YAPILDI. `src/core/__tests__/m8.test.ts` (9/9 test geçti) kendi doğrulayıcımızda **0 HATA**; toplam test **155/155** geçti |
+| **KONTROL-M8 R1 (`atticClip.ts`, `generate.ts`, `building.ts`, `fromImported.ts`)** | **YAPILDI.** En üst kata `zFloorOverride` ile bağlı çatı arası BB (`1004`) ve `ceilingFaces` / `manual` çatı altındaki odalarda duvarlar `zCeiling(storey)` yerine $z_{\text{top}}(x,y)$'ye uzanır; `prepareExplicitCeilingForPoly` ile tavan dış sınır yarı-kenarları (`topProfileForEdge`) duvar tepe zincirine birebir kenetlenir (`checkShell(r).closed === true`, hacim $\pm 0{,}05\text{ m}^3$). Açıklıklar `hostPartId` ve `zBaseOverride` ile kendi Z katmanındaki odaya/BB'ye bağlanır (`B-OP-02 = 0`; `m8.test.ts` R1 testi eklendi) |
+| **KONTROL-M8 R2 (`polyBoolean2d.ts`, `building.ts`)** | **YAPILDI.** Boolean fark sonucunda ardışık $\le 2\text{ mm}$ köşeler birleştirilir, $180^\circ$ dikenler ve doğrusal ara köşeler silinir (`pruneRingSpikesAndCollinear`), sekiz-biçimli halkalar basit döngülere bölünür (`decomposeToSimpleLoops`), alanı $< 0{,}01\text{ m}^2$ veya şerit kalınlığı $2A/P < 10\text{ mm}$ olan kıymıklar atılır ve `B-LOD2-02` (`U`) uyarısı verilir (`m8.test.ts` R2 testi eklendi, `V-034 = 0`) |
+| **KONTROL-M8 R3 (`geom.ts`, `rulesExtra.ts`, `ACIK_SORULAR.md`)** | **YAPILDI.** Doğrulayıcıya `V-217` (`severity: 'H'`) oda (`BBK_` / `OA_`) 3B kabuk kapalılığı kuralı (`checkRoomShellClosure`, T-kavşak bölme + $10\text{ mm}$ `val3dity` yakalama toleransı) eklendi ve `ACIK-10` olarak belgelendi (`m8.test.ts` R3 testi eklendi; `Ornek6` `0 HATA` korundu) |
+| **KONTROL-M8 R4 (`fromImported.ts`, `generate.ts`, `ACIK_SORULAR.md`)** | **YAPILDI.** Aynı duvar diliminde ve örtüşen Z aralığında çakışan kapı/pencere açıklıkları `fromImported.ts` içinde $10\text{ mm}$ payla kırpılır/elenir ve `ExtractionNote` düşülür; ayrıca `wallFaces` aynı yüzdeki çakışık deliği `B-OP-10` (`U`) ile eler (`ACIK-11`, `m8.test.ts` R4 testi eklendi, `V-035 = 0`, `V-039 = 0`) |
+| **KONTROL-M8 R5 (`docs/M8_CATI_ARASI_VE_OZEL_DURUMLAR.md`)** | **YAPILDI.** Kabul tablosu ve gerçek komut çıktıları (`npm run typecheck`, `npm run docs:m2`, `npm test` `159/159`) belgeye eklendi |
+| Kabul (§11): Eğik çatılı çatı arası odalar, iç yapı (merdiven/sütun/asansör), iç kısım, dubleks; 0 HATA | YAPILDI. `src/core/__tests__/m8.test.ts` (**13/13** test geçti) kendi doğrulayıcımızda **0 HATA**; toplam test **159/159** geçti |
+| Komutlar | `typecheck` (`tsconfig.json` + `tsconfig.core.json`) 0 hata ✔, `npm run docs:m2` (`176 kural`) ✔, `npm test` **159/159** ✔ |
 
 ---
 

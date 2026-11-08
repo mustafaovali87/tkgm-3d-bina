@@ -33,3 +33,12 @@
    - Bu numaranın kaynağı MAKS. Kullanıcı girmeli.
    - Kullanıcıya hangi ekranda sorulacağı belirlenecek (M7 sihirbazı).
 9. **ACIK-09 — Üretilen GML'in resmi kabulü (§10.6): YANITLANDI — 08.11.2026, TKGM 3dbinadogrula: başarılı.** Ornek6'dan üretilen dosya resmi TKGM `3dbinadogrula` doğrulamasından başarılı sonuçla geçti (08.11.2026).
+
+## M8 / KONTROL-M8 ile eklenen kural ve kararlar (08.11.2026)
+
+10. **ACIK-10 — V-217 Oda (`BBK_` / `OA_`) 3B kabuk kapalılığı kuralı (`KONTROL-M8 R3`, Şartname §5.5 madde 6):**
+    - **Gerekçe:** Eğik tavanlı / çatı arası odalarda duvar tepeleri ile tavan yüzleri birleşmediğinde (`openEdges > 0`), hem `volume` özniteliği hem geometrik hacim aynı eksik kabuktan hesaplandığında `V-158` hatayı yakalayamamakta; TKGM sunucusu ise `val3dity` ile açık kabuğu reddetmektedir.
+    - **Uygulama:** `src/core/validation/rulesExtra.ts` içine `V-217` (`severity: 'H'`) eklendi. Her `BBK_` ve `OA_` nesnesinin `FloorSurface`, `InteriorWallSurface` / `WallSurface` ve `CeilingSurface` poligonlarının dış halkaları (ve taban/tavan yapısal K71 iç halkaları) T-kavşaklarda bölünerek (`checkRoomShellClosure`) kenar eşleşmesi denetlenir. Duvarlardaki kapı/pencere delikleri (`interiorRings`) açıklık poligonlarıyla kapalı sayılır (`V-172` ayrıca denetler). Resmi örneklerdeki 2 ondalık hane (`10 mm`) yuvarlama farklarını ve `val3dity` `1 cm` yakalama toleransını gözetmek için `10 mm` üzerinde açık kalan kenarlar `H` (HATA), `1–10 mm` arasındaki mikro açıklıklar `B` (BİLGİ) olarak raporlanır.
+11. **ACIK-11 — Aynı duvar diliminde çakışan kapı ve pencere açıklıkları (`KONTROL-M8 R4`):**
+    - **Gerekçe:** `Ornek2` gibi bazı kaynak dosyalarda balkon kapısı ile bitişik pencere delikleri aynı duvar diliminde ortak kenar paylaşacak veya üst üste binecek biçimde tanımlanmış olup üretimde `V-035` / `V-039` delik kesişmesi üretmektedir.
+    - **Uygulama:** `fromImported.ts` içinde aynı kat, aynı duvar dilimi ve örtüşen Z aralığındaki açıklıklar tespit edilerek yatayda `10 mm` güvenlik payıyla örtüşmeyecek biçimde kırpılır (veya tamamen içeride kalıyorsa atlanır) ve `ExtractionNote` olarak kaydedilir. Ayrıca `generate.ts` içindeki `wallFaces` fonksiyonu aynı duvar parçasına düşen çakışık ikinci deliği `B-OP-10` (`U`) uyarısıyla eleyerek `V-035` / `V-039` oluşumunu engeller.

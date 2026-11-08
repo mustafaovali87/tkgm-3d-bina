@@ -257,3 +257,101 @@ export function signedVolumeOfRings(rings: ReadonlyArray<readonly Point3D[]>, or
   }
   return v;
 }
+
+/**
+ * V-217 — Oda (BBK_ / OA_) 3B kabuk kapalılığı denetimi (T-kavşak bölme + tolMm köşe yakalama).
+ * Duvarlardaki açıklık delikleri (interiorRings) açıklık poligonlarıyla kapalı sayılır (V-172 ayrıca denetler).
+ */
+export function checkRoomShellClosure(
+  rings: ReadonlyArray<readonly Point3D[]>,
+  tolMm = 10,
+): { readonly closed: boolean; readonly openEdges: number } {
+  const cleanRings = rings.map(uniqueRing).filter((r) => r.length >= 3);
+  if (cleanRings.length === 0) return { closed: true, openEdges: 0 };
+  const o = cleanRings[0][0];
+  interface V3 {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+    readonly k: string;
+  }
+  const canonVerts: V3[] = [];
+  const toCanon = (p: Point3D): V3 => {
+    const x = Math.round((p.e - o.e) * 1000);
+    const y = Math.round((p.n - o.n) * 1000);
+    const z = Math.round((p.z - o.z) * 1000);
+    for (const c of canonVerts) {
+      if (Math.hypot(x - c.x, y - c.y, z - c.z) <= tolMm) return c;
+    }
+    const v: V3 = { x, y, z, k: `${x},${y},${z}` };
+    canonVerts.push(v);
+    return v;
+  };
+  const mmRings: V3[][] = cleanRings.map((r) => {
+    const mapped = r.map(toCanon);
+    const dedup: V3[] = [];
+    for (const v of mapped) {
+      if (!dedup.length || dedup[dedup.length - 1].k !== v.k) dedup.push(v);
+    }
+    if (dedup.length > 1 && dedup[0].k === dedup[dedup.length - 1].k) dedup.pop();
+    return dedup;
+  });
+
+  const edgeCounts = new Map<string, { count: number; len: number }>();
+  const addSubEdge = (a: V3, b: V3) => {
+    if (a.k === b.k) return;
+    const key = a.k < b.k ? `${a.k}|${b.k}` : `${b.k}|${a.k}`;
+    const len = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    const cur = edgeCounts.get(key);
+    if (cur) cur.count++;
+    else edgeCounts.set(key, { count: 1, len });
+  };
+
+  for (const r of mmRings) {
+    if (r.length < 3) continue;
+    for (let i = 0; i < r.length; i++) {
+      const a = r[i];
+      const b = r[(i + 1) % r.length];
+      if (a.k === b.k) continue;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dz = b.z - a.z;
+      const L2 = dx * dx + dy * dy + dz * dz;
+      const L = Math.sqrt(L2);
+      if (L <= tolMm) continue;
+      const cuts: { t: number; v: V3 }[] = [];
+      for (const v of canonVerts) {
+        if (v.k === a.k || v.k === b.k) continue;
+        const wx = v.x - a.x;
+        const wy = v.y - a.y;
+        const wz = v.z - a.z;
+        const t = (wx * dx + wy * dy + wz * dz) / L2;
+        if (t * L <= tolMm || (1 - t) * L <= tolMm) continue;
+        const cx = wy * dz - wz * dy;
+        const cy = wz * dx - wx * dz;
+        const cz = wx * dy - wy * dx;
+        const dist = Math.sqrt((cx * cx + cy * cy + cz * cz) / L2);
+        if (dist <= tolMm) {
+          cuts.push({ t, v });
+        }
+      }
+      cuts.sort((m, n) => m.t - n.t);
+      let prev = a;
+      for (const c of cuts) {
+        if (c.v.k !== prev.k) {
+          addSubEdge(prev, c.v);
+          prev = c.v;
+        }
+      }
+      addSubEdge(prev, b);
+    }
+  }
+
+  let openEdges = 0;
+  const minOpenLen = Math.max(15, tolMm * 1.5);
+  for (const { count, len } of edgeCounts.values()) {
+    if (count < 2 && len > minOpenLen) openEdges++;
+  }
+  return { closed: openEdges === 0, openEdges };
+}
+

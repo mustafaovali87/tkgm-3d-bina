@@ -129,6 +129,7 @@ function makeBaseProject(buildingOverride: Partial<DesignBuilding>): DesignProje
     cardinalDirections: {
       sp0: [1001, 1005],
       sp1: [1001, 1005],
+      spLower: [1001, 1005],
       spAttic: [1001, 1005],
     },
     roof: { mode: 'flat', eaveOverhang: 0, thickness: 200, pitchDeg: 0 },
@@ -482,3 +483,223 @@ describe('M8 — İç Kısım (K71), Dubleks, Asma Kat, Uzak Kısım, Sahanlık 
     expect(hErrors(rep)).toEqual([]);
   });
 });
+
+describe('KONTROL-M8 — R1..R4 gerileme ve kabul testleri', () => {
+  it('R1 (Ornek2 eşdeğeri): en üst kata zFloorOverride ile bağlı çatı arası BB (1004) ve eğik tavanlı odalar kapalı kabuk üretir, hacim ±0.05 m³, B-OP-02 = 0', () => {
+    const kOutline = rect(0, 0, 10000, 8000);
+    const roomPoly = rect(200, 200, 9800, 7800);
+    const zKat2Bottom = 957850; // Kat_2: zFloorTop = 958050, zCeiling = 960850
+    const zAtticBbBottom = 960850;
+    const zAtticRoomFloor = 961000;
+    // Beşik çatı yüzleri: y = 200..7800 üzerinde x = 5000 mahyasında 963011 mm, yanlarda (x=200, x=9800) 962187 mm
+    const westCeilFacet = [
+      { x: 200, y: 200, z: 962187 },
+      { x: 5000, y: 200, z: 963011 },
+      { x: 5000, y: 7800, z: 963011 },
+      { x: 200, y: 7800, z: 962187 },
+    ];
+    const eastCeilFacet = [
+      { x: 5000, y: 200, z: 963011 },
+      { x: 9800, y: 200, z: 962187 },
+      { x: 9800, y: 7800, z: 962187 },
+      { x: 5000, y: 7800, z: 963011 },
+    ];
+    const roofWest = [
+      { x: 0, y: 0, z: 962153 },
+      { x: 5000, y: 0, z: 963011 },
+      { x: 5000, y: 8000, z: 963011 },
+      { x: 0, y: 8000, z: 962153 },
+    ];
+    const roofEast = [
+      { x: 5000, y: 0, z: 963011 },
+      { x: 10000, y: 0, z: 962153 },
+      { x: 10000, y: 8000, z: 962153 },
+      { x: 5000, y: 8000, z: 963011 },
+    ];
+
+    const project = makeBaseProject({
+      storeys: [{ id: 's2', storeyNumber: '2', zBottom: zKat2Bottom, height: 3000, slabThickness: 200, outline: [kOutline] }],
+      sectionParts: [
+        { id: 'spLower', sectionId: 'sec1', storeyId: 's2', usage: 1001, outline: kOutline },
+        { id: 'spAttic', sectionId: 'sec1', storeyId: 's2', usage: 1004, outline: kOutline, zFloorOverride: zAtticBbBottom, zTopOverride: 963011 },
+      ],
+      parts: [
+        { id: 'pLower', kind: 'BBK', storeyId: 's2', sectionPartIds: ['spLower'], usage: 1001, polygon: roomPoly, planArea: -1 },
+        {
+          id: 'pAttic',
+          kind: 'BBK',
+          storeyId: 's2',
+          sectionPartIds: ['spAttic'],
+          usage: 1005,
+          polygon: roomPoly,
+          planArea: -1,
+          zFloorOverride: zAtticRoomFloor,
+          zTopOverride: 963011,
+          ceilingFaces: [
+            { outer: westCeilFacet, holes: [] },
+            { outer: eastCeilFacet, holes: [] },
+          ],
+        },
+      ],
+      openings: [
+        // Alt kat (958050..960850) kapı ve penceresi
+        {
+          id: 'doorLower',
+          kind: 'door',
+          usage: 1003,
+          storeyId: 's2',
+          hostPartId: 'pLower',
+          anchor: { a: { x: 1000, y: 200 }, b: { x: 1900, y: 200 } },
+          sill: 10,
+          height: 2100,
+        },
+        {
+          id: 'winLower',
+          kind: 'window',
+          usage: 1001,
+          storeyId: 's2',
+          hostPartId: 'pLower',
+          anchor: { a: { x: 4200, y: 200 }, b: { x: 5800, y: 200 } },
+          sill: 900,
+          height: 1500,
+        },
+        // Çatı arası (961000..963011) penceresi — aynı (x, y) duvarında ve mahya (x = 5000) altında!
+        {
+          id: 'winAttic',
+          kind: 'window',
+          usage: 1001,
+          storeyId: 's2',
+          hostPartId: 'pAttic',
+          zBaseOverride: zAtticRoomFloor,
+          anchor: { a: { x: 4400, y: 200 }, b: { x: 5600, y: 200 } },
+          sill: 300,
+          height: 800,
+        },
+      ],
+      roof: {
+        mode: 'manual',
+        eaveOverhang: 0,
+        thickness: 200,
+        pitchDeg: 10,
+        facets: [
+          { outer: roofWest, holes: [] },
+          { outer: roofEast, holes: [] },
+        ],
+      },
+      tic: [
+        { x: 0, y: 0, z: zKat2Bottom },
+        { x: 10000, y: 0, z: zKat2Bottom },
+        { x: 10000, y: 8000, z: zKat2Bottom },
+        { x: 0, y: 8000, z: zKat2Bottom },
+      ],
+    });
+
+    const brep = generateBrep(project, project.buildings[0]);
+    expect(brep.issues.filter((i) => i.code === 'B-OP-02')).toEqual([]);
+    expect(brep.issues.filter((i) => i.severity === 'H')).toEqual([]);
+
+    for (const r of brep.rooms) {
+      const sh = checkShell(r);
+      expect(sh.closed, `${r.designId} openEdges=${sh.openEdges}`).toBe(true);
+    }
+
+    // Çatı arası odasının analitik hacmi: taban 9.6 m × 7.6 m = 72.96 m², ortalama yükseklik ((962.187 + 963.011)/2 − 961.000) = 1.599 m → 116.66 m³
+    const expectedAtticVol = 9.6 * 7.6 * ((962.187 + 963.011) / 2 - 961.0);
+    const atticRoom = brep.rooms.find((r) => r.designId === 'pAttic')!;
+    expect(Math.abs(atticRoom.attributes.volume - expectedAtticVol)).toBeLessThanOrEqual(0.05);
+
+    // GML yazımı → okuma → yeniden çıkarma → yeniden üretim round-trip (Ornek2 akışı)
+    const out1 = writeCityGml(project, brep, codelists);
+    const parsed1 = parseCityGmlModel(out1.xml, out1.fileName, codelists);
+    const rep1 = validateCityGml(out1.xml, out1.fileName, parsed1, codelists);
+    expect(hErrors(rep1)).toEqual([]);
+
+    const extracted = designFromImportedModel(parsed1).project;
+    const brep2 = generateBrep(extracted, extracted.buildings[0]);
+    expect(brep2.issues.filter((i) => i.code === 'B-OP-02')).toEqual([]);
+    for (const r of brep2.rooms) {
+      expect(checkShell(r).closed).toBe(true);
+    }
+    const out2 = writeCityGml(extracted, brep2, codelists);
+    const parsed2 = parseCityGmlModel(out2.xml, out2.fileName, codelists);
+    const rep2 = validateCityGml(out2.xml, out2.fileName, parsed2, codelists);
+    expect(hErrors(rep2)).toEqual([]);
+  });
+
+  it('R2 (Ornek3 eşdeğeri): iki ardışık kat sınırı 1 mm farklı olduğunda diken/kendini kesen OuterFloor üretilmez, V-034 = 0', () => {
+    const lowerOutline = rect(0, 0, 10000, 8000);
+    // Üst kat bir kenarda yalnızca 1 mm içeride ve bir köşede 1 mm ileri-geri diken oluşturacak biçimde hafif kayık
+    const upperOutline: Poly2 = {
+      outer: [
+        { x: 0, y: 1 },
+        { x: 10000, y: 0 },
+        { x: 10000, y: 8000 },
+        { x: 0, y: 8000 },
+      ],
+      holes: [],
+    };
+    const diff = subtractPolygons2D([lowerOutline], [upperOutline]);
+    expect(diff).toHaveLength(0);
+
+    const project = makeBaseProject({
+      storeys: [
+        { id: 's0', storeyNumber: 'Z', zBottom: Z0, height: 3000, slabThickness: 200, outline: [lowerOutline] },
+        { id: 's1', storeyNumber: '1', zBottom: Z0 + 3000, height: 3000, slabThickness: 200, outline: [upperOutline] },
+      ],
+      sectionParts: [
+        { id: 'sp0', sectionId: 'sec1', storeyId: 's0', usage: 1001, outline: lowerOutline },
+        { id: 'sp1', sectionId: 'sec1', storeyId: 's1', groupStoreyId: 's0', usage: 1001, outline: upperOutline },
+      ],
+      parts: [
+        { id: 'p0', kind: 'BBK', storeyId: 's0', sectionPartIds: ['sp0'], usage: 1001, polygon: rect(200, 200, 9800, 7800), planArea: -1 },
+        { id: 'p1', kind: 'BBK', storeyId: 's1', sectionPartIds: ['sp1'], usage: 1001, polygon: rect(200, 200, 9800, 7800), planArea: -1 },
+      ],
+    });
+    const brep = generateBrep(project, project.buildings[0]);
+    const out = writeCityGml(project, brep, codelists);
+    const parsed = parseCityGmlModel(out.xml, out.fileName, codelists);
+    const rep = validateCityGml(out.xml, out.fileName, parsed, codelists);
+    expect(rep.findings.filter((f) => f.ruleId === 'V-034')).toEqual([]);
+    expect(hErrors(rep)).toEqual([]);
+  });
+
+  it('R3 (V-217): açık oda kabuğunu (duvar tepesi tavana ulaşmayan oda) HATA olarak yakalar', () => {
+    const project = makeBaseProject({});
+    const brep = generateBrep(project, project.buildings[0]);
+    const out = writeCityGml(project, brep, codelists);
+    // Oda tavanını 1500 mm yukarı taşıyıp duvarları eski kotta bırakalım (R1 öncesi açık kabuk durumu)
+    const ceilMatch = out.xml.match(/<bldg:CeilingSurface>[\s\S]*?<\/bldg:CeilingSurface>/);
+    expect(ceilMatch).not.toBeNull();
+    const mutatedCeil = ceilMatch![0].replace(/103\.000/g, '104.500');
+    const brokenXml = out.xml.replace(ceilMatch![0], mutatedCeil);
+    const parsed = parseCityGmlModel(brokenXml, out.fileName, codelists);
+    const rep = validateCityGml(brokenXml, out.fileName, parsed, codelists);
+    const v217 = rep.findings.filter((f) => f.ruleId === 'V-217' && f.severity === 'H');
+    expect(v217.length).toBeGreaterThan(0);
+  });
+
+  it('R4 (Ornek2 çakışan açıklıklar): aynı duvar diliminde üst üste binen balkon kapısı ve pencereyi kırpar/eler, V-035 ve V-039 = 0', () => {
+    // Kaynak modelde aynı duvarda [1000..1900] kapı ve [1800..3000] pencere (100 mm yatay binme) olsun
+    const project = makeBaseProject({
+      openings: [
+        { id: 'd1', kind: 'door', usage: 1003, storeyId: 's0', anchor: { a: { x: 1000, y: 200 }, b: { x: 1900, y: 200 } }, sill: 10, height: 2100 },
+        { id: 'w1', kind: 'window', usage: 1001, storeyId: 's0', anchor: { a: { x: 2200, y: 200 }, b: { x: 3200, y: 200 } }, sill: 900, height: 1200 },
+      ],
+    });
+    const brep = generateBrep(project, project.buildings[0]);
+    const out = writeCityGml(project, brep, codelists);
+    // GML içindeki pencerenin başlangıç X koordinatını (500002.200) kapının içine (500001.800) çekerek çakışan kaynak GML oluşturalım
+    const overlappingXml = out.xml.replace(/500002\.200/g, '500001.800');
+    const parsedOverlap = parseCityGmlModel(overlappingXml, out.fileName, codelists);
+    const extracted = designFromImportedModel(parsedOverlap);
+    expect(extracted.notes.some((n) => n.message.includes('çakışma') || n.message.includes('üst üste'))).toBe(true);
+
+    const regenBrep = generateBrep(extracted.project, extracted.project.buildings[0]);
+    const regenOut = writeCityGml(extracted.project, regenBrep, codelists);
+    const regenParsed = parseCityGmlModel(regenOut.xml, regenOut.fileName, codelists);
+    const regenRep = validateCityGml(regenOut.xml, regenOut.fileName, regenParsed, codelists);
+    expect(regenRep.findings.filter((f) => f.ruleId === 'V-035' || f.ruleId === 'V-039')).toEqual([]);
+    expect(hErrors(regenRep)).toEqual([]);
+  });
+});
+

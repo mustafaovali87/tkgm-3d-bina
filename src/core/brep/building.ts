@@ -5,7 +5,7 @@ import type { Balcony, DesignBuilding, Poly2, Pt2, Ring2, Roof, Storey } from '.
 import { DEFAULT_ROOF } from '../design/types.ts';
 import { buildRoofEnvelope, resolveRoofEdgeZ, roofRidgeSplitPointsOnRing } from './atticClip.ts';
 import { edgeCovers, horizontal, ringEdges, round2, storeyLevels, wallFaces, type FaceHole } from './generate.ts';
-import { subtractPolygons2D } from './polyBoolean2d.ts';
+import { subtractPolygons2DWithStatus } from './polyBoolean2d.ts';
 import type { BrepIssue, BrepObject, BrepOpening, BrepPolygon, BrepPolygonKind, BrepShell, BrepSurface, Pt3, StoreyLevels } from './types.ts';
 
 type IdOf = (prefix: string, path: string) => string;
@@ -247,16 +247,17 @@ export function generateShell(building: DesignBuilding, lod2Openings: readonly B
   storeys.forEach((s, si) => {
     const lv = levels[si];
     const roofEnv = buildRoofEnvelope(building, s);
+    const zMaxStorey = Math.max(lv.zCeiling, roofEnv?.zCeiling ?? lv.zCeiling);
     s.outline.forEach((pl, pi) =>
       [pl.outer, ...pl.holes].forEach((ring, ri) => {
         const ridgeSplits = roofEnv ? roofRidgeSplitPointsOnRing(ring, roofEnv) : [];
         ringEdges(ring).forEach((e, ei) => {
           const ops = lod2Openings.filter((o) => {
             const r = o.polygon.outer;
-            return !used.has(o.id) && r[0].z >= lv.zFloorBottom && r[1].z <= lv.zCeiling && edgeCovers(e, r[0], r[2]);
+            return !used.has(o.id) && r[0].z >= lv.zFloorBottom && r[1].z <= zMaxStorey && edgeCovers(e, r[0], r[2]);
           });
           const holes: FaceHole[] = ops.map((o) => ({ key: o.id, a: o.polygon.outer[0], b: o.polygon.outer[2], zb: o.polygon.outer[0].z, zt: o.polygon.outer[1].z, kind: o.prefix === 'KAPI_' ? ('door' as const) : ('window' as const) }));
-          const wf = wallFaces(e, lv.zFloorBottom, lv.zCeiling, ridgeSplits, holes, 'Wall_', (x) => pid('Wall_', `lod2:${s.id}:${pi}:${ri}:${ei}:${x}`), issues, building.id, roofEnv?.zAt);
+          const wf = wallFaces(e, lv.zFloorBottom, zMaxStorey, ridgeSplits, holes, 'Wall_', (x) => pid('Wall_', `lod2:${s.id}:${pi}:${ri}:${ei}:${x}`), issues, building.id, roofEnv?.zAt);
           for (const o of ops) used.add(o.id);
           // Her poligon ayrı WallSurface (Ornek6: 16 eleman); açıklıklar delikli poligonun yüzeyine
           wf.polygons.forEach((p, k) => {
@@ -272,19 +273,30 @@ export function generateShell(building: DesignBuilding, lod2Openings: readonly B
   // M8 (§5.10): Kademeli katlarda OuterFloorSurface (L − U @ zCeiling(L), normal yukarı) ve OuterCeilingSurface (U − L @ zFloorBottom(U), normal aşağı)
   const outerFloorPolys: BrepPolygon[] = [];
   const outerCeilingPolys: BrepPolygon[] = [];
+  let droppedNonSimpleTotal = 0;
   for (let i = 1; i < storeys.length; i++) {
     const lower = storeys[i - 1];
     const upper = storeys[i];
     if (lower.outline.length === 0 || upper.outline.length === 0) continue;
     const same = JSON.stringify(upper.outline.map((p) => p.outer)) === JSON.stringify(lower.outline.map((p) => p.outer));
     if (same) continue;
-    const lMinusU = subtractPolygons2D(lower.outline, upper.outline);
-    lMinusU.forEach((poly, idx) => {
+    const lMinusU = subtractPolygons2DWithStatus(lower.outline, upper.outline);
+    droppedNonSimpleTotal += lMinusU.droppedNonSimple;
+    lMinusU.polygons.forEach((poly, idx) => {
       outerFloorPolys.push(horizontal(poly, levels[i - 1].zCeiling, true, 'OuterFloor_', pid('OuterFloor_', `${lower.id}:${idx}`)));
     });
-    const uMinusL = subtractPolygons2D(upper.outline, lower.outline);
-    uMinusL.forEach((poly, idx) => {
+    const uMinusL = subtractPolygons2DWithStatus(upper.outline, lower.outline);
+    droppedNonSimpleTotal += uMinusL.droppedNonSimple;
+    uMinusL.polygons.forEach((poly, idx) => {
       outerCeilingPolys.push(horizontal(poly, levels[i].zFloorBottom, false, 'OuterCeiling_', pid('OuterCeiling_', `${upper.id}:${idx}`)));
+    });
+  }
+  if (droppedNonSimpleTotal > 0) {
+    issues.push({
+      code: 'B-LOD2-02',
+      severity: 'U',
+      elementId: building.id,
+      message: `Kademeli kat Boolean farkında ${droppedNonSimpleTotal} adet kendini kesen / dejenere kıymık halka (OuterFloor/OuterCeiling) atıldı (V-034 önlemi).`,
     });
   }
   if (outerFloorPolys.length > 0) {

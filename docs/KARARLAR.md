@@ -275,3 +275,23 @@
   - Merdiven (`1001`), sütun (`1002`) ve asansör (`1003`) iç yapıları bağlı olduğu odanın taban poligonundan delik olarak çıkarılmaz (`§3.9`); kendi `FloorSurface`, `InteriorWallSurface` ve `CeilingSurface` yüzeyleriyle `<bldg:roomInstallation><bldg:IntBuildingInstallation>` olarak yazılır.
 - **İç Kısım (`K71`), Dubleks (`groupStoreyId`, `emitStoreyObject`), Sahanlık Penceresi (`spansStoreys`), OA Dış Duvarı ve Kademeli Katlar (`§5.10`):**
   - Oda içinde oda (`K71`) otomatik delik ve iç duvar adası üretir; kademeli katlarda `subtractPolygons2D` ile `L − U` için `OuterFloorSurface` (`OuterFloor_`) ve `U − L` için `OuterCeilingSurface` (`OuterCeiling_`) üretilir.
+
+---
+
+## A.14 M9 Resmî Test, Ön-Kontrol ve Teslim Paketi (08.11.2026)
+
+- **WGS84 ↔ TUREF TM Elipsoidal Dönüşümü (`src/core/importers/parcelImporter.ts`, `§8.3`, `K07`, `K08`):**
+  - GRS80 elipsoid parametreleri ($a = 6378137.0$ m, $f = 1/298.257222101$) ve Transverse Mercator 3° ($k_0 = 1.0$, $FE = 500000.0$ m) ile sub-milimetre hassasiyetli ileri ve geri dönüşüm uygulanır.
+  - KML ve GeoJSON formatları desteklenir; WGS84 boylamından EPSG dilimi (`5253..5259`) otomatik önerilir (`V-019`).
+- **Parsel ve Çok Blok Kesişim Denetimleri (`validateParcelAndMultiBuilding`, `§6.13`, `V-192`, `V-193`):**
+  - Bina tabanı ile parsel poligonu kesişimi 2B Boolean farkı (`subtractPolygons2D`) ile hesaplanır; tabanın parsel dışına taşması $> 0.05$ m² durumunda UYARI, hiç kesişmeme durumunda HATA üretilir (`V-193`).
+  - Çok bloklu yapılarda (2025/2 Genelgesi m.4/3) aynı parseldeki diğer blokların ayak izi kesişim alanı ve yüzdesi hesaplanır (`V-192`).
+- **Harici `val3dity` Rapor Ayrıştırıcı ve Kural Eşleyici (`src/core/validation/val3dity.ts`, `§9.5`):**
+  - `val3dity --report` JSON çıktısı okunur; hata kodları (`101..503`) Şartname §6 kural kodlarına (`V-031..V-040`, `V-100`, `V-101`, `V-217`) deterministik olarak eşlenir (`mapVal3dityCodeToRuleId`).
+  - Yerel genişletilmiş denetimde LoD1 CompositeSolid (`V-101`), RoofEdge ⊂ Çatı izdüşümü (`V-108`), BB ⊂ Kat (`V-125`), BBK ⊂ BB (`V-162`), iç yapı kapalılığı (`V-196`), K71 oda delik eşleşmesi (`V-197`), dubleks alan stratejisi (`V-200`) ve BBK/OA 3B manifold oda kapalılığı (`V-217`) denetlenir.
+- **Teslim Ön-Kontrolü ve Resmî Doğrulama Kaydı (`src/core/validation/submissionPackage.ts`, `§7.1`, `§10.6`, `K02`, `K03`, `K89`):**
+  - 10 adımlı kontrol listesi (`CHK-FILENAME`, `CHK-ENCODING`, `CHK-GML-SCHEMA`, `CHK-CRS`, `CHK-ATTRIBUTES`, `CHK-LANDSHARE`, `CHK-PARCEL`, `CHK-SHELLS`, `CHK-VAL3DITY`, `CHK-OFFICIAL`).
+  - Ham dosya SHA-256 ve K89 Kanonik Model Özeti (`canonicalHashSha256`) teslim paketinde kilitlenir; resmî TKGM onay kodları (`OfficialVerificationRecord`) SHA-256 eşleşmesiyle doğrulanır.
+- **Çevrimdışı HTML Raporları (`generateSubmissionReportHtml`, `generateMalikIrtifakReportHtml`, `K88-yeni`, `K99`):**
+  - Belediye ve Kadastro idaresine sunulacak teknik teslim raporunda hiçbir malik / kişisel veri yer almaz (`K99`).
+  - Kat irtifakı ve malik listesi raporunda `BigInt` tabanlı tam hisse toplamı (`pay/payda`) ve bağımsız bölüm tablosu üretilir (`K88-yeni`).

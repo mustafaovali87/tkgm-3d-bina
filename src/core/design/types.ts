@@ -68,6 +68,8 @@ export interface SectionPart {
   readonly outline: Poly2; // BB dış sınırı
   /** Asma kat vb.: BB tabanı katın döşeme altından farklı kottaysa mutlak kot (mm). Şartname §5.2 ÖNERİ. */
   readonly zFloorOverride?: Mm;
+  /** Çatı arası vb.: BB üst kotu katın olağan tavanından farklıysa mutlak kot (mm). */
+  readonly zTopOverride?: Mm;
   /** M8 (§5.9): Eğik çatı düzlemiyle kesilecek çatı arası BB parçası. */
   readonly clipToRoof?: boolean;
 }
@@ -83,6 +85,8 @@ export interface Part {
   readonly planArea: number; // -1: yok
   /** Asma kat vb.: oda tabanı katın olağan oda tabanından farklı kottaysa mutlak kot (mm). Şartname §5.2 ÖNERİ. */
   readonly zFloorOverride?: Mm;
+  /** Çatı arası / özel tavan kotu: oda tavanı katın olağan tavanından farklıysa mutlak üst kot (mm). */
+  readonly zTopOverride?: Mm;
   /** Uzak kısım: BB'sine fiziksel bağlı değil (uzak depo/otopark; şartname §4.2 remote, H11a). §5.3 içerme denetimi uygulanmaz. */
   readonly remote?: boolean;
   /** M8 (§5.9): Eğik çatı düzlemiyle kesilecek çatı arası odası. */
@@ -118,6 +122,10 @@ export interface Opening {
   readonly sill: Mm; // kısım tabanından (oda Floor_) yükseklik; kapıda 10 (K45a)
   readonly height: Mm;
   readonly spansStoreys?: readonly string[]; // sahanlık penceresi (§5.4 #6, M8)
+  /** Çatı arası / asma kat gibi aynı katta üst üste odalar olduğunda açıklığın bağlı olduğu oda kimliği. */
+  readonly hostPartId?: string;
+  /** Açıklığın referans taban kotu katın olağan döşeme üstünden farklıysa mutlak taban kotu (mm). */
+  readonly zBaseOverride?: Mm;
 }
 
 export interface Pt3 {

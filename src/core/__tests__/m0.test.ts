@@ -12,9 +12,11 @@ import {
   inspectCityGmlSample,
 } from '../gml/readAttributes.ts';
 import {
+  compareCodeUnits,
   computeCanonicalModelHash,
   deterministicGmlId,
   sha256Hex,
+  TKGM3D_UUID_NAMESPACE,
   uuidv5,
 } from '../hash/canonical.ts';
 import {
@@ -60,7 +62,20 @@ beforeAll(() => {
   }) as unknown as typeof fetch;
 });
 
-describe('M0 Adım 1 — 15 Resmi Referans Dosyası SHA-256 Kilidi ve PlatformAdapter (CLAUDE13 §2.1, K91, K100)', () => {
+function collectProductionCoreFiles(dir: string, acc: string[] = []): string[] {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '__tests__') continue;
+      collectProductionCoreFiles(full, acc);
+    } else if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+      acc.push(full);
+    }
+  }
+  return acc;
+}
+
+describe('M0 Adım 1 — 15 Resmi Referans Dosyası SHA-256 Kilidi, PlatformAdapter ve src/core Saflık Koruması (CLAUDE13 §2.1, K91, K100, F3, F8)', () => {
   it('K91 / CLAUDE13 §2.1: ornek6.gml ve 14 codelists/*.xml dosyasının bayt boyutu ve SHA-256 özeti DOSYA_LISTESI.txt ile birebir eşleşir', () => {
     const listPath = path.resolve(process.cwd(), 'resources', 'DOSYA_LISTESI.txt');
     const rawList = fs.readFileSync(listPath, 'utf-8');
@@ -105,6 +120,37 @@ describe('M0 Adım 1 — 15 Resmi Referans Dosyası SHA-256 Kilidi ve PlatformAd
     expect(await adapter.readTextFile('/proje/yeni.txt')).toBe('TEST-VERI');
 
     expect(() => globalThis.fetch('https://tkgm.gov.tr')).toThrow(/K91 İHLALİ/);
+  });
+
+  it('F3 / F8 / K100 / Mutlak Kural 4: src/core/**/*.ts üretim dosyalarında fetch, window, document, Math.random, Date.now, randomUUID, localeCompare veya @google/genai bulunmaz', () => {
+    const coreDir = path.resolve(process.cwd(), 'src', 'core');
+    const prodFiles = collectProductionCoreFiles(coreDir);
+    expect(prodFiles.length).toBeGreaterThanOrEqual(7);
+
+    const forbiddenPatterns: ReadonlyArray<{ label: string; regex: RegExp }> = [
+      { label: 'fetch(', regex: /\bfetch\s*\(/ },
+      { label: 'window.', regex: /\bwindow\s*\./ },
+      { label: 'document.', regex: /\bdocument\s*\./ },
+      { label: 'Math.random', regex: /\bMath\.random\b/ },
+      { label: 'Date.now', regex: /\bDate\.now\b/ },
+      { label: 'randomUUID', regex: /\brandomUUID\b/ },
+      { label: '@google/genai', regex: /@google\/genai/ },
+      { label: 'localeCompare', regex: /\.localeCompare\s*\(/ },
+    ];
+
+    for (const filePath of prodFiles) {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      // Yorum satırlarını temizleyerek gerçek kod gövdesini tara
+      const codeOnly = raw
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '');
+      for (const pat of forbiddenPatterns) {
+        expect(
+          pat.regex.test(codeOnly),
+          `${path.relative(process.cwd(), filePath)} içinde yasaklı ifade bulundu: ${pat.label}`
+        ).toBe(false);
+      }
+    }
   });
 });
 
@@ -164,7 +210,7 @@ describe('M0 Adım 2 — 14 Resmi TKGM XML Kod Listesi Yükleyici (K60, K91, V-0
   });
 });
 
-describe('M0 Adım 3 — Veri Modeli, 45 Öznitelik Beyaz Listesi, Koordinat Haneleri ve MAKS BigInt (K09, K76, K99, V-030, V-060, V-213)', () => {
+describe('M0 Adım 3 — Veri Modeli, 45 Öznitelik Beyaz Listesi, Koordinat Haneleri ve MAKS BigInt (K09, K76, K99, V-030, V-060, V-213, F4)', () => {
   it('K99 / V-060: ALLOWED_GENERIC_ATTRIBUTES tam 45 öznitelik içerir (42 Ornek6 + 3 OA/İçYapı) ve liste dışını reddeder', () => {
     expect(ORNEK6_GENERIC_ATTRIBUTES.length).toBe(42);
     expect(ALLOWED_GENERIC_ATTRIBUTES.length).toBe(45);
@@ -207,18 +253,48 @@ describe('M0 Adım 3 — Veri Modeli, 45 Öznitelik Beyaz Listesi, Koordinat Han
     expect(formatCoordinateFixed3FromMm(mm)).toBe('1095.900');
   });
 
-  it('V-213: 10 haneli maksIdentityNumber (5415689768 > 2^31-1) BigInt olarak kayıpsız saklanır', () => {
-    const parsed = parseMaksIdValue('5415689768');
-    expect(parsed.value).toBe(5415689768n);
-    expect(parsed.exceedsInt32).toBe(true);
+  it('V-213 / F4: parseMaksIdValue 10 haneli sayıyı (" 5415689768 ") BigInt + BİLGİ olarak saklar; geçersiz ("12a", "-1") girdilerde çökmez ve V-213 HATA döndürür', () => {
+    const parsed10Digit = parseMaksIdValue(' 5415689768 ', 'BB_1');
+    expect(parsed10Digit.value).toBe(5415689768n);
+    expect(parsed10Digit.exceedsInt32).toBe(true);
+    expect(parsed10Digit.issue?.ruleId).toBe('V-213');
+    expect(parsed10Digit.issue?.severity).toBe('B');
+    expect(parsed10Digit.issue?.targetGmlId).toBe('BB_1');
 
     const normal32 = parseMaksIdValue('431289685');
     expect(normal32.value).toBe(431289685n);
     expect(normal32.exceedsInt32).toBe(false);
+    expect(normal32.issue).toBeNull();
+
+    // F4: Bozuk girdi ('12a') SyntaxError fırlatmamalı, V-213 HATA ('H') üretmelidir
+    const invalidAlpha = parseMaksIdValue('12a', 'MB_1');
+    expect(invalidAlpha.value).toBeNull();
+    expect(invalidAlpha.exceedsInt32).toBe(false);
+    expect(invalidAlpha.issue?.ruleId).toBe('V-213');
+    expect(invalidAlpha.issue?.severity).toBe('H');
+
+    // F4: Negatif girdi ('-1') V-213 HATA ('H') üretmelidir
+    const invalidNegative = parseMaksIdValue('-1', 'MB_1');
+    expect(invalidNegative.value).toBeNull();
+    expect(invalidNegative.exceedsInt32).toBe(false);
+    expect(invalidNegative.issue?.ruleId).toBe('V-213');
+    expect(invalidNegative.issue?.severity).toBe('H');
+
+    // F4: Boş girdi ('', null, undefined) -> value: null, issue: null
+    expect(parseMaksIdValue('')).toEqual({
+      value: null,
+      exceedsInt32: false,
+      issue: null,
+    });
+    expect(parseMaksIdValue(null)).toEqual({
+      value: null,
+      exceedsInt32: false,
+      issue: null,
+    });
   });
 });
 
-describe('M0 Adım 4 — BigInt Arsa Payı Motoru (K27, K31, K84, V-198, V-198a, V-198b, V-199, V-212)', () => {
+describe('M0 Adım 4 — BigInt Arsa Payı Motoru (K27, K31, K84, V-198, V-198a, V-198b, V-199, V-212, F7)', () => {
   it('K84 / V-212: Fikstür 1 — Ornek1 #41 (aynı BB no altında 98/6534 MESKEN ve 79/6534 DEPO) -> toplam 59/2178, uniqueBbCount = 2 ve V-212 UYARI', () => {
     const result = analyzeBuildingLandShares([
       {
@@ -279,7 +355,7 @@ describe('M0 Adım 4 — BigInt Arsa Payı Motoru (K27, K31, K84, V-198, V-198a,
     expect(v199?.severity).toBe('B');
   });
 
-  it('K84 / V-198 / K30: Fikstür 3 — Boşluklu pay (" 98 / 6534 ") + küçük harf nitelik ("mesken") dubleks parçalarda tek BB sayılır ve V-198 BİLGİ üretir', () => {
+  it('K84 / V-198 / V-198a / V-198b / K30 / F7: Boşluklu pay (" 98 / 6534 ") dubleks parçalarda tek BB sayılır; "+5/10" ve "-5/10" V-198a HATA üretir', () => {
     const result = analyzeBuildingLandShares([
       {
         gmlId: 'BB_dubleks_alt',
@@ -306,12 +382,24 @@ describe('M0 Adım 4 — BigInt Arsa Payı Motoru (K27, K31, K84, V-198, V-198a,
       true
     );
 
-    // V-198a ve V-198b kontrolleri
+    // V-198a: pay > payda
     const badLot = parsePropertyLot('7000/6534');
     expect(badLot.isValid).toBe(false);
     expect(badLot.issues[0]?.ruleId).toBe('V-198a');
     expect(badLot.issues[0]?.severity).toBe('H');
 
+    // F7: İşaretli "+5/10" ve "-5/10" GML şemasında (/^\d+\/\d+$/) geçersizdir -> V-198a HATA
+    const plusSignLot = parsePropertyLot('+5/10');
+    expect(plusSignLot.isValid).toBe(false);
+    expect(plusSignLot.issues[0]?.ruleId).toBe('V-198a');
+    expect(plusSignLot.issues[0]?.severity).toBe('H');
+
+    const minusSignLot = parsePropertyLot('-5/10');
+    expect(minusSignLot.isValid).toBe(false);
+    expect(minusSignLot.issues[0]?.ruleId).toBe('V-198a');
+    expect(minusSignLot.issues[0]?.severity).toBe('H');
+
+    // V-198b: pay === 0 -> UYARI
     const zeroLot = parsePropertyLot('0/6534');
     expect(zeroLot.isValid).toBe(true);
     expect(zeroLot.issues[0]?.ruleId).toBe('V-198b');
@@ -319,9 +407,8 @@ describe('M0 Adım 4 — BigInt Arsa Payı Motoru (K27, K31, K84, V-198, V-198a,
   });
 });
 
-describe('M0 Adım 5 — 2B Helmert Dönüşümü ve Leave-One-Out Uyuşumsuz Nokta Tespiti (K08, K69, V-020)', () => {
-  it('K08 / V-020: Elle çözülmüş 2B Helmert dönüşümü (a, b, tE, tN, ölçek ppm ve artıklar) tam doğrulanır', () => {
-    // Bilinen dönüşüm: scale = 1.00005 (+50 ppm), rotation = 0, tE = 532500, tN = 4288300
+describe('M0 Adım 5 — 2B Helmert Dönüşümü ve Leave-One-Out Uyuşumsuz Nokta Tespiti (K08, K69, V-020, F8)', () => {
+  it('K08 / V-020: Sıfır dönüklü +50 ppm ölçekli 2B Helmert dönüşümü doğrulanır', () => {
     const s = 1.00005;
     const tE = 532500;
     const tN = 4288300;
@@ -338,6 +425,40 @@ describe('M0 Adım 5 — 2B Helmert Dönüşümü ve Leave-One-Out Uyuşumsuz No
     expect(res.tE).toBeCloseTo(tE, 6);
     expect(res.tN).toBeCloseTo(tN, 6);
     expect(res.scalePpm).toBeCloseTo(50, 3);
+    expect(res.rmseMeters).toBeLessThan(1e-9);
+  });
+
+  it('F8 / K08: Sıfır olmayan dönüklük (30 derece) + 100 ppm ölçekli 2B Helmert dönüşümü (a = s*cos(30°), b = s*sin(30°)) tam doğrulanır', () => {
+    const s = 1.0001; // +100 ppm
+    const thetaRad = Math.PI / 6; // 30°
+    const expectedA = s * Math.cos(thetaRad);
+    const expectedB = s * Math.sin(thetaRad);
+    const tE = 532568.58;
+    const tN = 4288398.7;
+
+    const localPts = [
+      { id: 'K1', x: 0, y: 0 },
+      { id: 'K2', x: 12, y: 0 },
+      { id: 'K3', x: 12, y: 8 },
+      { id: 'K4', x: 0, y: 8 },
+    ];
+
+    const pairs: HelmertControlPair[] = localPts.map((p) => ({
+      id: p.id,
+      localX: p.x,
+      localY: p.y,
+      targetE: expectedA * p.x - expectedB * p.y + tE,
+      targetN: expectedB * p.x + expectedA * p.y + tN,
+    }));
+
+    const res = solveHelmert2D(pairs);
+    expect(res.a).toBeCloseTo(expectedA, 9);
+    expect(res.b).toBeCloseTo(expectedB, 9);
+    expect(res.tE).toBeCloseTo(tE, 6);
+    expect(res.tN).toBeCloseTo(tN, 6);
+    expect(res.rotationRad).toBeCloseTo(thetaRad, 9);
+    expect(res.scale).toBeCloseTo(s, 9);
+    expect(res.scalePpm).toBeCloseTo(100, 3);
     expect(res.rmseMeters).toBeLessThan(1e-9);
   });
 
@@ -484,8 +605,9 @@ describe('M0 Adım 7 — Malik (Kat İrtifakı Listesi) Modeli ve Hisse Kontrol�
   });
 });
 
-describe('M0 Adım 8 — Deterministik uuidv5 ve SHA-256 Kanonik Model Özeti (K12, K89, K92, V-050, V-051)', () => {
-  it('K12 / K92 / V-050 / V-051: Deterministik uuidv5 süslü parantezsiz küçük harf GUID üretir ve aynı girdide her zaman aynı gml:id verir', () => {
+describe('M0 Adım 8 — Deterministik uuidv5 ve SHA-256 Kanonik Model Özeti (K12, K89, K92, V-050, V-051, F2, F8, F12)', () => {
+  it('K12 / K92 / V-050 / V-051 / F12: Deterministik uuidv5 kilitli TKGM3D_UUID_NAMESPACE ile süslü parantezsiz küçük harf GUID üretir', () => {
+    expect(TKGM3D_UUID_NAMESPACE).toBe('6ba7b810-9dad-11d1-80b4-00c04fd430c8');
     const id1 = deterministicGmlId('MB_', '70125626-A', 'Building/0');
     const id2 = deterministicGmlId('MB_', '70125626-A', 'Building/0');
     const idDifferent = deterministicGmlId('MB_', '70125626-B', 'Building/0');
@@ -498,7 +620,17 @@ describe('M0 Adım 8 — Deterministik uuidv5 ve SHA-256 Kanonik Model Özeti (K
     expect(uuidv5('test-seed')).toBe(uuidv5('test-seed'));
   });
 
-  it('K89: Üretici profili (A10 -> B50) değiştiğinde CanonicalHash değişir; kamera/UI görünümü değiştiğinde CanonicalHash değişmez', () => {
+  it('K89 / F2 / F8: CanonicalHash üretici profili (A10 -> B50) ile değişir, kamera/UI görünümü ile değişmez ve yerel ayara duyarlı ID sıralamalarından (İ/I/i/ı/_) etkilenmez', () => {
+    const objectsOrderA = [
+      { gmlId: 'BB_İ_1', attributes: { independentSectionNumber: '1', propertyLot: '1/4' } },
+      { gmlId: 'BB_I_1', attributes: { independentSectionNumber: '2', propertyLot: '1/4' } },
+      { gmlId: 'BB_i_1', attributes: { independentSectionNumber: '3', propertyLot: '1/4' } },
+      { gmlId: 'BB_ı_1', attributes: { independentSectionNumber: '4', propertyLot: '1/4' } },
+      { gmlId: 'BB__1', attributes: { independentSectionNumber: '5', propertyLot: '1/4' } },
+      { gmlId: 'BB_Z_1', attributes: { independentSectionNumber: '6', propertyLot: '1/4' } },
+    ];
+    const objectsOrderB = [...objectsOrderA].reverse();
+
     const baseModel = {
       schemaVersion: '3.5.5',
       producerProfile: 'A10' as const,
@@ -508,9 +640,7 @@ describe('M0 Adım 8 — Deterministik uuidv5 ve SHA-256 Kanonik Model Özeti (K
         maksIdentityNumber: 431289685n,
       },
       coordinatesMm: [532568580, 4288398700, 1095900],
-      objectAttributes: [
-        { gmlId: 'BB_1', attributes: { independentSectionNumber: '1', propertyLot: '1/2' } },
-      ],
+      objectAttributes: objectsOrderA,
     };
 
     const hashView1 = computeCanonicalModelHash(baseModel, {
@@ -521,16 +651,33 @@ describe('M0 Adım 8 — Deterministik uuidv5 ve SHA-256 Kanonik Model Özeti (K
       darkMode: false,
     });
 
-    const hashView2 = computeCanonicalModelHash(baseModel, {
-      cameraPosition: [999, -500, 42],
-      selectedGmlId: null,
-      activeTab: 'validation',
-      zoomLevel: 4.0,
-      darkMode: true,
-    });
+    const hashView2 = computeCanonicalModelHash(
+      {
+        ...baseModel,
+        objectAttributes: objectsOrderB,
+      },
+      {
+        cameraPosition: [999, -500, 42],
+        selectedGmlId: null,
+        activeTab: 'validation',
+        zoomLevel: 4.0,
+        darkMode: true,
+      }
+    );
 
-    // Kamera veya UI durumu özeti asla değiştirmez
+    // Kamera/UI durumu veya objectAttributes dizi sırası özeti asla değiştirmez
     expect(hashView1).toBe(hashView2);
+
+    // UTF-16 kod birimi sıralaması deterministiktir: 'BB_I_1' (0x49) < 'BB_Z_1' (0x5A) < 'BB__1' (0x5F) < 'BB_i_1' (0x69) < 'BB_İ_1' (0x130) < 'BB_ı_1' (0x131)
+    const sortedIds = objectsOrderA.map((o) => o.gmlId).sort(compareCodeUnits);
+    expect(sortedIds).toEqual([
+      'BB_I_1',
+      'BB_Z_1',
+      'BB__1',
+      'BB_i_1',
+      'BB_İ_1',
+      'BB_ı_1',
+    ]);
 
     // Üretici profili A10 -> B50 değiştiğinde özet değişir
     const hashProfileB50 = computeCanonicalModelHash({
@@ -541,7 +688,7 @@ describe('M0 Adım 8 — Deterministik uuidv5 ve SHA-256 Kanonik Model Özeti (K
   });
 });
 
-describe('M0 Adım 9 — fixtures/ornek6.gml Öznitelik ve Yapı Doğrulaması (K55, K79, K87, K99, V-060, V-215)', () => {
+describe('M0 Adım 9 — fixtures/ornek6.gml Öznitelik ve Yapı Doğrulaması (K55, K79, K87, K99, V-060, V-215, F5, F6)', () => {
   it('K99 / V-060 / K87: fixtures/ornek6.gml içinden çıkan 42 gen:*Attribute listesi docs/KARARLAR.md §A.3 ile birebir aynıdır', () => {
     const ornek6Path = path.resolve(process.cwd(), 'fixtures', 'ornek6.gml');
     const xml = fs.readFileSync(ornek6Path, 'utf-8');
@@ -549,7 +696,7 @@ describe('M0 Adım 9 — fixtures/ornek6.gml Öznitelik ve Yapı Doğrulaması (
     const extracted = extractGenericAttributesFromGml(xml);
     expect(extracted.unauthorizedSpecs).toEqual([]);
     expect(extracted.specsSorted.length).toBe(42);
-    expect(extracted.specsSorted).toEqual([...ORNEK6_GENERIC_ATTRIBUTES].sort());
+    expect(extracted.specsSorted).toEqual([...ORNEK6_GENERIC_ATTRIBUTES].sort(compareCodeUnits));
 
     const report = inspectCityGmlSample(xml);
     expect(report.matchesOrnek6Expected42).toBe(true);
@@ -573,7 +720,47 @@ describe('M0 Adım 9 — fixtures/ornek6.gml Öznitelik ve Yapı Doğrulaması (
       MBG: 1,
     });
     expect(report.detectedStoreyForm).toBe('A');
+    expect(report.detectedStoreyForms).toEqual(['A', 'A']);
+    expect(report.hasInconsistentStoreyForms).toBe(false);
     expect(report.detectedDoorBottomOffsetMm).toBe(10);
+    expect(report.doorOffsetInfoIssue).toBeNull();
     expect(report.detectedProducerProfile).toBe('A10');
+  });
+
+  it('F5 / F6: srsDimension="3" öznitelikli <gml:posList> ve kapısız oda durumunda null + BİLGİ (V-215) ve çok katlı uyumsuzluk tespiti çalışır', () => {
+    const syntheticXml = `<?xml version="1.0" encoding="utf-8"?>
+<CityModel xmlns:gml="http://www.opengis.net/gml" xmlns:bldg="http://www.opengis.net/citygml/building/2.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/2.0" xmlns:gen="http://www.opengis.net/citygml/generics/2.0">
+  <gml:boundedBy><gml:Envelope srsName="EPSG:5254" srsDimension="3"><gml:lowerCorner>500000 4000000 100</gml:lowerCorner><gml:upperCorner>500010 4000010 106</gml:upperCorner></gml:Envelope></gml:boundedBy>
+  <bldg:Building gml:id="MB_00000000-0000-5000-8000-000000000001">
+    <gen:stringAttribute name="constructionID"><gen:value>100-A</gen:value></gen:stringAttribute>
+    <bldg:interiorRoom>
+      <bldg:Room gml:id="BBK_00000000-0000-5000-8000-000000000002">
+        <bldg:boundedBy>
+          <bldg:FloorSurface>
+            <gml:Polygon gml:id="Floor_00000000-0000-5000-8000-000000000003">
+              <gml:exterior><gml:LinearRing gml:id="LinearRing_00000000-0000-5000-8000-000000000004">
+                <gml:posList srsDimension="3">500000 4000000 100.000 500010 4000000 100.000 500010 4000010 100.000 500000 4000000 100.000</gml:posList>
+              </gml:LinearRing></gml:exterior>
+            </gml:Polygon>
+          </bldg:FloorSurface>
+        </bldg:boundedBy>
+      </bldg:Room>
+    </bldg:interiorRoom>
+  </bldg:Building>
+  <grp:CityObjectGroup gml:id="K_00000000-0000-5000-8000-000000000010">
+    <gml:Polygon gml:id="Floor_1"/><gml:Polygon gml:id="Floor_2"/>
+  </grp:CityObjectGroup>
+  <grp:CityObjectGroup gml:id="K_00000000-0000-5000-8000-000000000011">
+    <gml:Polygon gml:id="Floor_3"/>
+  </grp:CityObjectGroup>
+</CityModel>`;
+
+    const rep = inspectCityGmlSample(syntheticXml);
+    expect(rep.coordinateEncoding).toBe('gml:posList');
+    expect(rep.detectedStoreyForms).toEqual(['C', 'A']);
+    expect(rep.hasInconsistentStoreyForms).toBe(true);
+    expect(rep.detectedDoorBottomOffsetMm).toBeNull();
+    expect(rep.doorOffsetInfoIssue?.ruleId).toBe('V-215');
+    expect(rep.doorOffsetInfoIssue?.severity).toBe('B');
   });
 });

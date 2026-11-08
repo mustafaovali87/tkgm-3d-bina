@@ -6,11 +6,50 @@
 import { ObjectIdPrefix, PolygonIdPrefix, ProducerProfile, RingIdPrefix } from '../model/index.ts';
 
 /**
- * TKGM 3B Bina projesi sabit UUIDv5 ad alanı (`K92`).
+ * TKGM 3B Bina projesi sabit UUIDv5 ad alanı (`K92`, `docs/KARARLAR.md §A.2`).
+ * Kalıcı olarak kilitlenmiştir; tüm sürümlerde aynı deterministik `gml:id` üretimini garanti eder.
  */
 export const TKGM3D_UUID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
-const TEXT_ENCODER = new TextEncoder();
+/**
+ * Saf TypeScript UTF-8 kodlayıcı (`tsconfig.core.json` `lib: ["ES2022"], types: []` altında
+ * DOM/Node `TextEncoder` globaline ihtiyaç duymadan çalışır — `F3`).
+ */
+export function utf8Encode(str: string): Uint8Array {
+  const bytes: number[] = [];
+  for (let i = 0; i < str.length; i++) {
+    let c = str.charCodeAt(i);
+    if (c < 0x80) {
+      bytes.push(c);
+    } else if (c < 0x800) {
+      bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    } else if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) {
+      const c2 = str.charCodeAt(i + 1);
+      if (c2 >= 0xdc00 && c2 <= 0xdfff) {
+        c = 0x10000 + (((c & 0x3ff) << 10) | (c2 & 0x3ff));
+        bytes.push(
+          0xf0 | (c >> 18),
+          0x80 | ((c >> 12) & 0x3f),
+          0x80 | ((c >> 6) & 0x3f),
+          0x80 | (c & 0x3f)
+        );
+        i++;
+      } else {
+        bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+      }
+    } else {
+      bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+  }
+  return new Uint8Array(bytes);
+}
+
+/**
+ * İşletim sistemi yerel ayarından (`tr-TR`, `en-US` vb.) bağımsız deterministik UTF-16 kod birimi karşılaştırması (`F2`, `K89`).
+ */
+export function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 function rotr32(x: number, n: number): number {
   return (x >>> n) | (x << (32 - n));
@@ -127,7 +166,7 @@ export function bytesToHex(bytes: Uint8Array): string {
 
 // K89
 export function sha256Hex(input: string | Uint8Array): string {
-  const bytes = typeof input === 'string' ? TEXT_ENCODER.encode(input) : input;
+  const bytes = typeof input === 'string' ? utf8Encode(input) : input;
   return bytesToHex(sha256Bytes(bytes));
 }
 
@@ -232,7 +271,7 @@ export function uuidv5(
   namespace: string = TKGM3D_UUID_NAMESPACE
 ): string {
   const nsBytes = uuidToBytes(namespace);
-  const nameBytes = TEXT_ENCODER.encode(name);
+  const nameBytes = utf8Encode(name);
   const combined = new Uint8Array(nsBytes.length + nameBytes.length);
   combined.set(nsBytes, 0);
   combined.set(nameBytes, nsBytes.length);
@@ -293,7 +332,7 @@ function canonicalStringifyValue(val: unknown): string {
   }
   if (typeof val === 'object') {
     const record = val as Record<string, unknown>;
-    const sortedKeys = Object.keys(record).sort();
+    const sortedKeys = Object.keys(record).sort(compareCodeUnits);
     const parts = sortedKeys.map(
       (k) => `${JSON.stringify(k)}:${canonicalStringifyValue(record[k])}`
     );
@@ -303,9 +342,10 @@ function canonicalStringifyValue(val: unknown): string {
 }
 
 /**
- * Doğrulama raporunun bağlandığı deterministik **SHA-256 Kanonik Model Özeti** (`// K89`).
+ * Doğrulama raporunun bağlandığı deterministik **SHA-256 Kanonik Model Özeti** (`// K89`, `F2`).
  * - Geometri (mm), öznitelikler, üretici profili (`A10/B50/C50`), kod listesi özeti veya şema sürümü değişirse özet değişir.
  * - Kamera konumu, seçili nesne, aktif sekme veya yakınlaştırma gibi arayüz (`uiViewState`) durumları özeti **kesinlikle değiştirmez**.
+ * - Sıralama yerel ayardan (`localeCompare`) bağımsız deterministik UTF-16 kod birimi (`compareCodeUnits`) ile yapılır.
  */
 // K89
 export function computeCanonicalModelHash(
@@ -319,7 +359,7 @@ export function computeCanonicalModelHash(
     buildingAttributes: modelInput.buildingAttributes,
     coordinatesMm: modelInput.coordinatesMm,
     objectAttributes: [...modelInput.objectAttributes].sort((a, b) =>
-      a.gmlId.localeCompare(b.gmlId)
+      compareCodeUnits(a.gmlId, b.gmlId)
     ),
   };
 

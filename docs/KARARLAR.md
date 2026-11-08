@@ -19,6 +19,7 @@
 
 ## A.2 Kimlik (`gml:id`), Adlar (`gml:name`) ve Sınıflar
 - **`gml:id` Biçimi (`K12`, `K92`, `V-050`, `V-051`):** `<Önek>_<küçük harf deterministik uuidv5>`. Süslü parantez yok, dosya içinde tekrar yok.
+  - **Kilitli `UUIDv5` Ad Alanı (`K92`, `F12`):** `TKGM3D_UUID_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"` (`M3` ve sonraki tüm sürümlerde aynı deterministik `gml:id` üretimini garanti etmek üzere kalıcı olarak kilitlenmiştir).
   - **Nesne Önekleri (12 adet — `V-052`):** `MB_`, `K_`, `BB_`, `BBK_`, `OA_`, `BBKIY_`, `OAIY_`, `BLKN_`, `TRS_`, `MBG_`, `KAPI_`, `PEN_`
   - **Poligon Önekleri (14 adet — `V-053`):** `Floor_`, `Wall_`, `Roof_`, `InteriorWall_`, `Ceiling_`, `Ground_`, `OuterFloor_`, `OuterCeiling_`, `Closure_`, `Lod1Poligon_`, `Lod0FootPrint_`, `Lod0RoofEdge_`, `Door_`, `Window_`
   - **Halka Önekleri (3 adet — `V-054`, `V-055`):** `LinearRing_`, `DoorLinearRing_`, `WindowLinearRing_`

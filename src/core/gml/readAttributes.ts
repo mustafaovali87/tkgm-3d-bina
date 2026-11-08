@@ -4,12 +4,14 @@
 // K99
 // V-060
 // V-215
+import { compareCodeUnits } from '../hash/canonical.ts';
 import {
   ALLOWED_GENERIC_ATTRIBUTES,
   GenericAttributeType,
   ORNEK6_GENERIC_ATTRIBUTES,
   ProducerProfile,
   StoreyGeometryForm,
+  ValidationIssue,
 } from '../model/index.ts';
 
 export interface ExtractedGenericAttribute {
@@ -45,7 +47,10 @@ export interface GmlSampleInspectionReport {
   };
   readonly coordinateEncoding: 'gml:pos' | 'gml:posList' | 'mixed';
   readonly detectedStoreyForm: StoreyGeometryForm;
-  readonly detectedDoorBottomOffsetMm: number;
+  readonly detectedStoreyForms: readonly StoreyGeometryForm[];
+  readonly hasInconsistentStoreyForms: boolean;
+  readonly detectedDoorBottomOffsetMm: number | null;
+  readonly doorOffsetInfoIssue: ValidationIssue | null;
   readonly detectedProducerProfile: ProducerProfile;
   readonly uniqueGenericAttributes: readonly ExtractedGenericAttribute[];
   readonly uniqueAttributeSpecsSorted: readonly string[];
@@ -55,7 +60,7 @@ export interface GmlSampleInspectionReport {
 
 /**
  * Bir CityGML dosyasındaki tüm `gen:*Attribute` (`stringAttribute`, `intAttribute`, `doubleAttribute`, `dateAttribute`)
- * etiketlerini tarar ve `ad:tip` listesini alfabetik sıralı olarak döndürür (`// K99`, `// V-060`).
+ * etiketlerini tarar ve `ad:tip` listesini deterministik UTF-16 kod birimi sırasıyla döndürür (`// K99`, `// V-060`, `F2`).
  */
 // K99
 // V-060
@@ -81,9 +86,7 @@ export function extractGenericAttributesFromGml(xmlContent: string): {
     }
   }
 
-  const sortedSpecs = Array.from(countsBySpec.keys()).sort((a, b) =>
-    a.localeCompare(b, 'en')
-  );
+  const sortedSpecs = Array.from(countsBySpec.keys()).sort(compareCodeUnits);
 
   const allowedSet = new Set<string>(ALLOWED_GENERIC_ATTRIBUTES);
   const unauthorizedSpecs = sortedSpecs.filter((s) => !allowedSet.has(s));
@@ -122,7 +125,7 @@ function countGmlIdPrefix(xmlContent: string, prefix: string): number {
 
 /**
  * İçe alınan GML dosyasının öznitelik beyaz listesi uyumunu, nesne sayılarını ve üretici profilini (`A10/B50/C50`)
- * çevrimdışı olarak analiz eder (`// K55`, `// K79`, `// K87`, `// K99`, `// V-060`, `// V-215`).
+ * çevrimdışı olarak analiz eder (`// K55`, `// K79`, `// K87`, `// K99`, `// V-060`, `// V-215`, `F5`, `F6`).
  */
 // K55
 // K79
@@ -173,38 +176,43 @@ export function inspectCityGmlSample(xmlContent: string): GmlSampleInspectionRep
     MBG: countGmlIdPrefix(xmlContent, 'MBG_'),
   };
 
-  const hasPos = /<gml:pos>/.test(xmlContent);
-  const hasPosList = /<gml:posList>/.test(xmlContent);
+  // F5: <gml:pos ...> ve <gml:posList ...> etiketlerinde srsDimension="3" vb. özniteliklere izin ver
+  const hasPos = /<gml:pos\b[^>]*>/.test(xmlContent);
+  const hasPosList = /<gml:posList\b[^>]*>/.test(xmlContent);
   const coordinateEncoding: 'gml:pos' | 'gml:posList' | 'mixed' =
     hasPos && hasPosList ? 'mixed' : hasPos ? 'gml:pos' : 'gml:posList';
 
-  // Kat (K_) geometrisindeki Floor_ poligon sayısından Biçim A / B / C tespiti (K87, V-215)
-  const firstStoreyBlock =
-    /<grp:CityObjectGroup\s+gml:id="K_[\s\S]*?<\/grp:CityObjectGroup>/.exec(
-      xmlContent
-    );
-  let storeyFloorCount = 0;
-  if (firstStoreyBlock) {
-    const floorMatches = firstStoreyBlock[0].match(/gml:id="Floor_/g);
-    storeyFloorCount = floorMatches ? floorMatches.length : 0;
+  // F6: Dosyadaki tüm Kat (K_) bloklarını inceleyerek Biçim A / B / C dizisini ve olası uyumsuzluğu tespit et (K87, V-215)
+  const storeyBlockRe =
+    /<grp:CityObjectGroup\s+[^>]*gml:id="K_[^"]+"[^>]*>[\s\S]*?<\/grp:CityObjectGroup>/g;
+  const detectedStoreyForms: StoreyGeometryForm[] = [];
+  let storeyMatch: RegExpExecArray | null;
+  while ((storeyMatch = storeyBlockRe.exec(xmlContent)) !== null) {
+    const floorMatches = storeyMatch[0].match(/gml:id="Floor_/g);
+    const floorCount = floorMatches ? floorMatches.length : 0;
+    const form: StoreyGeometryForm =
+      floorCount === 1 ? 'A' : floorCount === 2 ? 'C' : 'B';
+    detectedStoreyForms.push(form);
   }
 
-  //Biçim A: 1 adet Floor_ poligonu (zFloorBottom) + n adet Wall_ (zFloorBottom..zCeiling) — Ornek6, Ornek4, Ornek1, Amasya
-  //Biçim C: 2 adet yatay Floor_ poligonu (zFloorBottom ve zFloorTop) + n adet Wall_ — 18 gerçek dosya (CLAUDE8 N26)
-  //Biçim B: (n + 2) adet Floor_ poligonu (döşeme kutusu) + n adet Wall_ (zFloorTop..zCeiling) — Ornek2, Ornek5, Sincan
   const detectedStoreyForm: StoreyGeometryForm =
-    storeyFloorCount === 1 ? 'A' : storeyFloorCount === 2 ? 'C' : 'B';
+    detectedStoreyForms.length > 0 ? detectedStoreyForms[0] : 'A';
+  const hasInconsistentStoreyForms =
+    detectedStoreyForms.length > 1 &&
+    detectedStoreyForms.some((f) => f !== detectedStoreyForm);
 
-  // İlk KAPI_ nesnesinin en küçük Z değeri ile BBK taban Z değerini karşılaştırarak +10mm / +50mm tespiti
-  const firstBbkBlock =
-    /<bldg:Room\s+gml:id="BBK_[\s\S]*?<\/bldg:Room>/.exec(xmlContent);
-  let detectedDoorBottomOffsetMm = 10;
-  if (firstBbkBlock) {
+  // F5: Kapı alt ofsetini tüm BBK_ / OA_ blokları içinde kapı bulunan ilk odadan ölç; ölçülemezse null + BİLGİ döndür
+  const roomBlockRe =
+    /<bldg:Room\s+[^>]*gml:id="(?:BBK_|OA_)[^"]+"[^>]*>[\s\S]*?<\/bldg:Room>/g;
+  let detectedDoorBottomOffsetMm: number | null = null;
+  let roomMatch: RegExpExecArray | null;
+  while ((roomMatch = roomBlockRe.exec(xmlContent)) !== null) {
     const floorSection =
-      /<bldg:FloorSurface>[\s\S]*?<\/bldg:FloorSurface>/.exec(firstBbkBlock[0]);
-    const doorSection = /<bldg:Door\s+gml:id="KAPI_[\s\S]*?<\/bldg:Door>/.exec(
-      firstBbkBlock[0]
-    );
+      /<bldg:FloorSurface>[\s\S]*?<\/bldg:FloorSurface>/.exec(roomMatch[0]);
+    const doorSection =
+      /<bldg:Door\s+[^>]*gml:id="KAPI_[^"]+"[^>]*>[\s\S]*?<\/bldg:Door>/.exec(
+        roomMatch[0]
+      );
     if (floorSection && doorSection) {
       const zValuesFloor = extractZCoords(floorSection[0]);
       const zValuesDoor = extractZCoords(doorSection[0]);
@@ -212,9 +220,20 @@ export function inspectCityGmlSample(xmlContent: string): GmlSampleInspectionRep
         const floorZ = Math.min(...zValuesFloor);
         const doorMinZ = Math.min(...zValuesDoor);
         detectedDoorBottomOffsetMm = Math.round((doorMinZ - floorZ) * 1000);
+        break;
       }
     }
   }
+
+  const doorOffsetInfoIssue: ValidationIssue | null =
+    detectedDoorBottomOffsetMm === null
+      ? {
+          ruleId: 'V-215',
+          severity: 'B',
+          message:
+            'Dosyada KAPI_ ve FloorSurface içeren ortak bir oda bloğu bulunamadığından kapı alt ofseti (mm) ölçülemedi; üretici profili kat geometrisinden belirlendi.',
+        }
+      : null;
 
   const detectedProducerProfile: ProducerProfile =
     detectedStoreyForm === 'B'
@@ -223,9 +242,7 @@ export function inspectCityGmlSample(xmlContent: string): GmlSampleInspectionRep
       ? 'C50'
       : 'A10';
 
-  const expectedOrnek6 = [...ORNEK6_GENERIC_ATTRIBUTES].sort((a, b) =>
-    a.localeCompare(b, 'en')
-  );
+  const expectedOrnek6 = [...ORNEK6_GENERIC_ATTRIBUTES].sort(compareCodeUnits);
   const matchesOrnek6Expected42 =
     extracted.specsSorted.length === expectedOrnek6.length &&
     extracted.specsSorted.every((val, idx) => val === expectedOrnek6[idx]);
@@ -243,7 +260,10 @@ export function inspectCityGmlSample(xmlContent: string): GmlSampleInspectionRep
     counts,
     coordinateEncoding,
     detectedStoreyForm,
+    detectedStoreyForms,
+    hasInconsistentStoreyForms,
     detectedDoorBottomOffsetMm,
+    doorOffsetInfoIssue,
     detectedProducerProfile,
     uniqueGenericAttributes: extracted.attributes,
     uniqueAttributeSpecsSorted: extracted.specsSorted,
@@ -254,7 +274,7 @@ export function inspectCityGmlSample(xmlContent: string): GmlSampleInspectionRep
 
 function extractZCoords(xmlFragment: string): number[] {
   const zList: number[] = [];
-  const posRe = /<gml:pos>([^<]+)<\/gml:pos>/g;
+  const posRe = /<gml:pos\b[^>]*>([^<]+)<\/gml:pos>/g;
   let m: RegExpExecArray | null;
   while ((m = posRe.exec(xmlFragment)) !== null) {
     const parts = m[1].trim().split(/\s+/);
@@ -263,7 +283,7 @@ function extractZCoords(xmlFragment: string): number[] {
       if (Number.isFinite(z)) zList.push(z);
     }
   }
-  const posListRe = /<gml:posList>([^<]+)<\/gml:posList>/g;
+  const posListRe = /<gml:posList\b[^>]*>([^<]+)<\/gml:posList>/g;
   while ((m = posListRe.exec(xmlFragment)) !== null) {
     const parts = m[1].trim().split(/\s+/);
     for (let i = 2; i < parts.length; i += 3) {

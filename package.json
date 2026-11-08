@@ -1,15 +1,15 @@
 {
-  "name": "react-example",
+  "name": "tkgm-3d-bina",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.core.json --noEmit",
+    "lint": "tsc --noEmit && tsc -p tsconfig.core.json --noEmit",
     "test": "vitest run",
     "trace": "tsx scripts/trace.ts",
     "verify:samples": "tsx scripts/verify-samples.ts"
@@ -32,7 +32,6 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",

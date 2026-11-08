@@ -359,26 +359,60 @@ export function checkCoordinateDecimalPlaces(
 
 /**
  * `maksIdentityNumber` ve `maksNumaratajIdentityNumber` alanları 10 haneli olabildiği için
- * (`5415689768 > 2^31 - 1`), modelde `string | bigint | null` olarak tutulur (`// V-213`).
+ * (`5415689768 > 2^31 - 1`), modelde `string | bigint | null` olarak tutulur (`// V-213`, `F4`).
+ * - Boş (`null`, `undefined`, `''`): `{ value: null, exceedsInt32: false, issue: null }`
+ * - Geçersiz biçim (`'12a'`, `'-1'` vb. `/^\d{1,19}$/` dışı): çökmez, `{ value: null, exceedsInt32: false, issue: V-213 HATA ('H') }` döndürür.
+ * - Geçerli ve `> 2^31 - 1` (`' 5415689768 '`): `{ value: 5415689768n, exceedsInt32: true, issue: V-213 BİLGİ ('B') }` döndürür.
  */
 export type MaksIdValue = string | bigint | null;
 
 // V-213
-export function parseMaksIdValue(raw: string | number | bigint | null | undefined): {
+export function parseMaksIdValue(
+  raw: string | number | bigint | null | undefined,
+  targetGmlId?: string
+): {
   readonly value: MaksIdValue;
   readonly exceedsInt32: boolean;
+  readonly issue: ValidationIssue | null;
 } {
-  if (raw === null || raw === undefined || String(raw).trim() === '') {
-    return { value: null, exceedsInt32: false };
+  if (raw === null || raw === undefined) {
+    return { value: null, exceedsInt32: false, issue: null };
   }
   const clean = String(raw).trim();
+  if (clean === '') {
+    return { value: null, exceedsInt32: false, issue: null };
+  }
+
+  if (!/^\d{1,19}$/.test(clean)) {
+    return {
+      value: null,
+      exceedsInt32: false,
+      issue: {
+        ruleId: 'V-213',
+        severity: 'H',
+        message: `MAKS kimlik numarası geçersiz biçimde ("${clean}"); 1–19 haneli pozitif tam sayı bekleniyor.`,
+        targetGmlId,
+      },
+    };
+  }
+
   const asBigInt = BigInt(clean);
   const INT32_MAX = 2147483647n;
-  const INT32_MIN = -2147483648n;
-  const exceedsInt32 = asBigInt > INT32_MAX || asBigInt < INT32_MIN;
+  const exceedsInt32 = asBigInt > INT32_MAX;
+
+  const issue: ValidationIssue | null = exceedsInt32
+    ? {
+        ruleId: 'V-213',
+        severity: 'B',
+        message: `MAKS kimlik numarası (${clean}) 32-bit işaretli tam sayı sınırını (2147483647) aşıyor; BigInt olarak kayıpsız saklandı.`,
+        targetGmlId,
+      }
+    : null;
+
   return {
     value: asBigInt,
     exceedsInt32,
+    issue,
   };
 }
 

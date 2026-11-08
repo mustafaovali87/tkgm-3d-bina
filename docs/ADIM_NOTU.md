@@ -1,37 +1,58 @@
 # M0 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
 
-> **Aşama:** `M0` (10 Adımlı Saf TypeScript Çekirdeği + 15 Resmi Dosya SHA-256 Kilidi + Birim Testler + İzlenebilirlik + `Ornek6` Doğrulaması)
-> **Durum:** `TAMAMLANDI (19 / 19 Birim Test GEÇTİ, 15 / 15 Resmi Dosya SHA-256 DOĞRULANDI, 0 Tip/Lint Hatası)`
+> **Aşama:** `M0 + KONTROL-M0 Düzeltmeleri (F1–F12)` (Saf TypeScript Çekirdeği + `tsconfig.core.json` Saflık Kilidi + `package-lock.json` + 15 Resmi Dosya SHA-256 Kilidi + 22 Birim Test)
+> **Durum:** `TAMAMLANDI (F1–F12 TAMAMI YAPILDI, 22 / 22 Birim Test GEÇTİ, 15 / 15 Resmi Dosya SHA-256 DOĞRULANDI, npm ci / typecheck / lint 0 Hata)`
+
+---
+
+## 0. `KONTROL-M0.md` Bulguları (`F1–F12`) Durum Tablosu
+
+| Kod | Önem | Durum | Açıklama ve Uygulanan Çözüm |
+|---|---|---|---|
+| **F1** | Orta (M1 öncesi zorunlu) | **YAPILDI** | package.json esbuild çakışması + package-lock.json eksikliği + npm ci doğrulaması — *package.json içinden vite@^8.3.0 ile çakışan esbuild@^0.25.0 kaldırıldı, package-lock.json üretildi ve npm ci 0 hata ile doğrulandı.* |
+| **F2** | Orta (M1 öncesi zorunlu) | **YAPILDI** | src/core/hash/canonical.ts ve readAttributes.ts içinde localeCompare kullanımı — *Tüm sıralamalarda işletim sistemi yerel ayarından bağımsız deterministik UTF-16 kod birimi karşılaştırması (compareCodeUnits: a < b ? -1 : a > b ? 1 : 0) kullanıldı.* |
+| **F3** | Orta (M1 öncesi zorunlu) | **YAPILDI** | src/core/ saflık kuralının (Mutlak Kural 4) derleyici ve statik test ile korunması — *tsconfig.core.json (lib: ["ES2022"], types: []) eklendi, npm run typecheck ve lint komutlarına bağlandı; ayrıca m0.test.ts içine statik kaynak tarama testi eklendi.* |
+| **F4** | Orta (M1 öncesi zorunlu) | **YAPILDI** | parseMaksIdValue fonksiyonunun bozuk/negatif girdilerde ("12a", "-1") çökmemesi — */^\d{1,19}$/ kontrolü eklendi; geçersiz girdide çökmeden { value: null, exceedsInt32: false, issue: V-213 HATA } ve >2^31-1 durumunda V-213 BİLGİ döndürür.* |
+| **F5** | Düşük | **YAPILDI** | readAttributes.ts içinde <gml:posList srsDimension="3"> desteği ve kapısız odada null + BİLGİ — *Etiket eşleşmeleri <gml:pos\b[^>]*> ve <gml:posList\b[^>]*> olarak genişletildi; kapı bulunamazsa detectedDoorBottomOffsetMm: null + V-215 BİLGİ döndürülür.* |
+| **F6** | Düşük | **YAPILDI** | readAttributes.ts kat biçimi tespitinin tüm K_ bloklarını kontrol etmesi (+ M1 GMLReader) — *Dosyadaki tüm K_ blokları taranarak detectedStoreyForms ve hasInconsistentStoreyForms raporlanır (M1 GMLReader içinde tam XML ağacıyla da doğrulanacaktır).* |
+| **F7** | Düşük | **YAPILDI** | parsePropertyLot içinde "+5/10" ve "-5/10" işaretli payların reddedilmesi — *Düzenli ifade /^(\d+)\/(\d+)$/ olarak sıkılaştırıldı; "+5/10" ve "-5/10" artık V-198a HATA üretir.* |
+| **F8** | Düşük | **YAPILDI** | Birim test kapsamı genişletmesi (30° dönüklü Helmert, K89 sıra/yerel ayar bağımsızlığı, statik saflık) — *m0.test.ts içine 30° dönüklü + 100 ppm Helmert testi, İ/I/i/ı/_ sıralama bağımsızlığı testi ve statik src/core saflık testi eklendi (22/22 test geçti).* |
+| **F9** | Düşük | **YAPILDI** | .env.example içindeki GEMINI_API_KEY şablon kalıntısının temizlenmesi — *.env.example dosyasından yapay zeka anahtarı kalıntıları tamamen kaldırıldı.* |
+| **F10** | Bilgi | **YAPILDI** | Önizleme arayüzünde kaydedilmiş denetim çıktısı tarih/saat etiketinin açık gösterimi — *src/App.tsx üst bilgi şeridine "Kaydedilmiş Denetim Çıktısı: <tarih>" rozeti ve KONTROL-M0 F1–F12 durum tablosu eklendi.* |
+| **F11** | Bilgi | **YAPILDI** | docs/ACIK_SORULAR.md güncellemesi (<bldg:class>Teras</bldg:class> Ornek3 içinde 9 kez doğrulandı) — *docs/ACIK_SORULAR.md güncellendi: <bldg:class>Teras</bldg:class> kesinleşti; yalnız Ornek3 içindeki gml:id öneki M1 öncesinde Claude ölçümüyle netleşecektir.* |
+| **F12** | Bilgi | **YAPILDI** | package.json adının "tkgm-3d-bina" yapılması ve TKGM3D_UUID_NAMESPACE sabitinin KARARLAR.md içine işlenmesi — *package.json name alanı "tkgm-3d-bina" yapıldı ve TKGM3D_UUID_NAMESPACE ("6ba7b810-9dad-11d1-80b4-00c04fd430c8") docs/KARARLAR.md §A.2 içine kalıcı olarak işlendi.* |
 
 ---
 
 ## 1. `M0` Kapsamında Oluşturulan / Doğrulanan Dosyalar
 
-- `docs/KARARLAR.md` (`CLAUDE12 Ek-A` + `CLAUDE13 §1–§4` nihai karar listesi)
-- `docs/ACIK_SORULAR.md` (`K97` doğrulama bekleyen noktalar)
-- `docs/ADIM_NOTU.md` (Bu belge — gerçek konsol ve test çıktıları)
+- `package.json` ve `package-lock.json` (`F1`, `F3`, `F12` — `"name": "tkgm-3d-bina"`, `esbuild` çakışması giderildi, `npm ci` hatasız çalışır)
+- `tsconfig.core.json` (`F3` — `lib: ["ES2022"]`, `types: []` ile `src/core/` içinde DOM/Node global kullanımı derleyici düzeyinde yasaklandı)
+- `docs/KARARLAR.md` (`CLAUDE12 Ek-A` + `CLAUDE13 §1–§4` + `F12` `TKGM3D_UUID_NAMESPACE` kilidi)
+- `docs/ACIK_SORULAR.md` (`F11` `<bldg:class>Teras</bldg:class>` `Ornek3` içinde 9 kez doğrulandı; yalnız `gml:id` öneki `M1` öncesi ölçülecek)
+- `docs/ADIM_NOTU.md` (Bu belge — `F1–F12` durum tablosu ve gerçek konsol çıktıları)
 - `fixtures/ornek6.gml` (`717200` bayt, SHA-256: `7839a667f50cad0c90547a18a81c69274b21e9b4e33d02461085415869750f03`)
 - `resources/codelists/*.xml` (14 resmi TKGM XML kod listesi, `resources/DOSYA_LISTESI.txt` ile bayt-bayt kilitli)
 - `src/platform/PlatformAdapter.ts` (`K100` platform soyutlama katmanı)
 - `src/core/codelists/index.ts` (`K60`, `K91`, `V-063` çevrimdışı XML kod listesi ayrıştırıcısı)
-- `src/core/model/index.ts` (`ALLOWED_GENERIC_ATTRIBUTES` 45 öznitelik beyaz listesi, `K09/V-030` ondalık hane denetimi, `V-213` `BigInt` MAKS ID, mm ızgara tipleri)
-- `src/core/math/landShare.ts` (`BigInt` rasyonel arsa payı motoru, `K84`, `V-198`, `V-198a`, `V-198b`, `V-199`, `V-212`)
+- `src/core/model/index.ts` (`ALLOWED_GENERIC_ATTRIBUTES` 45 öznitelik beyaz listesi, `K09/V-030` ondalık hane denetimi, `F4` güvenli `parseMaksIdValue`)
+- `src/core/math/landShare.ts` (`BigInt` rasyonel arsa payı motoru, `F7` `/^(\d+)\/(\d+)$/` sıkılaştırması, `K84`, `V-198..V-212`)
 - `src/core/math/helmert2d.ts` (2B Helmert dönüşümü, `ppm` ölçek hesabı ve `leave-one-out` uyuşumsuz nokta tespiti)
 - `src/core/math/ring.ts` (Shoelace işaretli alan, `CCW/CW` halka yönü, 3B düzlemsellik `V-037`, delik–kenar mesafesi `K45a`, `V-042a/b`)
 - `src/core/model/malik.ts` (`CLAUDE13 §1` `K88-yeni` Malik veri modeli ve `BigInt` hisse toplamı `= 1/1` kontrolü `V-208`)
-- `src/core/hash/canonical.ts` (Saf TS `uuidv5` `K92` ve deterministik SHA-256 `CanonicalHash` `K89`)
-- `src/core/gml/readAttributes.ts` (`fixtures/ornek6.gml` salt-okunur 42 `gen:*Attribute` ve yapı denetçisi)
-- `src/core/__tests__/m0.test.ts` (19 birim testi + `K91` global `fetch` yasağı kilidi)
+- `src/core/hash/canonical.ts` (`F2` deterministik `compareCodeUnits`, `F3` saf TS `utf8Encode`, `uuidv5` `K92` ve SHA-256 `CanonicalHash` `K89`)
+- `src/core/gml/readAttributes.ts` (`F2`, `F5`, `F6` — `fixtures/ornek6.gml` 42 `gen:*Attribute` ve çok katlı yapı denetçisi)
+- `src/core/__tests__/m0.test.ts` (22 birim testi + `K91` global `fetch` yasağı + `F3/F8` statik `src/core` saflık testi)
 - `scripts/trace.ts` (`npm run trace` kural-kod-test izlenebilirlik matrisi)
 - `scripts/verify-samples.ts` (`npm run verify:samples` 15 resmi dosya SHA-256 + `ornek6.gml` doğrulama betiği)
 
 ---
 
-## 2. `npm run typecheck` ve `npm run lint` Gerçek Çıktısı
+## 2. `npm run typecheck` ve `npm run lint` (`tsc --noEmit && tsc -p tsconfig.core.json --noEmit`) Gerçek Çıktısı
 
 ```text
-> react-example@0.0.0 typecheck
-> tsc --noEmit
+> tkgm-3d-bina@0.1.0 typecheck
+> tsc --noEmit && tsc -p tsconfig.core.json --noEmit
 (Çıkış Kodu: 0 — 0 hata)
 ```
 
@@ -42,12 +63,12 @@
 ```text
 RUN  v5.1.0 /app/applet
 
- ✓ src/core/__tests__/m0.test.ts (19 tests) 114ms
+ ✓ src/core/__tests__/m0.test.ts (22 tests) 118ms
 
  Test Files  1 passed (1)
-      Tests  19 passed (19)
-   Start at  01:07:26
-   Duration  477ms (tests 49%, import 33%, transform 16%, worker 3%)
+      Tests  22 passed (22)
+   Start at  01:31:31
+   Duration  653ms (transform 47%, tests 28%, import 23%, worker 1%)
 ```
 
 ---
@@ -330,7 +351,13 @@ V-216   | src/core/model/index.ts                | -
     },
     "coordinateEncoding": "mixed",
     "detectedStoreyForm": "A",
+    "detectedStoreyForms": [
+      "A",
+      "A"
+    ],
+    "hasInconsistentStoreyForms": false,
     "detectedDoorBottomOffsetMm": 10,
+    "doorOffsetInfoIssue": null,
     "detectedProducerProfile": "A10",
     "uniqueGenericAttributes": [
       {

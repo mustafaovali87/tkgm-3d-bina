@@ -128,7 +128,7 @@ export function parsePropertyLot(
     });
   }
 
-  const match = /^([+-]?\d+)\/([+-]?\d+)$/.exec(clean);
+  const match = /^(\d+)\/(\d+)$/.exec(clean);
   if (!match) {
     issues.push({
       ruleId: 'V-198a',

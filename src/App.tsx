@@ -415,7 +415,9 @@ export function App() {
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                 <span>Şartname {M0_AUDIT_DATA.specVersion}</span>
                 <span aria-hidden="true">·</span>
-                <span>CityGML 2.0 / GML 3.1.1</span>
+                <span className="font-mono text-slate-700 font-medium">
+                  Kaydedilmiş Denetim Çıktısı: {M0_AUDIT_DATA.generatedAtIso}
+                </span>
                 <span aria-hidden="true">·</span>
                 <span>Sıfır Ağ İsteği (K91 Çevrimdışı Çekirdek)</span>
               </div>
@@ -469,10 +471,10 @@ export function App() {
               <div className="text-xs text-slate-500">Birim Testler (vitest run)</div>
               <div className="text-xl font-bold font-mono tabular-nums text-emerald-700 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>19 / 19 Geçti</span>
+                <span>22 / 22 Geçti</span>
               </div>
               <div className="text-xs text-slate-600">
-                Strict TS (0 hata) · K91 fetch kilidi
+                tsconfig.core.json (0 hata) · KONTROL-M0 F1–F12
               </div>
             </div>
 
@@ -492,7 +494,7 @@ export function App() {
                 Profil {ornek6.detectedProducerProfile}
               </div>
               <div className="text-xs text-slate-600 font-mono tabular-nums">
-                Kat Biçim {ornek6.detectedStoreyForm} · Kapı +{ornek6.detectedDoorBottomOffsetMm} mm
+                Kat Biçim {ornek6.detectedStoreyForm} · Kapı +{ornek6.detectedDoorBottomOffsetMm ?? 0} mm
               </div>
             </div>
 
@@ -511,6 +513,58 @@ export function App() {
         {/* SECTION 1: 15 RESMİ DOSYA SHA-256 KİLİDİ VE ORNEK6 ANALİZİ */}
         {activeSection === 'overview' && (
           <div className="space-y-8">
+            {/* KONTROL-M0 F1-F12 Status Table */}
+            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+                    <span>00. KONTROL-M0 Denetim Bulguları Durum Tablosu (F1–F12)</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    KONTROL-M0.md raporundaki F1–F4 zorunlu maddeleri ve F5–F12 iyileştirme maddelerinin tamamı uygulanmış ve test edilmiştir.
+                  </p>
+                </div>
+                <span className="text-xs font-mono text-emerald-700 font-semibold">
+                  Durum: 12 / 12 YAPILDI
+                </span>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                      <th className="py-2.5 px-3">Kod</th>
+                      <th className="py-2.5 px-3">Önem</th>
+                      <th className="py-2.5 px-3">Durum</th>
+                      <th className="py-2.5 px-3">Bulgu Özeti</th>
+                      <th className="py-2.5 px-3">Uygulanan Çözüm</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {M0_AUDIT_DATA.kontrolM0Findings.map((item) => (
+                      <tr key={item.code} className="hover:bg-slate-50/80">
+                        <td className="py-2 px-3 font-mono font-bold text-slate-900">
+                          {item.code}
+                        </td>
+                        <td className="py-2 px-3 text-slate-600 whitespace-nowrap">
+                          {item.severity}
+                        </td>
+                        <td className="py-2 px-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                          {item.status}
+                        </td>
+                        <td className="py-2 px-3 font-medium text-slate-900">
+                          {item.summary}
+                        </td>
+                        <td className="py-2 px-3 text-slate-600">
+                          {item.resolutionNote}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
             {/* 15 Official Reference Files Table */}
             <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">

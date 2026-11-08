@@ -175,3 +175,20 @@
 4. Hazır düzenler `F5–F8` ile değişir. Kanonik özet değişmez.
 5. Genişlik `1280 px`'e indirilince sekme düzenine geçer.
 
+
+
+---
+
+## A.7 M2 Doğrulayıcı — Rejim ve Ölçüme Dayalı Ciddiyetler (Claude, 08.11.2026)
+
+- **Rejim (N19, AS-1):**
+  - Binada GroundSurface varsa **S** (Sürdürülebilirlik), yoksa **E** (eski kılavuz).
+  - Rejim E'de o dönem istenmeyen öğelerin eksikliği BİLGİ'dir: MAKS/tapu öznitelikleri, GroundSurface, açıklıklar, boş blockName, Envelope dışı TIC, BB'de `InteriorWall_`.
+- **Ölçüme dayalı UYARI'lar:** Şartnamede H olan şu kurallar, TKGM'nin kabul ettiği resmi örneklerde ihlal edildiği için U'dur. Ölçümler `docs/M2_DOGRULAYICI.md` §4'te.
+  - V-076, V-096 (çatı en alçak noktası kısmı), V-117, V-126, V-137, V-138, V-163.
+  - V-164'ün "açıklık 10 cm'den fazla taşıyor" kısmı.
+- **V-158:** Oda hacmi, tavan altı prizma yöntemiyle hesaplanır; %1'den büyük sapma UYARI'dır.
+- **§6.14 bilinen istisnalar** `src/core/validation/knownSampleExceptions.ts` dosyasındadır.
+  - Şu an tek kayıt: Ornek2 V-186 (balkon 1002).
+  - Eşleşen bulgu silinmez, BİLGİ'ye düşer ve gerekçesi gösterilir.
+- **Kabul ölçütü (M2 ve sonrası):** 8 kabul dosyasında 0 HATA; ret dosyasında V-202 HATA. Bir kural değişikliği bu ölçütü bozarsa geri alınır.

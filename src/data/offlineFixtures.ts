@@ -52,7 +52,7 @@ export function getDefaultOrnek6Model(): ImportedModel {
   if (!cachedOrnek6Model) {
     cachedOrnek6Model = parseCityGmlModel(
       ornek6GmlRaw,
-      'Ornek6-M-70125626-A.gml',
+      'M-70125626-A.gml',
       getOfflineCodelistRegistry()
     );
   }

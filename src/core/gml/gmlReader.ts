@@ -106,6 +106,21 @@ export interface ImportedCityObject {
   readonly allPolygonIds: readonly string[]; // inline + xlink çözümlenmiş poligonlar
   readonly minZ: number | null;
   readonly maxZ: number | null;
+  /** M2: Nesnenin bldg:boundedBy altındaki yüzey elemanları (V-103..V-107, V-151..V-154, V-170, V-181). */
+  readonly surfaces: readonly ImportedSurface[];
+  /** M2: Kapı/pencere için açıklığın bağlı olduğu yüzey etiketi (ör. 'WallSurface'); diğer nesnelerde null (V-170). */
+  readonly hostSurfaceTag: string | null;
+}
+
+/** M2: bldg:boundedBy altındaki tek bir yüzey elemanı (ör. bldg:WallSurface). */
+export interface ImportedSurface {
+  readonly tag: string; // WallSurface, RoofSurface, GroundSurface, FloorSurface, InteriorWallSurface, CeilingSurface, ...
+  readonly gmlName: string;
+  readonly hasGmlIdAttr: boolean; // V-056: yüzey elemanlarında gml:id olmamalı
+  readonly lod: 'lod2' | 'lod4' | 'none';
+  readonly polygonIds: readonly string[]; // satır içi poligon kimlikleri
+  readonly xlinkHrefs: readonly string[];
+  readonly openingObjectIds: readonly string[]; // KAPI_ / PEN_
 }
 
 export interface ImportedTreeNode {
@@ -779,8 +794,10 @@ export function parseCityGmlModel(
   const registerObject = (
     objNode: Record<string, unknown>,
     tagName: string,
-    parentGmlId: string | null
+    parentGmlId: string | null,
+    hostSurfaceTag: string | null = null
   ): ImportedCityObject => {
+    const surfaces: ImportedSurface[] = [];
     const gmlId = getAttrByLocalName(objNode, '@_gml:id', '@_id');
     const prefix = getIdPrefix(gmlId);
     const gmlName = extractText(
@@ -977,9 +994,17 @@ export function parseCityGmlModel(
           | Record<string, unknown>
           | undefined;
         if (ls) {
-          const posText = extractText(
+          // M2: TIC hem gml:posList hem ardışık gml:pos ile yazılabilir (Amasya, Ornek4 gml:pos kullanıyor)
+          const posListText = extractText(
             getNodeByLocalName(ls, 'gml:posList', 'posList')
           ).trim();
+          const posText =
+            posListText.length > 0
+              ? posListText
+              : asArray(getNodeByLocalName(ls, 'gml:pos', 'pos'))
+                  .map((n) => extractText(n).trim())
+                  .filter(Boolean)
+                  .join(' ');
           const toks = posText ? posText.split(/\s+/) : [];
           const verts: Point3D[] = [];
           for (let i = 0; i + 2 < toks.length; i += 3) {
@@ -1053,12 +1078,17 @@ export function parseCityGmlModel(
           const surfName = extractText(
             getNodeByLocalName(sNode, 'gml:name', 'name')
           ).trim();
+          const surfPolyStart = inlinePolygons.length;
+          const surfHrefStart = xlinkPolygonHrefs.length;
+          const surfOpeningIds: string[] = [];
+          let surfLod: ImportedSurface['lod'] = 'none';
           const lod2Ms = getNodeByLocalName(
             sNode,
             'bldg:lod2MultiSurface',
             'lod2MultiSurface'
           ) as Record<string, unknown> | undefined;
           if (lod2Ms) {
+            surfLod = 'lod2';
             collectMultiSurfacePolygonsAndXlinks(
               lod2Ms,
               gmlId,
@@ -1077,6 +1107,7 @@ export function parseCityGmlModel(
             'lod4MultiSurface'
           ) as Record<string, unknown> | undefined;
           if (lod4Ms) {
+            surfLod = 'lod4';
             collectMultiSurfacePolygonsAndXlinks(
               lod4Ms,
               gmlId,
@@ -1099,15 +1130,25 @@ export function parseCityGmlModel(
               getNodeByLocalName(op, 'bldg:Door', 'Door')
             ) as Array<Record<string, unknown>>;
             for (const dNode of doors) {
-              registerObject(dNode, 'bldg:Door', gmlId);
+              surfOpeningIds.push(registerObject(dNode, 'bldg:Door', gmlId, shortSurfTag).gmlId);
             }
             const windows = asArray(
               getNodeByLocalName(op, 'bldg:Window', 'Window')
             ) as Array<Record<string, unknown>>;
             for (const wNode of windows) {
-              registerObject(wNode, 'bldg:Window', gmlId);
+              surfOpeningIds.push(registerObject(wNode, 'bldg:Window', gmlId, shortSurfTag).gmlId);
             }
           }
+
+          surfaces.push({
+            tag: shortSurfTag,
+            gmlName: surfName,
+            hasGmlIdAttr: getAttrByLocalName(sNode, '@_gml:id', '@_id').length > 0,
+            lod: surfLod,
+            polygonIds: inlinePolygons.slice(surfPolyStart).map((p) => p.gmlId),
+            xlinkHrefs: xlinkPolygonHrefs.slice(surfHrefStart),
+            openingObjectIds: surfOpeningIds,
+          });
         }
       }
     }
@@ -1189,6 +1230,8 @@ export function parseCityGmlModel(
       allPolygonIds: Array.from(new Set(allPolygonIds)),
       minZ,
       maxZ,
+      surfaces,
+      hostSurfaceTag,
     };
 
     objects.push(cityObj);

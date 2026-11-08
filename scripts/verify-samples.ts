@@ -8,6 +8,7 @@ import path from 'node:path';
 import { sha256Hex } from '../src/core/hash/canonical.ts';
 import { inspectCityGmlSample } from '../src/core/gml/readAttributes.ts';
 import { parseCityGmlModel } from '../src/core/gml/gmlReader.ts';
+import { validateCityGml } from '../src/core/validation/index.ts';
 import {
   createCodelistRegistryFromXmlMap,
   OFFICIAL_CODELIST_NAMES,
@@ -105,11 +106,14 @@ export type SampleVerificationRow =
       readonly detectedProducerProfile: string;
       readonly landShareTotal: string;
       readonly hasPropertyLotData: boolean;
+      readonly regime: string;
+      readonly validationMs: number;
       readonly issueCounts: {
         readonly H: number;
         readonly U: number;
         readonly B: number;
       };
+      readonly topRules: readonly string[];
     }
   | {
       readonly fileName: string;
@@ -171,18 +175,20 @@ export function verifyGmlDirectorySamples(
         (process.memoryUsage().heapUsed / (1024 * 1024)).toFixed(1)
       );
 
-      const allIssues = [
-        ...model.readerIssues,
-        ...model.landShareAnalysis.issues,
-      ];
-      let H = 0;
-      let U = 0;
-      let B = 0;
-      for (const issue of allIssues) {
-        if (issue.severity === 'H') H++;
-        else if (issue.severity === 'U') U++;
-        else B++;
+      // M2: Doğrulayıcı (şartname §6). Dosya adında "M-…" bölümü varsa o kullanılır
+      // (yerel kopyalara eklenen "Ornek1-" gibi ön ekler V-001'i yanlış tetiklemesin).
+      const tkgmName = (/M-[^\\/]*\.gml$/i.exec(path.basename(filePath)) ?? [path.basename(filePath)])[0];
+      const report = validateCityGml(xmlText, tkgmName, model, registry);
+      const ruleCounts = new Map<string, number>();
+      for (const f of report.findings) {
+        if (f.severity === 'B') continue;
+        const k = `${f.severity}:${f.ruleId}`;
+        ruleCounts.set(k, (ruleCounts.get(k) ?? 0) + 1);
       }
+      const topRules = [...ruleCounts.entries()]
+        .sort((a, b) => (a[0][0] === b[0][0] ? b[1] - a[1] : a[0] < b[0] ? -1 : 1))
+        .slice(0, 5)
+        .map(([k, n]) => `${k}x${n}`);
 
       return {
         fileName,
@@ -196,7 +202,10 @@ export function verifyGmlDirectorySamples(
         detectedProducerProfile: model.detectedProducerProfile,
         landShareTotal: model.landShareAnalysis.formattedTotalUnreduced,
         hasPropertyLotData: model.landShareAnalysis.hasPropertyLotData,
-        issueCounts: { H, U, B },
+        regime: report.regime,
+        validationMs: report.durationMs,
+        issueCounts: report.counts,
+        topRules,
       };
     } catch (err) {
       hasError = true;

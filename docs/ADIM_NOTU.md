@@ -5,6 +5,22 @@
 
 ---
 
+## M2 — DOSYA DOĞRULAYICI (Claude, 08.11.2026)
+
+> Gemini'nin günlük limiti dolduğu için M2'yi kullanıcının isteğiyle Claude yazdı. Ayrıntı: `docs/M2_DOGRULAYICI.md`.
+
+| Madde | Durum |
+|---|---|
+| Kural altyapısı (`src/core/validation/`) | YAPILDI. 175 kural kaydı: 136 uygulandı, 13 okuyucuda, 16 ertelendi (gerekçeli), 7 sunucu (T), 3 kısmi (K) |
+| 8 kabul dosyası 0 HATA | YAPILDI. Ornek1–6, Amasya, Sincan: H = 0 (yerel `verify:samples`) |
+| Ret dosyasında V-202 | YAPILDI. `GML_M-17273333-F`: V-202 H + V-072/073/074/090/130/061 |
+| Her kural için test | YAPILDI. `m2.test.ts`: Ornek6 0 HATA + 18 "tek hata ekleme" testi + katalog testleri (59/59) |
+| Doğrulama paneli | YAPILDI. Worker içinde çalışır, H → U → B sıralı, poligon bulgusunda poligon vurgusu |
+| `verify:samples` | YAPILDI. Satıra `regime`, `validationMs`, `issueCounts`, `topRules` eklendi |
+| Okuyucu eki | YAPILDI. `surfaces`, `hostSurfaceTag`; TIC'te `gml:pos` desteği |
+| Komutlar | `npm ci` ✔, `typecheck` 0 hata ✔, `npm test` 59/59 ✔, `npm run docs:m2` (kapsam tablosu) ✔ |
+---
+
 ## 0. `KONTROL-M1-2.md` (`R1–R3`) ve `KONTROL-M1.md` (`G1–G8`) Durum Tablosu
 
 | Kod | Önem | Durum | Açıklama ve Uygulanan Çözüm |

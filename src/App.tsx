@@ -30,6 +30,7 @@ import {
   savePersistedWorkspaceState,
 } from './state/workspaceState.ts';
 import { CityGmlViewport3D } from './viewer3d/CityGmlViewport3D.tsx';
+import { validateCityGml, type Finding, type ValidationReport } from './core/validation/index.ts';
 import { FloorPlanPreview2D } from './viewer3d/FloorPlanPreview2D.tsx';
 import { parseCityGmlInWorker } from './workers/gmlWorkerClient.ts';
 
@@ -43,6 +44,10 @@ interface WorkerReadState {
 
 export function App() {
   const [model, setModel] = useState<ImportedModel>(() => getDefaultOrnek6Model());
+  // M2: Dosya doğrulayıcı raporu (şartname §6). Okuyucu, arsa payı ve kural bulgularının tamamı.
+  const [validation, setValidation] = useState<ValidationReport>(() =>
+    validateCityGml(ORNEK6_RAW_XML, 'M-70125626-A.gml', getDefaultOrnek6Model(), getOfflineCodelistRegistry())
+  );
   const [selectedGmlId, setSelectedGmlId] = useState<string | null>(() => {
     const m = getDefaultOrnek6Model();
     return m.objects.find((o) => o.prefix === 'BBK_')?.gmlId ?? m.buildingGmlId;
@@ -208,9 +213,10 @@ export function App() {
     });
 
     try {
-      const { model: parsed, durationMs } = await job.promise;
+      const { model: parsed, durationMs, validation: report } = await job.promise;
       setLastWorkerDurationMs(durationMs);
       setModel(parsed);
+      setValidation(report);
       setActiveStoreyId(null);
       setHighlightedRulePolygonId(null);
       setSelectedGmlId(
@@ -225,6 +231,7 @@ export function App() {
           getOfflineCodelistRegistry()
         );
         setModel(fallback);
+        setValidation(validateCityGml(xmlText, fileName, fallback, getOfflineCodelistRegistry()));
       }
     } finally {
       setWorkerReadState(null);
@@ -240,13 +247,15 @@ export function App() {
   };
 
   const handleResetToOrnek6 = () => {
-    void loadGmlViaWorker(ORNEK6_RAW_XML, 'Ornek6-M-70125626-A.gml');
+    void loadGmlViaWorker(ORNEK6_RAW_XML, 'M-70125626-A.gml');
   };
 
-  const allIssues = useMemo(
-    () => [...model.readerIssues, ...model.landShareAnalysis.issues],
-    [model]
-  );
+  // M2: Panel, doğrulayıcının tüm bulgularını gösterir (okuyucu + arsa payı + §6 kuralları).
+  // Önce HATA, sonra UYARI, sonra BİLGİ.
+  const allIssues = useMemo(() => {
+    const rank = { H: 0, U: 1, B: 2 } as const;
+    return [...validation.findings].sort((a, b) => rank[a.severity] - rank[b.severity]);
+  }, [validation]);
 
   const issueCounts = useMemo(() => computeModelIssueCounts(allIssues), [allIssues]);
   const objectCounts = useMemo(
@@ -255,6 +264,13 @@ export function App() {
   );
 
   const handleIssueClick = (issue: ValidationIssue) => {
+    // M2 / D-23.3: Bulgu belirli bir poligonu gösteriyorsa o poligon 3B'de kırmızı vurgulanır.
+    const polyId = (issue as Finding).polygonGmlId;
+    if (polyId && model.polygonsById[polyId]) {
+      setSelectedGmlId(model.polygonsById[polyId].ownerObjectGmlId);
+      setHighlightedRulePolygonId(polyId);
+      return;
+    }
     if (!issue.targetGmlId) return;
     if (model.objectsById[issue.targetGmlId]) {
       setSelectedGmlId(issue.targetGmlId);

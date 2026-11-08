@@ -6,12 +6,14 @@ import {
   parseCityGmlModel,
 } from '../core/gml/gmlReader.ts';
 import { getOfflineCodelistRegistry } from '../data/offlineFixtures.ts';
+import { validateCityGml, type ValidationReport } from '../core/validation/index.ts';
 import type { GmlWorkerRequest, GmlWorkerResponse } from './gmlReader.worker.ts';
 
 export interface GmlWorkerJob {
   readonly promise: Promise<{
     readonly model: ImportedModel;
     readonly durationMs: number;
+    readonly validation: ValidationReport;
   }>;
   readonly cancel: () => void;
 }
@@ -44,7 +46,8 @@ export function parseCityGmlInWorker(
         }
       );
       if (cancelled) throw new GmlWorkerCancelledError();
-      return { model, durationMs: Math.round(performance.now() - t0) };
+      const validation = validateCityGml(xmlContent, fileName, model, getOfflineCodelistRegistry());
+      return { model, durationMs: Math.round(performance.now() - t0), validation };
     });
     return {
       promise,
@@ -65,6 +68,7 @@ export function parseCityGmlInWorker(
   const promise = new Promise<{
     readonly model: ImportedModel;
     readonly durationMs: number;
+    readonly validation: ValidationReport;
   }>((resolve, reject) => {
     rejectFn = reject;
 
@@ -93,6 +97,7 @@ export function parseCityGmlInWorker(
         resolve({
           model: hydrated,
           durationMs: data.durationMs,
+          validation: data.validation,
         });
         return;
       }

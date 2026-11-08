@@ -152,6 +152,15 @@ describe('M0 Adım 1 — 15 Resmi Referans Dosyası SHA-256 Kilidi, PlatformAdap
       }
     }
   });
+
+  it('F1 (KONTROL-M0-2): package-lock.json içinde Windows (win32-x64) platform paketleri (@tailwindcss/oxide-win32-x64-msvc, lightningcss-win32-x64-msvc, @esbuild/win32-x64) mevcuttur', () => {
+    const lockPath = path.resolve(process.cwd(), 'package-lock.json');
+    expect(fs.existsSync(lockPath)).toBe(true);
+    const lockContent = fs.readFileSync(lockPath, 'utf-8');
+    expect(lockContent).toContain('@tailwindcss/oxide-win32-x64-msvc');
+    expect(lockContent).toContain('lightningcss-win32-x64-msvc');
+    expect(lockContent).toContain('@esbuild/win32-x64');
+  });
 });
 
 describe('M0 Adım 2 — 14 Resmi TKGM XML Kod Listesi Yükleyici (K60, K91, V-063)', () => {

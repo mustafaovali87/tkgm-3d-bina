@@ -12,8 +12,8 @@ import {
 export interface KontrolM0FindingStatus {
   readonly code: string;
   readonly severity: string;
+  readonly status: 'YAPILDI' | 'YAPILDI (win32 girdileri doğrulandı)' | 'M1 KAPSAMINDA TAMAMLANACAK';
   readonly summary: string;
-  readonly status: 'YAPILDI' | 'M1 KAPSAMINDA TAMAMLANACAK';
   readonly resolutionNote: string;
 }
 
@@ -21,10 +21,10 @@ export const KONTROL_M0_FINDINGS: readonly KontrolM0FindingStatus[] = [
   {
     code: 'F1',
     severity: 'Orta (M1 öncesi zorunlu)',
-    summary: 'package.json esbuild çakışması + package-lock.json eksikliği + npm ci doğrulaması',
-    status: 'YAPILDI',
+    summary: 'package.json esbuild çakışması + package-lock.json + Windows (win32) npm ci uyumluluğu',
+    status: 'YAPILDI (win32 girdileri doğrulandı)',
     resolutionNote:
-      'package.json içinden vite@^8.3.0 ile çakışan esbuild@^0.25.0 kaldırıldı, package-lock.json üretildi ve npm ci 0 hata ile doğrulandı.',
+      'node_modules ve package-lock.json silinip temiz npm install ile yeniden üretildi; @tailwindcss/oxide-win32-x64-msvc, lightningcss-win32-x64-msvc ve @esbuild/win32-x64 girdilerinin kilit dosyasında bulunduğu birim testiyle doğrulandı.',
   },
   {
     code: 'F2',

@@ -103,3 +103,75 @@
 ## A.5 15 Resmi Referans Dosyası ve SHA-256 Kilidi (`CLAUDE13 §2.1`)
 - `fixtures/ornek6.gml` (`717200` B, SHA-256: `7839a667f50cad0c90547a18a81c69274b21e9b4e33d02461085415869750f03`)
 - `resources/codelists/*.xml` altındaki 14 resmi XML kod listesi (`resources/DOSYA_LISTESI.txt` ile bayt-bayt kilitli). `commonAreaUsage.xml` adında ayrı bir dosya yoktur; `commonAreaUsage` özniteliği `partUsage.xml` dosyasından okunur.
+
+---
+
+## A.6 Arayüz Yerleşimi (`KARAR D-23` — `claude_uygulama_sartnamesi_v3.md §7.2, §7.4, §7.6, §7.7`)
+
+### D-23.1 Varsayılan Yerleşim (Şartname §7.2 Aynen Korunur)
+
+```text
+┌─────────────┬────────────────────────────┬────────────────────────────┐
+│ PROJE AĞACI │ 2B ÇİZİM (aktif kat)       │ 3B SAHNE (canlı)            │
+│  ~%15       │  ~%45                      │  ~%40                       │
+├─────────────┴────────────────────────────┼────────────────────────────┤
+│ DOĞRULAMA PANELİ (H/U/B, tıkla → git)     │ ÖZNİTELİK PANELİ (seçili)   │
+└──────────────────────────────────────────┴────────────────────────────┘
+```
+
+### D-23.2 Paneller Esnek Olacak
+1. **Boyutlandırma:** Panel sınırları sürüklenerek değişir. Her panel daraltılıp açılabilir.
+2. **Kütüphane:** `react-resizable-panels` (MIT) önerilir. npm ile kurulur ve derlemeye gömülür (`K91`).
+3. **Hazır Düzenler:** Görünüm menüsünde ve kısayolla seçilir.
+
+   | Ad | Kısayol | Kullanım | Düzen |
+   |---|---|---|---|
+   | **Standart** | `F5` | Varsayılan | D-23.1 |
+   | **Yan Yana** (kullanıcının tarif ettiği) | `F6` | — | Sol yarı 2B çizim; sağ yarıda üstte 3B, altta ağaç ve öznitelik |
+   | **Çizim** | `F7` | Plan çizerken | 2B büyük; 3B küçük önizleme; ağaç daraltılmış |
+   | **Denetim** | `F8` | Hazır GML incelerken | 3B büyük; doğrulama paneli geniş; 2B gizli |
+
+   - **Not:** Hazır GML incelenirken 2B paneli gizlenir, çünkü içe aktarılan GML'de çizim katmanı yoktur (`§7.7`).
+4. **İkinci Monitör:** 3B sahne `"Ayrı pencerede aç"` komutuyla ikinci bir Electron penceresine taşınabilir.
+   - Seçim ve vurgulama iki pencere arasında eş zamanlı kalır.
+   - Pencere kapanınca 3B sahne ana pencereye geri döner.
+   - Tarayıcı geliştirme ortamında bu komut gizlenir.
+5. **Küçük Ekran (genişlik `< 1366 px`):**
+   - 2B ve 3B tek alanda sekme olarak gösterilir.
+   - Ağaç açılır kenar paneli olur.
+
+### D-23.3 Seçim Eşgüdümü (Zorunlu)
+- **Tek Seçim Kaynağı:** Seçili nesne tek bir `selection` durumunda tutulur.
+  - Ağaçta, 2B'de, 3B'de veya doğrulama panelinde yapılan seçim diğer üçünde de vurgulanır.
+  - Öznitelik paneli bu seçimi gösterir.
+- **Çift Tıklama:**
+  - Ağaçta bir kata çift tıklanınca 2B'de o kat aktif olur.
+  - 3B'de o kat öne alınır (kat patlatma veya kesit).
+- **Hata Seçimi:** Doğrulama panelinde bir hata seçilince ilgili poligon 3B'de kırmızı olur ve kamera oraya gider (`§7.6`). Nesnenin 2B karşılığı varsa 2B'de de gösterilir.
+
+### D-23.4 Arayüz Durumu ve Kanonik Özet
+- **Nerede Saklanır:**
+  - Panel boyutları, seçili hazır düzen, kamera ve ayrı pencere durumu, **kullanıcı ayarı** olarak saklanır (Electron `userData`).
+  - Bunlar proje dosyasına (`.tkgm3b`) **yazılmaz**.
+- **`K89`:** Bu durumlar kanonik model özetini **değiştirmez**. Test:
+  - Aynı model iki farklı yerleşimde aynı özeti vermeli.
+  - Aynı model farklı nesne sırasıyla da aynı özeti vermeli.
+
+### D-23.5 Aşamalara Dağılım (Yol Haritası §11 Değişmez)
+
+| Aşama | Yerleşimde Gelen |
+|---|---|
+| **M1** | Pencere iskeleti, D-23.1 düzeni, boyutlandırma, ağaç + 3B görüntüleyici + öznitelik paneli (içe aktarılan GML için), seçim eşgüdümü. 2B paneli yer tutucu: `"M4'te gelecek"`. |
+| **M2** | Doğrulama paneli, tıkla → git. |
+| **M4** | 2B çizim editörü (`§7.4`), Çizim ve Yan Yana hazır düzenleri tam çalışır. |
+| **M6** | Çizimden canlı 3B (her değişiklikte 3B yenilenir; `300 ms` gecikmeli toplu güncelleme önerilir). |
+| **M7** | DXF ve resim altlık katmanı. |
+| **M10** | İkinci monitör penceresi paketlenmiş Electron'da test edilir. |
+
+### D-23.6 Kabul Testi (`M1` Sonunda Kontrol Edilecek)
+1. `Ornek6` açılır.
+2. Ağaçta `BBK_` seçilince 3B'de aynı nesne vurgulanır ve öznitelik panelinde `partUsage` görünür.
+3. Panel boyutları değiştirilip uygulama kapatılıp açılınca aynı kalır.
+4. Hazır düzenler `F5–F8` ile değişir. Kanonik özet değişmez.
+5. Genişlik `1280 px`'e indirilince sekme düzenine geçer.
+

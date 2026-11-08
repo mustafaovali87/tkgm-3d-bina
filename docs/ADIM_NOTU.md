@@ -9,7 +9,7 @@
 
 | Kod | Önem | Durum | Açıklama ve Uygulanan Çözüm |
 |---|---|---|---|
-| **F1** | Orta (M1 öncesi zorunlu) | **YAPILDI** | package.json esbuild çakışması + package-lock.json eksikliği + npm ci doğrulaması — *package.json içinden vite@^8.3.0 ile çakışan esbuild@^0.25.0 kaldırıldı, package-lock.json üretildi ve npm ci 0 hata ile doğrulandı.* |
+| **F1** | Orta (M1 öncesi zorunlu) | **YAPILDI (win32 girdileri doğrulandı)** | package.json esbuild çakışması + package-lock.json + Windows (win32) npm ci uyumluluğu — *node_modules ve package-lock.json silinip temiz npm install ile yeniden üretildi; @tailwindcss/oxide-win32-x64-msvc, lightningcss-win32-x64-msvc ve @esbuild/win32-x64 girdilerinin kilit dosyasında bulunduğu birim testiyle doğrulandı.* |
 | **F2** | Orta (M1 öncesi zorunlu) | **YAPILDI** | src/core/hash/canonical.ts ve readAttributes.ts içinde localeCompare kullanımı — *Tüm sıralamalarda işletim sistemi yerel ayarından bağımsız deterministik UTF-16 kod birimi karşılaştırması (compareCodeUnits: a < b ? -1 : a > b ? 1 : 0) kullanıldı.* |
 | **F3** | Orta (M1 öncesi zorunlu) | **YAPILDI** | src/core/ saflık kuralının (Mutlak Kural 4) derleyici ve statik test ile korunması — *tsconfig.core.json (lib: ["ES2022"], types: []) eklendi, npm run typecheck ve lint komutlarına bağlandı; ayrıca m0.test.ts içine statik kaynak tarama testi eklendi.* |
 | **F4** | Orta (M1 öncesi zorunlu) | **YAPILDI** | parseMaksIdValue fonksiyonunun bozuk/negatif girdilerde ("12a", "-1") çökmemesi — */^\d{1,19}$/ kontrolü eklendi; geçersiz girdide çökmeden { value: null, exceedsInt32: false, issue: V-213 HATA } ve >2^31-1 durumunda V-213 BİLGİ döndürür.* |
@@ -63,12 +63,12 @@
 ```text
 RUN  v5.1.0 /app/applet
 
- ✓ src/core/__tests__/m0.test.ts (22 tests) 118ms
+ ✓ src/core/__tests__/m0.test.ts (23 tests) 113ms
 
  Test Files  1 passed (1)
-      Tests  22 passed (22)
-   Start at  01:31:31
-   Duration  653ms (transform 47%, tests 28%, import 23%, worker 1%)
+      Tests  23 passed (23)
+   Start at  01:42:01
+   Duration  643ms (transform 43%, import 28%, tests 27%, worker 1%)
 ```
 
 ---

@@ -471,10 +471,10 @@ export function App() {
               <div className="text-xs text-slate-500">Birim Testler (vitest run)</div>
               <div className="text-xl font-bold font-mono tabular-nums text-emerald-700 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>22 / 22 Geçti</span>
+                <span>23 / 23 Geçti</span>
               </div>
               <div className="text-xs text-slate-600">
-                tsconfig.core.json (0 hata) · KONTROL-M0 F1–F12
+                tsconfig.core.json (0 hata) · KONTROL-M0-2 (win32)
               </div>
             </div>
 

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "tr.gov.tkgm.bina3d",
+  "productName": "TKGM 3B Sayısal Yapı Modeli",
+  "copyright": "Copyright © 2026 Çevre, Şehircilik ve İklim Değişikliği Bakanlığı / TKGM",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "resources/codelists",
+      "to": "codelists",
+      "filter": ["*.xml"]
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": "gml",
+        "name": "CityGML 2.0 3B Yapı Modeli",
+        "description": "TKGM 3B Sayısal Yapı Modeli Dosyası",
+        "role": "Editor"
+      },
+      {
+        "ext": "tkgm3b",
+        "name": "TKGM 3B Proje Dosyası",
+        "description": "TKGM 3B Sayısal Yapı Tasarım Projesi",
+        "role": "Editor"
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": true,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "TKGM 3B Sayısal Yapı Modeli",
+    "uninstallDisplayName": "TKGM 3B Sayısal Yapı Modeli Kaldır"
+  }
+}

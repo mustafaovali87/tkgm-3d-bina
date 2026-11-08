@@ -295,3 +295,25 @@
 - **Çevrimdışı HTML Raporları (`generateSubmissionReportHtml`, `generateMalikIrtifakReportHtml`, `K88-yeni`, `K99`):**
   - Belediye ve Kadastro idaresine sunulacak teknik teslim raporunda hiçbir malik / kişisel veri yer almaz (`K99`).
   - Kat irtifakı ve malik listesi raporunda `BigInt` tabanlı tam hisse toplamı (`pay/payda`) ve bağımsız bölüm tablosu üretilir (`K88-yeni`).
+
+---
+
+## A.15 M10 Masaüstü Paketleme, Çift Monitör ve Mimari Şablonlar (08.11.2026)
+
+- **Platform Soyutlama & Masaüstü Adaptörü (`src/platform/PlatformAdapter.ts`, `§11`, `K91`, `K100`):**
+  - `src/core/` altındaki tüm algoritmalar saf TypeScript olarak tutulur; doğrudan DOM (`window`, `document`) veya Node (`fs`, `path`) çağrısı yapılmaz.
+  - Dosya okuma/yazma, varlık denetimi ve yol normalizasyonu `PlatformAdapter` arayüzü (`InMemoryPlatformAdapter` ve `WebPlatformAdapter`) üzerinden yürütülür.
+- **Çift Monitör ve İkinci Pencere İletişim Protokolü (`src/platform/dualWindowProtocol.ts`, `§11`, `KARAR D-23.5`, `KARARLAR.md §169`, `OY-12`):**
+  - İkinci ekran (3B Sahne veya 2B Çizim) ayrı bir pencere veya monitörde açıldığında ana pencere ile `PING`, `PONG`, `SYNC_STATE`, `SELECT_OBJECT`, `SELECT_STOREY`, `DETACH_VIEW` ve `REATTACH_VIEW` mesajları üzerinden haberleşir.
+  - Tarayıcıda `BroadcastChannel` ve `localStorage` fallback, Electron ortamında ise güvenli `ContextBridge` IPC köprüsü ile sıfır gecikmeli çift yönlü senkronizasyon sağlanır.
+  - İkinci pencere URL'sindeki `?windowMode=secondary&panel=...` parametresi ile bağımsız, tam ekran ve temiz bir görünüm sunulur.
+- **Hazır Mimari Proje Şablonları (F10, `src/core/templates/projectTemplates.ts`, `§11`):**
+  - Dört standart mimari şablon tanımlanmıştır:
+    1. *4 Katlı Apartman:* 4 kat, 8 mesken bağımsız bölümü, kat holü, asansör ve merdiven iç yapıları.
+    2. *2 Katlı Müstakil Villa:* 2 kat, 1 bağımsız bölüm, salon/mutfak, yatak odaları, zemin terası ve 35° beşik çatı.
+    3. *Çatı Piyesli Dubleks Daire:* 2 kat (normal kat + çatı arası katı), kırma çatı altında çatı arası kesimi, dizlik duvarı ve çift katlı BB.
+    4. *Zemin Ticari + Konut Karma:* Zemin katta 2 adet dükkan/mağaza, üst katlarda 4 adet mesken.
+  - Tüm şablonlar B-Rep ve CityGML üretimine doğrudan sokulduğunda TKGM 3B doğrulayıcısından 0 hata ile geçer.
+- **Windows 11 NSIS ve Taşınabilir Paketleme (`electron/main.ts`, `electron/preload.ts`, `electron-builder.json5`):**
+  - Windows 10/11 x64 NSIS kurulum ve Portable yapılandırması tanımlandı; `.gml` ve `.tkgm3b` dosya uzantıları uygulamaya ilişkilendirildi.
+  - Çoklu ekranlar Electron `screen.getAllDisplays()` ile tespit edilir ve ikinci monitöre otomatik konumlandırılır.

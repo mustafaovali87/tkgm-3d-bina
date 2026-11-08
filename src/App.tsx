@@ -46,6 +46,11 @@ import { parseCityGmlInWorker } from './workers/gmlWorkerClient.ts';
 import { parseParcelKmlOrGeoJson, type ImportedParcelBoundary, validateParcelAndMultiBuilding } from './core/importers/parcelImporter.ts';
 import { evaluateSubmissionReadiness, generateSubmissionReportHtml, generateMalikIrtifakReportHtml } from './core/validation/submissionPackage.ts';
 import { designFromImportedModel } from './core/design/fromImported.ts';
+import { generateBrep } from './core/brep/generate.ts';
+import { writeCityGml } from './core/gml/cityGmlWriter.ts';
+import { loadProjectTemplate, type TemplateTypeId } from './core/templates/projectTemplates.ts';
+import { ProjectTemplatesModal } from './editor2d/ProjectTemplatesModal.tsx';
+import { DualWindowCoordinator, type DetachablePanelId, type DualWindowMessage } from './platform/dualWindowProtocol.ts';
 
 interface WorkerReadState {
   fileName: string;
@@ -108,6 +113,55 @@ export function App() {
   const [auditModalTab, setAuditModalTab] = useState<
     'kontrol_m1' | 'kontrol_m0' | 'adim_notu' | 'kararlar' | 'codelists' | 'trace'
   >('kontrol_m1');
+
+  // M10: Hazır Mimari Şablonlar Seçim Modali (F10)
+  const [showTemplatesModal, setShowTemplatesModal] = useState<boolean>(false);
+
+  // M10: Çift Ekran / İkincil Monitör Koordinatörü (KARAR D-23.5)
+  const isSecondaryWindow = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('windowMode') === 'secondary';
+  }, []);
+
+  const secondaryPanelId = useMemo<DetachablePanelId>(() => {
+    if (typeof window === 'undefined') return 'viewer3d';
+    const p = new URLSearchParams(window.location.search).get('panel') as DetachablePanelId;
+    return p || 'viewer3d';
+  }, []);
+
+  const coordinatorRef = useRef<DualWindowCoordinator | null>(null);
+
+  useEffect(() => {
+    const coordinator = new DualWindowCoordinator(
+      isSecondaryWindow ? 'win_secondary' : 'win_primary'
+    );
+    coordinatorRef.current = coordinator;
+
+    const unsubscribe = coordinator.subscribe((msg: DualWindowMessage) => {
+      if (msg.type === 'SELECT_OBJECT') {
+        setSelectedGmlId(msg.gmlId);
+        setHighlightedRulePolygonId(null);
+      } else if (msg.type === 'SELECT_STOREY') {
+        setActiveStoreyId(msg.storeyId);
+      } else if (msg.type === 'SYNC_STATE') {
+        if (msg.payload.selectedGmlId !== undefined) {
+          setSelectedGmlId(msg.payload.selectedGmlId);
+        }
+        if (msg.payload.activeStoreyId !== undefined) {
+          setActiveStoreyId(msg.payload.activeStoreyId);
+        }
+      }
+    });
+
+    if (isSecondaryWindow) {
+      coordinator.ping();
+    }
+
+    return () => {
+      unsubscribe();
+      coordinator.destroy();
+    };
+  }, [isSecondaryWindow]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const parcelInputRef = useRef<HTMLInputElement | null>(null);
@@ -434,6 +488,76 @@ export function App() {
     });
   };
 
+  // M10: Hazır Mimari Proje Şablonunu Projeye Yükleme (F10)
+  const handleSelectTemplate = (templateId: TemplateTypeId) => {
+    try {
+      const project = loadProjectTemplate(templateId);
+      const brep = generateBrep(project);
+      const { xml } = writeCityGml(project, brep, getOfflineCodelistRegistry());
+      const fileName = `${templateId}-proje.gml`;
+      const codelists = getOfflineCodelistRegistry();
+      const parsed = parseCityGmlModel(xml, fileName, codelists);
+      setModel(parsed);
+      setSourceXml(xml);
+      setCurrentFileName(fileName);
+      setEditHistory([]);
+      const rep = validateCityGml(xml, fileName, parsed, codelists);
+      setValidation(rep);
+      const initialSelected =
+        parsed.objects.find((o) => o.prefix === 'BBK_')?.gmlId ?? parsed.buildingGmlId;
+      setSelectedGmlId(initialSelected);
+      setActiveStoreyId(null);
+      setHighlightedRulePolygonId(null);
+
+      // İkinci ekrana senkronize et
+      coordinatorRef.current?.sendSyncState({
+        selectedGmlId: initialSelected,
+        activeStoreyId: null,
+        activeTab: cad2dMode,
+        sourceFileName: fileName,
+        canonicalHash: parsed.canonicalHash,
+        detachedPanel: null,
+        timestamp: Date.now(),
+      });
+
+      setEditMessage({
+        kind: 'ok',
+        text: `Hazır mimari şablon yüklendi: ${templateId.toUpperCase()} (${project.buildings[0].storeys.length} Kat, ${project.buildings[0].sections.length} Bağımsız Bölüm)`,
+      });
+    } catch (err) {
+      setEditMessage({
+        kind: 'error',
+        text: `Şablon yüklenirken hata oluştu: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  };
+
+  // M10: Çift Monitör İkinci Pencere Açma (D-23.5)
+  const handleOpenSecondaryWindow = async (panel: DetachablePanelId = 'viewer3d') => {
+    if (typeof window !== 'undefined' && window.electronAPI?.openSecondaryWindow) {
+      await window.electronAPI.openSecondaryWindow(panel);
+    } else if (typeof window !== 'undefined') {
+      const url = `${window.location.pathname}?windowMode=secondary&panel=${panel}`;
+      window.open(url, 'tkgm3d_secondary_display', 'width=1280,height=850');
+    }
+    coordinatorRef.current?.detachPanel(panel);
+    setEditMessage({
+      kind: 'ok',
+      text: `Çift monitör / 2. ekran penceresi açıldı (${panel === 'viewer3d' ? '3B Sahne' : '2B Çizim'}).`,
+    });
+  };
+
+  const handleSelectObject = (id: string | null) => {
+    setSelectedGmlId(id);
+    setHighlightedRulePolygonId(null);
+    coordinatorRef.current?.selectObject(id);
+  };
+
+  const handleSelectStorey = (id: string | null) => {
+    setActiveStoreyId(id);
+    coordinatorRef.current?.selectStorey(id);
+  };
+
   // M2: Panel, doğrulayıcının tüm bulgularını gösterir (okuyucu + arsa payı + §6 kuralları).
   // Önce HATA, sonra UYARI, sonra BİLGİ.
   const allIssues = useMemo(() => {
@@ -515,10 +639,9 @@ export function App() {
       isCollapsed={!!workspaceState.collapsedPanels['tree']}
       maximizedPanelId={maximizedPanelId}
       onSelectGmlId={(gmlId) => {
-        setSelectedGmlId(gmlId);
-        setHighlightedRulePolygonId(null);
+        handleSelectObject(gmlId);
       }}
-      onToggleStoreyFilter={(storeyId) => setActiveStoreyId(storeyId)}
+      onToggleStoreyFilter={(storeyId) => handleSelectStorey(storeyId)}
       onToggleExpandNode={(gmlId, currentExpanded) =>
         setExpandedNodes((prev) => ({ ...prev, [gmlId]: !currentExpanded }))
       }
@@ -576,10 +699,9 @@ export function App() {
             selectedGmlId={selectedGmlId}
             activeStoreyGmlId={activeStoreyId}
             onSelectGmlId={(id) => {
-              setSelectedGmlId(id);
-              setHighlightedRulePolygonId(null);
+              handleSelectObject(id);
             }}
-            onSelectStoreyGmlId={setActiveStoreyId}
+            onSelectStoreyGmlId={handleSelectStorey}
           />
         )}
       </div>
@@ -611,10 +733,9 @@ export function App() {
           activeStoreyGmlId={activeStoreyId}
           highlightedRulePolygonId={highlightedRulePolygonId}
           onSelectGmlId={(id) => {
-            setSelectedGmlId(id);
-            setHighlightedRulePolygonId(null);
+            handleSelectObject(id);
           }}
-          onClearStoreyFilter={() => setActiveStoreyId(null)}
+          onClearStoreyFilter={() => handleSelectStorey(null)}
         />
       </div>
     </div>
@@ -643,6 +764,35 @@ export function App() {
       onToggleMaximizePanel={() => toggleMaximizePanel('attributes')}
     />
   );
+
+  // M10: İkincil Monitör / Ayrı Pencere Görünümü (KARAR D-23.5)
+  if (isSecondaryWindow) {
+    return (
+      <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
+        <header className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-500 text-slate-950">
+              2. EKRAN
+            </span>
+            <span className="text-xs font-semibold text-slate-200">
+              TKGM 3B Studio · {secondaryPanelId === 'editor2d' ? '2B Çizim / Plan' : '3B TUREF Sahne'}
+            </span>
+            <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Canlı Senkronize
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
+            <span>Seçili: <strong className="text-amber-300">{selectedGmlId ?? 'Yok'}</strong></span>
+            {activeStoreyId && <span>Kat: <strong className="text-sky-300">{activeStoreyId}</strong></span>}
+          </div>
+        </header>
+        <div className="flex-1 min-h-0">
+          {secondaryPanelId === 'editor2d' ? cad2dPanelNode : scene3dPanelNode}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
@@ -684,6 +834,22 @@ export function App() {
               className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
             >
               ⚡ Ornek6 (Worker{lastWorkerDurationMs !== null ? ` · ${lastWorkerDurationMs}ms` : ''})
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTemplatesModal(true)}
+              title="M10 / F10: Hazır Mimari Proje Şablonları (Apartman, Villa, Dubleks, Ticari Zemin)"
+              className="px-2 py-1 text-[11px] font-medium rounded bg-amber-600 hover:bg-amber-500 text-slate-950 transition-colors shadow-sm"
+            >
+              📐 Şablonlar
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenSecondaryWindow('viewer3d')}
+              title="M10 / KARAR D-23.5: Çift Monitör İkinci Pencere (3B Sahneyi İkinci Ekrana Aktar)"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-800/60"
+            >
+              🖥️+🖥️ 2. Ekran
             </button>
           </div>
 
@@ -1110,6 +1276,13 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* M10: Hazır Mimari Şablonlar Seçim Modali (F10) */}
+      <ProjectTemplatesModal
+        isOpen={showTemplatesModal}
+        onClose={() => setShowTemplatesModal(false)}
+        onSelectTemplate={handleSelectTemplate}
+      />
     </div>
   );
 }

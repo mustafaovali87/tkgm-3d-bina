@@ -1075,3 +1075,33 @@ V-216   | src/core/model/index.ts, src/core/validation/rulesExtra.ts | src/core/
   }
 }
 ```
+
+---
+
+## 8. M10 Adım Notu: Masaüstü Paketleme, Çift Monitör ve Mimari Şablonlar (v1.0 Final)
+
+**Tamamlanma Tarihi:** 2026-11-08  
+**Standartlar:** TKGM 3B Teknik Şartnamesi v3.5.5, KARAR D-23.5, KARARLAR.md §169, OY-12, K60, K91.
+
+### 8.1. Yapılan Geliştirmeler
+1. **Platform Soyutlama & Masaüstü Adaptörü (`src/platform/`):**
+   - `PlatformAdapter`, `InMemoryPlatformAdapter` ve `WebPlatformAdapter` oluşturuldu.
+   - Çekirdek motorlar (`src/core/`) DOM/Node bağımlılıklarından tamamen yalıtılarak sıfır yan etkili ve taşınabilir kılındı.
+2. **Çift Monitör / İkinci Pencere İletişim Protokolü (`src/platform/dualWindowProtocol.ts`):**
+   - `DualWindowCoordinator` sınıfı ile `PING`, `PONG`, `SYNC_STATE`, `SELECT_OBJECT`, `SELECT_STOREY`, `DETACH_VIEW` mesajları tanımlandı.
+   - Tarayıcıda `BroadcastChannel` ve `localStorage`, masaüstünde Electron IPC köprüsü ile mikro saniye seviyesinde canlı senkronizasyon sağlandı.
+3. **Hazır Mimari Proje Şablonları (F10 / `src/core/templates/`):**
+   - 4 standart şablon: 4 Katlı Apartman, 2 Katlı Müstakil Villa (Beşik Çatı), Çatı Piyesli Dubleks Daire (Çatı arası kesimi ve dizlik duvarı) ve Zemin Ticari + Konut Karma Şablonu.
+   - Her şablon B-Rep ve CityGML üretimine doğrudan sokuldu ve TKGM doğrulayıcısından 0 hata ile geçti.
+4. **Kullanıcı Arayüzü Entegrasyonu:**
+   - `src/editor2d/ProjectTemplatesModal.tsx` şablon seçim modali eklendi.
+   - `src/App.tsx` içine `📐 Şablonlar` ve `🖥️+🖥️ 2. Ekran` butonları bağlandı.
+   - `windowMode === 'secondary'` durumunda ikinci ekranda bağımsız/tam ekran canlı senkronize görünüm sunuldu.
+5. **Windows 11 NSIS ve Taşınabilir Paketleme:**
+   - `electron/main.ts`, `electron/preload.ts` ve `electron-builder.json5` ile x64 NSIS kurulum ve Portable yapılandırması tamamlandı. `.gml` ve `.tkgm3b` dosya ilişkilendirmeleri yapıldı.
+6. **Dokümantasyon:**
+   - `docs/M10_PAKETLEME_VE_KULLANICI_KILAVUZU.md` oluşturuldu.
+
+### 8.2. Test Doğrulama Çıktısı
+- **Birim Testler:** `11 test dosyası, 182 testin 182'si de BAŞARIYLA GEÇTİ (182/182, %100).`
+- **M0..M10 Yol Haritası Tamamlandı:** Proje v1.0.0 sürümüne ulaştı.

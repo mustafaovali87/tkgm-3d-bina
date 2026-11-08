@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "TKGM 3B Sayısal Yapı Modeli (CityGML 2.0) Çekirdek ve Doğrulama Sistemi",
+  "description": "TKGM 2025/2 Genelgesi ve CityGML 2.0 standartlarına uyumlu, çevrimdışı çalışan 3B Sayısal Yapı Modeli üretim, doğrulama ve M0 çekirdek denetim konsolu.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

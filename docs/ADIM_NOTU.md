@@ -1,7 +1,23 @@
-# M0 + M1 + M2 + M3 + M4 + M5 + M6 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
+# M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
 
-> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II ve Tam CityGML 2.0 Üretimi)`
-> **Durum:** `TAMAMLANDI (M0–M6 TAMAMI DOĞRULANDI, 130 / 130 Birim Test GEÇTİ, Ornek6 Altın Testi 0 HATA · 0 UYARI, npm ci / typecheck / lint / docs:m2 0 Hata)`
+> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma: DXF, Helmert, Raster, Liste Beyan)`
+> **Durum:** `TAMAMLANDI (M0–M7 TAMAMI DOĞRULANDI, 143 / 143 Birim Test GEÇTİ, Ornek6 DXF + Helmert Altın Testi 0 HATA · 0 UYARI, npm ci / typecheck / lint / docs:m2 0 Hata)`
+
+---
+
+## M7 — KONUMLANDIRMA SİHİRBAZI VE İÇE AKTARMA: DXF, HELMERT, RASTER, LİSTE BEYAN (08.11.2026)
+
+> Ayrıntı: `docs/M7_KONUMLANDIRMA_VE_ICE_AKTARMA.md`.
+
+| Madde | Durum |
+|---|---|
+| `src/core/importers/georefWizard.ts` (§7.3 Helmert & Röleve/TIC) | YAPILDI. Boylamdan (`λ`) `DOM = 27 + 3·round((λ − 27)/3)` ve `EPSG:5253…5259` önerisi (`K07`), 3B röleve tablosu (`ID, E, N, Z`) → `TIC` (`K54`), 2B Helmert en küçük kareler çözücüsü, `5 cm` (`50 mm`) kalıntı eşiği ve `leave-one-out` sapan nokta tespiti (`K76`) |
+| `src/core/importers/rasterCalib.ts` (§8.1 Raster Kat Planı Kalibrasyonu) | YAPILDI. 2 noktalı yatay hizalama açısı, en az 2 X + 2 Y bilinen uzunluk + 3. kontrol ölçüsüyle ayrı X/Y ölçek kalibrasyonu ve `>= 3` kontrol noktasıyla 6 parametreli 2B afin dönüşümü (`KARAR D-23.5`) |
+| `src/core/importers/dxfImporter.ts` (§8.2 DXF İçe Aktarma & Katman Eşleme) | YAPILDI. `$INSUNITS` (`mm/cm/m`), `LWPOLYLINE` bulge yay kırma (`<= 5°`, `<= 5 cm`), `CIRCLE` → 12-gen (`K63`), `LINE` zincirleme (`<= 1 mm`), `INSERT` blok açma, `TEXT`/`MTEXT` oda etiketinden `Ek-A` `partUsage` çıkarımı, TUREF / yerel CAD otomatik tespiti ve `K71` oda boşluğu açma |
+| `src/core/importers/listeBeyan.ts` (§8.4 Liste Beyan & Malik Tablosu) | YAPILDI. CSV/TSV/Akıllı Yapıştırma, `KAT_TANIMI` birebir koruma (`OY-04`), `NITELIK`/`EKLENTI` Türkçe büyük harf (`K61`), `V-198a/b`, `V-199`, `V-208`, `V-212` doğrulaması, kullanıcı önizleme onayı (`OY-06`), serbest düzenlenebilirlik (`K88-yeni`) ve `Malik[]` bilgisinin yalnız `.tkgm3b` içinde tutulup GML'e yazılmaması (`K99`) |
+| Kabul (§11): Gerçek bir projenin DXF'i içe alınıp konumlandırılabiliyor | YAPILDI. `Ornek6` katları yerel/döndürülmüş CAD DXF olarak dışa aktarılıp 4 kontrol noktasıyla Helmert ile konumlandırıldı, katman eşleme tablosuyla içe alındı ve üretilen CityGML kendi doğrulayıcımızda **0 HATA, 0 UYARI** verdi (`MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1`) |
+| Arayüz (`src/editor2d/M7ImportWizardsModal.tsx` & `DesignEditor2D.tsx`) | YAPILDI. 2B Tasarım Editörüne 4 sekmeli M7 sihirbazı (DXF İçe Aktar, Helmert & TIC, Raster Altlık Kalibrasyonu, Liste Beyan & Malik) ve kalibre edilmiş DXF/Raster altlık çizimi + DXF köşe yakalama (snap) eklendi |
+| Komutlar | `typecheck` (`tsconfig.json` + `tsconfig.core.json`) 0 hata ✔, `npm test` **143/143** ✔ |
 
 ---
 
@@ -176,61 +192,66 @@ Kapsam tablosu güncellendi: 175 kural.
 ```text
 RUN  v5.1.0 /app/applet
 
- ✓ src/core/__tests__/m1.test.ts (10 tests) 2505ms
+ ✓ src/core/__tests__/m1.test.ts (10 tests) 2610ms
    ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve KONTROL-M1-2 §4 Gerileme Testleri (R1–R3) (7)
-     ✓ KONTROL-M1-2 §4.1 (R3): Ornek6 altın değerlerini (polygons.length === 741, benzersiz gml:id, MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1, biçim A, ofset 10, profil A10) birebir doğrular 918ms
-     ✓ KONTROL-M1 G1: Float64Array transferable poligon köşe paketleme ve geri yükleme (packModelPolygonVerticesFloat64 / hydrateModelPolygonVerticesFloat64) sıfır kayıpla çalışır 498ms
+     ✓ KONTROL-M1-2 §4.1 (R3): Ornek6 altın değerlerini (polygons.length === 741, benzersiz gml:id, MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1, biçim A, ofset 10, profil A10) birebir doğrular 1086ms
+     ✓ KONTROL-M1 G1: Float64Array transferable poligon köşe paketleme ve geri yükleme (packModelPolygonVerticesFloat64 / hydrateModelPolygonVerticesFloat64) sıfır kayıpla çalışır 486ms
    ✓ M1 Adım 2 — 3B Düzlemsel Poligon + İç Delik (DoorLinearRing_ / WindowLinearRing_) Üçgenleme (triangulate3d.ts) (2)
-     ✓ fixtures/ornek6.gml içindeki tüm iç delikli (DoorLinearRing_ / WindowLinearRing_) duvar poligonlarını sıfır kayıpla üçgenler 508ms
+     ✓ fixtures/ornek6.gml içindeki tüm iç delikli (DoorLinearRing_ / WindowLinearRing_) duvar poligonlarını sıfır kayıpla üçgenler 510ms
    ✓ M1 Adım 3 — KARAR D-23.4: Kalıp (F5–F8) ve Panel Boyutu Değişiminin K89 CanonicalHash Üzerinde Etkisizliği (1)
-     ✓ D-23.4 / K89: F5 (Standart), F6 (Yan Yana), F7 (Çizim), F8 (Denetim) ve <1366px sekme modları CanonicalModelHash değerini asla değiştirmez 387ms
- ✓ src/core/__tests__/m3.test.ts (16 tests) 4903ms
+     ✓ D-23.4 / K89: F5 (Standart), F6 (Yan Yana), F7 (Çizim), F8 (Denetim) ve <1366px sekme modları CanonicalModelHash değerini asla değiştirmez 386ms
+ ✓ src/core/__tests__/m3.test.ts (16 tests) 4914ms
    ✓ M3 — Gidiş-dönüş (şartname §11 kabul ölçütü) (6)
-     ✓ OY-02: Düzeltme kipi yalnız 3 haneden kısa değerleri tamamlar; bütün köşe değerleri ve öznitelikler sayısal olarak aynı 697ms
-     ✓ K70: düzenleme yoksa ve tamamlama kapalıysa çıktı girdiyle bayt bayt aynıdır (SHA-256 eşit) 319ms
-     ✓ K70: öznitelik düzenlemesi geometri metnine dokunmaz; yalnız istenen değerler değişir 403ms
-     ✓ K70: düzenlenen dosya doğrulayıcıda yine 0 HATA verir 582ms
-     ✓ Öznitelik ekleme ve silme: biçim korunur, geri alınınca dosya özgün haline döner 1003ms
-     ✓ Ad (gml:name) düzenlemesi yalnız nesnenin kendi adını değiştirir (yüzey adları değişmez) 614ms
+     ✓ OY-02: Düzeltme kipi yalnız 3 haneden kısa değerleri tamamlar; bütün köşe değerleri ve öznitelikler sayısal olarak aynı 703ms
+     ✓ K70: düzenleme yoksa ve tamamlama kapalıysa çıktı girdiyle bayt bayt aynıdır (SHA-256 eşit) 313ms
+     ✓ K70: öznitelik düzenlemesi geometri metnine dokunmaz; yalnız istenen değerler değişir 401ms
+     ✓ K70: düzenlenen dosya doğrulayıcıda yine 0 HATA verir 484ms
+     ✓ Öznitelik ekleme ve silme: biçim korunur, geri alınınca dosya özgün haline döner 1186ms
+     ✓ Ad (gml:name) düzenlemesi yalnız nesnenin kendi adını değiştirir (yüzey adları değişmez) 426ms
    ✓ M3 — Sayımlar ve adlar (3)
-     ✓ §7.7: bozulan partCount yeniden hesaplanır ve V-128 kaybolur 573ms
-     ✓ §7.7 / V-058: bozulan ad yeniden üretilir ve dosya özgün haline döner 338ms
- ✓ src/core/__tests__/m6.test.ts (16 tests) 1712ms
+     ✓ §7.7: bozulan partCount yeniden hesaplanır ve V-128 kaybolur 592ms
+     ✓ §7.7 / V-058: bozulan ad yeniden üretilir ve dosya özgün haline döner 506ms
+ ✓ src/core/__tests__/m6.test.ts (16 tests) 2192ms
    ✓ M6 — Ornek6 altın testi, tam (§10.4) (10)
-     ✓ Kendi doğrulayıcısında sıfır HATA ve sıfır UYARI (Biçim A = Ornek6, Biçim B = varsayılan); üretim uyarısı yok 422ms
-     ✓ Biçim (§3.1, K70): CRLF, BOM yok, utf-8 bildirimi, posList, tam 3 ondalık; iki yazım bayt bayt aynı 610ms
- ✓ src/core/__tests__/m0.test.ts (23 tests) 473ms
- ✓ src/core/__tests__/m5.test.ts (19 tests) 575ms
- ✓ src/core/__tests__/m2.test.ts (26 tests) 8509ms
+     ✓ Kendi doğrulayıcısında sıfır HATA ve sıfır UYARI (Biçim A = Ornek6, Biçim B = varsayılan); üretim uyarısı yok 688ms
+     ✓ Biçim (§3.1, K70): CRLF, BOM yok, utf-8 bildirimi, posList, tam 3 ondalık; iki yazım bayt bayt aynı 684ms
+ ✓ src/core/__tests__/m7.test.ts (13 tests) 1208ms
+   ✓ M7 — Konumlandırma Sihirbazı ve İçe Aktarma (DXF, Helmert, Raster, Liste Beyan) (13)
+     ✓ 4. §11 M7 Altın Kabul Testi: Gerçek Proje (Ornek6) DXF İçe Aktarma + Helmert Konumlandırma + 0 HATA CityGML (2)
+       ✓ Ornek6 projesinin yerel/döndürülmüş CAD DXF çizimlerini Helmert ile konumlandırıp katman eşlemesiyle içe alır ve 0 HATA ile CityGML üretir 818ms
+ ✓ src/core/__tests__/m5.test.ts (19 tests) 594ms
+ ✓ src/core/__tests__/m2.test.ts (26 tests) 9279ms
    ✓ M2 — Ornek6 resmi kabul örneği (4)
-     ✓ V-105 / N19: Ornek6 Sürdürülebilirlik rejimindedir (GroundSurface var) 514ms
+     ✓ V-105 / N19: Ornek6 Sürdürülebilirlik rejimindedir (GroundSurface var) 502ms
    ✓ M2 — Ornek6 üzerinde tek hata ekleme (her kural gerçekten yakalıyor mu?) (18)
-     ✓ V-001: dosya adı M- ile başlamıyor → HATA 490ms
-     ✓ V-002: dosya adı constructionID ile uyuşmuyor → HATA 393ms
-     ✓ V-004: GML ad alanı 3.2 → HATA 415ms
-     ✓ V-014: srsName EPSG:4326 → HATA 396ms
-     ✓ V-021: poligonda srsName → HATA 593ms
-     ✓ V-033: halka kapanmıyor (son pos silindi) → HATA 514ms
-     ✓ V-050: aynı gml:id iki kez → HATA 608ms
-     ✓ V-056: WallSurface elemanında gml:id → HATA 489ms
-     ✓ V-057: kısım sınıf değeri yanlış → HATA 404ms
-     ✓ V-058: kat adı storeyNumber ile uyuşmuyor → HATA 479ms
-     ✓ V-059: yüzey adı yanlış → HATA 432ms
-     ✓ V-061: BB zorunlu partCount yok → HATA 386ms
-     ✓ V-072: bina geometrySuitability 1005 → HATA 508ms
-     ✓ V-202: ret paketi (bina geometrySuitability 1005) → HATA 406ms
-     ✓ V-112: kat parent bina değil → HATA 371ms
-     ✓ V-130: BB integrationState 1003 → HATA 505ms
-     ✓ V-160: kısım BB referansı yok → HATA 311ms
- ✓ src/core/__tests__/m4.test.ts (20 tests) 32ms
+     ✓ V-001: dosya adı M- ile başlamıyor → HATA 491ms
+     ✓ V-002: dosya adı constructionID ile uyuşmuyor → HATA 395ms
+     ✓ V-004: GML ad alanı 3.2 → HATA 487ms
+     ✓ V-014: srsName EPSG:4326 → HATA 402ms
+     ✓ V-021: poligonda srsName → HATA 502ms
+     ✓ V-033: halka kapanmıyor (son pos silindi) → HATA 614ms
+     ✓ V-050: aynı gml:id iki kez → HATA 429ms
+     ✓ V-056: WallSurface elemanında gml:id → HATA 579ms
+     ✓ V-057: kısım sınıf değeri yanlış → HATA 499ms
+     ✓ V-058: kat adı storeyNumber ile uyuşmuyor → HATA 427ms
+     ✓ V-059: yüzey adı yanlış → HATA 567ms
+     ✓ V-061: BB zorunlu partCount yok → HATA 417ms
+     ✓ V-072: bina geometrySuitability 1005 → HATA 388ms
+     ✓ V-202: ret paketi (bina geometrySuitability 1005) → HATA 396ms
+     ✓ V-112: kat parent bina değil → HATA 501ms
+     ✓ V-130: BB integrationState 1003 → HATA 499ms
+     ✓ V-160: kısım BB referansı yok → HATA 497ms
+     ✓ V-188: balkon BB referansı yok → HATA 522ms
+ ✓ src/core/__tests__/m0.test.ts (23 tests) 249ms
+ ✓ src/core/__tests__/m4.test.ts (20 tests) 30ms
 
- Test Files  7 passed (7)
-      Tests  130 passed (130)
-   Start at  13:43:38
-   Duration  10.91s (tests 69%, import 29%, transform 2%)
+ Test Files  8 passed (8)
+      Tests  143 passed (143)
+   Start at  14:57:26
+   Duration  12.24s (tests 69%, import 28%, transform 2%)
 
-    Isolate  7 workers spawned · ~543ms startup each (spawn + environment, per file)
-             at least ~725ms faster with isolate: false — reuses workers across files instead of one per file
+    Isolate  8 workers spawned · ~527ms startup each (spawn + environment, per file)
+             at least ~878ms faster with isolate: false — reuses workers across files instead of one per file
 ```
 
 ---
@@ -238,7 +259,7 @@ RUN  v5.1.0 /app/applet
 ## 5. `npm run verify:samples fixtures` (`G6`, `R1 / R3` & `M2` Doğrulama Özeti) Gerçek Çıktısı
 
 ```json
-{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":253,"memoryMB":25,"objectCount":108,"polygonCount":741,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"regime":"S","validationMs":56,"issueCounts":{"H":1,"U":0,"B":3},"topRules":["H:V-001x1"]}
+{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":268,"memoryMB":24.6,"objectCount":108,"polygonCount":741,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"regime":"S","validationMs":52,"issueCounts":{"H":1,"U":0,"B":3},"topRules":["H:V-001x1"]}
 ```
 
 ---
@@ -247,18 +268,19 @@ RUN  v5.1.0 /app/applet
 
 ```text
 === TKGM 3B BINA M0 + M1 KURAL-KOD-TEST IZLENEBILIRLIK MATRISI (K98) ===
-Toplam Izlenen Kural Sayisi (M0 + M1): 225
+Toplam Izlenen Kural Sayisi (M0 + M1): 229
 ----------------------------------------------------------------------
 KURAL   | KAYNAK MODULLER                        | TEST DOSYALARI
 ----------------------------------------------------------------------
 D-23.1  | src/core/gml/gmlReader.ts              | -
 D-23.4  | -                                      | src/core/__tests__/m1.test.ts
+D-23.5  | -                                      | src/core/__tests__/m7.test.ts
 D-23.6  | src/core/gml/gmlReader.ts              | src/core/__tests__/m1.test.ts
 K01     | src/core/gml/gmlReader.ts, src/core/model/index.ts | -
 K02     | src/core/gml/gmlReader.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m3.test.ts
-K06     | src/core/gml/gmlReader.ts, src/core/model/index.ts | src/core/__tests__/m1.test.ts
-K07     | src/core/gml/gmlReader.ts, src/core/model/index.ts | -
-K08     | src/core/gml/gmlReader.ts, src/core/gml/triangulate3d.ts, src/core/math/helmert2d.ts | src/core/__tests__/m0.test.ts
+K06     | src/core/gml/gmlReader.ts, src/core/importers/georefWizard.ts, src/core/model/index.ts | src/core/__tests__/m1.test.ts
+K07     | src/core/gml/gmlReader.ts, src/core/importers/georefWizard.ts, src/core/model/index.ts | src/core/__tests__/m7.test.ts
+K08     | src/core/gml/gmlReader.ts, src/core/gml/triangulate3d.ts, src/core/importers/dxfImporter.ts, src/core/importers/georefWizard.ts, src/core/math/helmert2d.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 K09     | src/core/gml/gmlReader.ts, src/core/model/index.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
 K10     | src/core/validation/rulesExtra.ts      | -
 K11     | src/core/validation/rulesExtra.ts      | -
@@ -267,39 +289,42 @@ K13     | src/core/gml/gmlReader.ts, src/core/model/index.ts, src/core/validatio
 K14     | src/core/gml/gmlReader.ts, src/core/model/index.ts | -
 K15     | src/core/validation/rulesExtra.ts      | -
 K18     | src/core/validation/rulesExtra.ts      | -
-K27     | src/core/math/landShare.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
+K27     | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
+K29     | src/core/importers/listeBeyan.ts       | -
 K30     | src/core/math/landShare.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
-K31     | src/core/gml/gmlReader.ts, src/core/math/landShare.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts
+K31     | src/core/gml/gmlReader.ts, src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts
 K36     | src/core/gml/triangulate3d.ts, src/core/math/ring.ts | src/core/__tests__/m0.test.ts
 K45a    | src/core/brep/generate.ts, src/core/design/fromImported.ts, src/core/design/types.ts, src/core/gml/triangulate3d.ts, src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts, src/core/__tests__/m5.test.ts
 K48     | src/core/brep/generate.ts, src/core/brep/types.ts, src/core/validation/rulesExtra.ts | -
 K50     | src/core/gml/triangulate3d.ts, src/core/math/ring.ts | src/core/__tests__/m0.test.ts
+K54     | src/core/importers/georefWizard.ts     | src/core/__tests__/m7.test.ts
 K55     | src/core/gml/gmlReader.ts, src/core/gml/readAttributes.ts, src/core/model/index.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
 K59     | src/core/validation/rulesExtra.ts      | -
 K60     | src/core/codelists/index.ts, src/core/gml/gmlReader.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
-K61     | src/core/math/landShare.ts             | -
+K61     | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts | src/core/__tests__/m7.test.ts
 K62     | src/core/model/index.ts, src/core/validation/rulesExtra.ts | -
+K63     | src/core/importers/dxfImporter.ts      | src/core/__tests__/m7.test.ts
 K67     | src/core/model/index.ts, src/core/validation/rulesFile.ts | -
 K68     | src/core/model/index.ts, src/core/validation/rulesExtra.ts | -
-K69     | src/core/math/helmert2d.ts             | src/core/__tests__/m0.test.ts
+K69     | src/core/importers/georefWizard.ts, src/core/math/helmert2d.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 K70     | src/core/gml/cityGmlWriter.ts, src/core/gml/gmlWriter.ts, src/core/model/index.ts | src/core/__tests__/m3.test.ts, src/core/__tests__/m6.test.ts
-K71     | src/core/validation/rulesExtra.ts      | -
-K76     | src/core/model/index.ts                | src/core/__tests__/m0.test.ts
+K71     | src/core/importers/dxfImporter.ts, src/core/validation/rulesExtra.ts | -
+K76     | src/core/importers/dxfImporter.ts, src/core/importers/georefWizard.ts, src/core/importers/rasterCalib.ts, src/core/model/index.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 K78     | src/core/validation/rulesBuilding.ts, src/core/validation/rulesExtra.ts | -
 K79     | src/core/gml/gmlReader.ts, src/core/gml/readAttributes.ts, src/core/model/index.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
 K80     | src/core/validation/rulesExtra.ts      | -
 K83     | src/core/validation/rulesExtra.ts      | -
-K84     | src/core/gml/gmlReader.ts, src/core/math/landShare.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
+K84     | src/core/gml/gmlReader.ts, src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
 K85     | src/core/validation/rulesExtra.ts      | -
 K86     | src/core/model/index.ts, src/core/validation/rulesExtra.ts | -
 K87     | src/core/gml/gmlReader.ts, src/core/gml/readAttributes.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
-K88     | src/core/design/projectFile.ts, src/core/gml/cityGmlWriter.ts, src/core/model/index.ts, src/core/model/malik.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m6.test.ts
+K88     | src/core/design/projectFile.ts, src/core/gml/cityGmlWriter.ts, src/core/importers/listeBeyan.ts, src/core/model/index.ts, src/core/model/malik.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m6.test.ts, src/core/__tests__/m7.test.ts
 K89     | src/core/gml/gmlReader.ts, src/core/hash/canonical.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
 K90     | src/core/model/index.ts                | -
 K91     | src/core/codelists/index.ts, src/platform/PlatformAdapter.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
-K92     | src/core/hash/canonical.ts             | src/core/__tests__/m0.test.ts
+K92     | src/core/hash/canonical.ts, src/core/importers/dxfImporter.ts, src/core/importers/listeBeyan.ts | src/core/__tests__/m0.test.ts
 K93     | src/core/gml/gmlReader.ts, src/core/validation/rulesExtra.ts | -
-K99     | src/core/gml/gmlReader.ts, src/core/gml/gmlWriter.ts, src/core/gml/readAttributes.ts, src/core/model/index.ts, src/core/model/malik.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m3.test.ts
+K99     | src/core/gml/gmlReader.ts, src/core/gml/gmlWriter.ts, src/core/gml/readAttributes.ts, src/core/importers/listeBeyan.ts, src/core/model/index.ts, src/core/model/malik.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m3.test.ts, src/core/__tests__/m7.test.ts
 K100    | src/core/model/index.ts, src/platform/PlatformAdapter.ts | src/core/__tests__/m0.test.ts
 V-001   | src/core/validation/rulesFile.ts       | src/core/__tests__/m2.test.ts
 V-002   | src/core/validation/rulesFile.ts       | src/core/__tests__/m2.test.ts
@@ -318,14 +343,14 @@ V-015   | src/core/validation/rulesFile.ts       | -
 V-016   | src/core/validation/rulesFile.ts       | -
 V-017   | src/core/validation/rulesFile.ts       | -
 V-018   | src/core/validation/rulesExtra.ts, src/core/validation/rulesFile.ts | -
-V-019   | src/core/validation/rulesFile.ts       | -
-V-020   | src/core/math/helmert2d.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
+V-019   | src/core/importers/georefWizard.ts, src/core/validation/rulesFile.ts | -
+V-020   | src/core/importers/georefWizard.ts, src/core/math/helmert2d.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
 V-021   | src/core/validation/rulesFile.ts       | src/core/__tests__/m2.test.ts
 V-030   | src/core/gml/gmlReader.ts, src/core/model/index.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m2.test.ts, src/core/__tests__/m3.test.ts
 V-031   | src/core/gml/gmlReader.ts, src/core/gml/triangulate3d.ts, src/core/math/ring.ts, src/core/validation/index.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
 V-032   | src/core/gml/gmlWriter.ts, src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
 V-033   | src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m2.test.ts
-V-034   | src/core/design/checks.ts, src/core/design/editor.ts, src/core/validation/geom.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m2.test.ts, src/core/__tests__/m4.test.ts
+V-034   | src/core/design/checks.ts, src/core/design/editor.ts, src/core/importers/dxfImporter.ts, src/core/validation/geom.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m2.test.ts, src/core/__tests__/m4.test.ts
 V-035   | src/core/validation/geom.ts, src/core/validation/rulesFile.ts | -
 V-036   | src/core/validation/rulesFile.ts       | -
 V-037   | src/core/gml/triangulate3d.ts, src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts
@@ -346,9 +371,9 @@ V-057   | src/core/model/index.ts, src/core/validation/rulesBb.ts, src/core/vali
 V-058   | src/core/gml/gmlWriter.ts, src/core/gml/names.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m2.test.ts, src/core/__tests__/m3.test.ts
 V-059   | src/core/model/index.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m2.test.ts
 V-060   | src/core/gml/gmlReader.ts, src/core/gml/gmlWriter.ts, src/core/gml/readAttributes.ts, src/core/model/index.ts, src/core/model/malik.ts, src/core/validation/index.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m3.test.ts, src/core/__tests__/m6.test.ts
-V-061   | src/core/design/checks.ts, src/core/gml/gmlWriter.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m2.test.ts
+V-061   | src/core/design/checks.ts, src/core/gml/gmlWriter.ts, src/core/importers/listeBeyan.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m2.test.ts
 V-062   | src/core/gml/cityGmlWriter.ts, src/core/gml/gmlWriter.ts, src/core/model/index.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m3.test.ts
-V-063   | src/core/codelists/index.ts, src/core/gml/gmlReader.ts, src/core/validation/index.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts
+V-063   | src/core/codelists/index.ts, src/core/gml/gmlReader.ts, src/core/importers/listeBeyan.ts, src/core/validation/index.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts
 V-064   | src/core/validation/rulesBuilding.ts   | -
 V-070   | src/core/validation/rulesBuilding.ts   | -
 V-071   | src/core/validation/rulesBuilding.ts   | -
@@ -407,10 +432,10 @@ V-129   | src/core/validation/rulesBb.ts         | -
 V-130   | src/core/validation/rulesBb.ts         | src/core/__tests__/m2.test.ts
 V-131   | src/core/validation/rulesBb.ts         | -
 V-132   | src/core/validation/rulesBb.ts         | -
-V-133   | src/core/math/landShare.ts, src/core/validation/rulesBb.ts | -
+V-133   | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesBb.ts | -
 V-134   | src/core/validation/rulesBb.ts         | -
-V-135   | src/core/validation/rulesBb.ts         | -
-V-136   | src/core/validation/rulesBb.ts         | -
+V-135   | src/core/importers/listeBeyan.ts, src/core/validation/rulesBb.ts | -
+V-136   | src/core/importers/listeBeyan.ts, src/core/validation/rulesBb.ts | -
 V-137   | src/core/validation/rulesBb.ts         | -
 V-138   | src/core/validation/rulesBb.ts         | -
 V-139   | src/core/validation/rulesBb.ts         | -
@@ -455,23 +480,23 @@ V-194   | src/core/validation/rulesBb.ts         | -
 V-195   | src/core/validation/rulesBb.ts         | src/core/__tests__/m2.test.ts
 V-196   | src/core/validation/rulesExtra.ts      | src/core/__tests__/m2.test.ts
 V-197   | src/core/validation/rulesExtra.ts      | -
-V-198   | src/core/math/landShare.ts, src/core/validation/index.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
-V-198a  | src/core/math/landShare.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
-V-198b  | src/core/math/landShare.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
-V-199   | src/core/math/landShare.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
+V-198   | src/core/math/landShare.ts, src/core/validation/index.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts, src/core/__tests__/m7.test.ts
+V-198a  | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
+V-198b  | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
+V-199   | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 V-200   | src/core/validation/rulesExtra.ts      | -
-V-201   | src/core/validation/rulesExtra.ts      | -
+V-201   | src/core/importers/georefWizard.ts, src/core/validation/rulesExtra.ts | -
 V-202   | src/core/validation/rulesExtra.ts      | src/core/__tests__/m2.test.ts
 V-203   | src/core/validation/rulesBb.ts, src/core/validation/rulesExtra.ts | -
 V-204   | src/core/validation/rulesExtra.ts, src/core/validation/rulesFile.ts | -
 V-205   | src/core/validation/rulesExtra.ts      | -
 V-206   | src/core/validation/rulesExtra.ts      | -
 V-207   | src/core/validation/rulesExtra.ts      | -
-V-208   | src/core/model/malik.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
+V-208   | src/core/importers/listeBeyan.ts, src/core/model/malik.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 V-209   | src/core/validation/rulesExtra.ts      | -
 V-210   | src/core/model/index.ts, src/core/validation/rulesExtra.ts | -
 V-211   | src/core/gml/gmlReader.ts, src/core/validation/index.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m1.test.ts
-V-212   | src/core/math/landShare.ts, src/core/validation/index.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts
+V-212   | src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/index.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m7.test.ts
 V-213   | src/core/gml/gmlReader.ts, src/core/model/index.ts, src/core/validation/index.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m2.test.ts
 V-214   | src/core/gml/gmlReader.ts, src/core/gml/gmlWriter.ts, src/core/validation/index.ts, src/core/validation/rulesBuilding.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m1.test.ts, src/core/__tests__/m2.test.ts, src/core/__tests__/m3.test.ts
 V-215   | src/core/gml/gmlReader.ts, src/core/gml/readAttributes.ts, src/core/model/index.ts, src/core/validation/index.ts, src/core/validation/rulesExtra.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts

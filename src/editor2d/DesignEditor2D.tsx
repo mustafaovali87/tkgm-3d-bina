@@ -17,6 +17,8 @@ import { BrepPreview3D } from '../viewer3d/BrepPreview3D.tsx';
 import { writeCityGml } from '../core/gml/cityGmlWriter.ts';
 import { parseCityGmlModel } from '../core/gml/gmlReader.ts';
 import { validateCityGml } from '../core/validation/index.ts';
+import type { Malik } from '../core/model/malik.ts';
+import { M7ImportWizardsModal, type CalibratedRasterUnderlay } from './M7ImportWizardsModal.tsx';
 
 export interface DesignEditor2DProps {
   readonly model: ImportedModel;
@@ -65,6 +67,13 @@ function initialProject(model: ImportedModel): DesignProject {
 export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists }) => {
   const [state, dispatch] = useReducer(editorReducer, model, (m) => createEditorState(initialProject(m)));
   const [showUnderlay, setShowUnderlay] = useState(true);
+  const [dxfUnderlay, setDxfUnderlay] = useState<{ rings: readonly Ring2[]; fileName: string } | null>(null);
+  const [showDxfUnderlay, setShowDxfUnderlay] = useState(true);
+  const [rasterUnderlay, setRasterUnderlay] = useState<CalibratedRasterUnderlay | null>(null);
+  const [showRasterUnderlay, setShowRasterUnderlay] = useState(true);
+  const [malikler, setMalikler] = useState<readonly Malik[]>([]);
+  const [showM7Modal, setShowM7Modal] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [view, setView] = useState({ cx: 0, cy: 0, mmPerPx: 20 });
   const [cursor, setCursor] = useState<SnapResult | null>(null);
   const [size, setSize] = useState({ w: 600, h: 400 });
@@ -117,7 +126,11 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
 
   // Görünüme sığdır
   const fit = () => {
-    const rings = [...storeyRings, ...(showUnderlay ? underlay : [])];
+    const rings = [
+      ...storeyRings,
+      ...(showUnderlay ? underlay : []),
+      ...(dxfUnderlay && showDxfUnderlay ? dxfUnderlay.rings : []),
+    ];
     if (rings.length === 0) return;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const r of rings) {
@@ -153,7 +166,12 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
 
   const snap = (p: Pt2, ortho: boolean): SnapResult =>
     snapPoint(p, {
-      rings: [...storeyRings, ...(showUnderlay ? underlay : []), state.draft],
+      rings: [
+        ...storeyRings,
+        ...(showUnderlay ? underlay : []),
+        ...(dxfUnderlay && showDxfUnderlay ? dxfUnderlay.rings : []),
+        state.draft,
+      ],
       toleranceMm: 8 * view.mmPerPx,
       lastPoint: state.draft[state.draft.length - 1],
       ortho,
@@ -181,7 +199,7 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
   const partOptions = codelists.getList('partUsage').entries;
 
   const saveProject = () => {
-    const blob = new Blob([serializeProject(state.project)], { type: 'application/json;charset=utf-8' });
+    const blob = new Blob([serializeProject(state.project, malikler)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -215,9 +233,12 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
     e.target.value = '';
     if (!f) return;
     try {
-      dispatch({ type: 'load', project: parseProject(await f.text()).project });
+      const parsedFile = parseProject(await f.text());
+      dispatch({ type: 'load', project: parsedFile.project });
+      setMalikler(parsedFile.malikler);
+      setFileError(null);
     } catch (err) {
-      window.alert(`Proje açılamadı: ${(err as Error).message}`);
+      setFileError(`Proje açılamadı: ${(err as Error).message}`);
     }
   };
 
@@ -267,8 +288,27 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
             setView((v) => ({ mmPerPx: Math.min(500, Math.max(0.2, v.mmPerPx * f)), cx: m.x + (v.cx - m.x) * f, cy: m.y + (v.cy - m.y) * f }));
           }}
         >
+          {/* M7 Raster Altlık (§8.1) */}
+          {rasterUnderlay && showRasterUnderlay && (
+            <image
+              href={rasterUnderlay.dataUrl}
+              x={rasterUnderlay.offsetXMm}
+              y={-(rasterUnderlay.offsetYMm + rasterUnderlay.heightPx * rasterUnderlay.scaleYMmPerPx)}
+              width={rasterUnderlay.widthPx * rasterUnderlay.scaleXMmPerPx}
+              height={rasterUnderlay.heightPx * rasterUnderlay.scaleYMmPerPx}
+              opacity={rasterUnderlay.opacity}
+              preserveAspectRatio="none"
+              transform={
+                rasterUnderlay.rotationDeg !== 0
+                  ? `rotate(${-rasterUnderlay.rotationDeg} ${rasterUnderlay.offsetXMm} ${-rasterUnderlay.offsetYMm})`
+                  : undefined
+              }
+            />
+          )}
           {/* Altlık */}
           {showUnderlay && underlay.map((r, i) => <path key={`u${i}`} d={ringPath(r)} fill="none" stroke="#cbd5e1" strokeWidth={sw} strokeDasharray={`${4 * sw} ${3 * sw}`} />)}
+          {/* M7 DXF Altlık (§8.2) */}
+          {dxfUnderlay && showDxfUnderlay && dxfUnderlay.rings.map((r, i) => <path key={`dxf${i}`} d={ringPath(r)} fill="none" stroke="#0284c7" strokeOpacity={0.65} strokeWidth={1.2 * sw} strokeDasharray={`${3 * sw} ${2 * sw}`} />)}
           {/* Kat sınırı */}
           {storey?.outline.map((o, i) => (
             <path key={`k${i}`} d={polyPath(o)} fillRule="evenodd" fill="#f1f5f9" stroke={selected === `${storey.id}#outline#${i}` ? '#f59e0b' : '#0f172a'} strokeWidth={2.5 * sw} />
@@ -319,9 +359,9 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
           {state.draft.length > 0 && <span>Taslak: {state.draft.length} nokta{draftArea > 0 ? ` · ${draftArea.toFixed(2)} m²` : ''} · Enter/çift tık: kapat · Esc: vazgeç</span>}
           <span>Shift: dik/yatay · Orta/sağ tuş: kaydır · Tekerlek: yakınlaştır</span>
         </div>
-        {state.message && (
-          <div role="status" className={`absolute left-2 top-2 max-w-[70%] px-2 py-1 rounded text-[11px] shadow ${state.message.kind === 'error' ? 'bg-red-600 text-white' : state.message.kind === 'ok' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-100'}`}>
-            {state.message.text}
+        {(state.message || fileError) && (
+          <div role="status" className={`absolute left-2 top-2 max-w-[70%] px-2 py-1 rounded text-[11px] shadow ${fileError || state.message?.kind === 'error' ? 'bg-red-600 text-white' : state.message?.kind === 'ok' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-100'}`}>
+            {fileError ?? state.message?.text}
           </div>
         )}
       </div>
@@ -351,6 +391,26 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
           <input type="checkbox" checked={showUnderlay} onChange={(e) => setShowUnderlay(e.target.checked)} />
           <span>Altlık: içe aktarılan GML planı</span>
         </label>
+        {dxfUnderlay && (
+          <label className="flex items-center gap-1.5 text-sky-300">
+            <input type="checkbox" checked={showDxfUnderlay} onChange={(e) => setShowDxfUnderlay(e.target.checked)} />
+            <span className="truncate">DXF altlık ({dxfUnderlay.rings.length} halka)</span>
+          </label>
+        )}
+        {rasterUnderlay && (
+          <label className="flex items-center gap-1.5 text-amber-300">
+            <input type="checkbox" checked={showRasterUnderlay} onChange={(e) => setShowRasterUnderlay(e.target.checked)} />
+            <span className="truncate">Raster altlık ({rasterUnderlay.fileName})</span>
+          </label>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowM7Modal(true)}
+          className="w-full px-1.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold text-[11px]"
+          title="M7: Helmert konumlandırma, DXF içe aktarma, Raster kalibrasyon ve Liste Beyan / Malik sihirbazı (§7.3, §8)"
+        >
+          M7 İçe Aktar / Konumlandır
+        </button>
 
         {(state.tool === 'bb' || state.tool === 'kisim' || state.tool === 'oa') && (
           <div className="space-y-1.5 p-1.5 rounded border border-slate-800">
@@ -482,6 +542,29 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
           </div>
         </div>
       </aside>
+      {showM7Modal && (
+        <M7ImportWizardsModal
+          project={state.project}
+          activeStoreyId={sid}
+          malikler={malikler}
+          codelists={codelists}
+          onUpdateProject={(nextProject) => {
+            dispatch({ type: 'load', project: nextProject });
+            setFileError(null);
+          }}
+          onUpdateMalikler={(nextMalikler) => setMalikler(nextMalikler)}
+          onSetDxfUnderlay={(rings, fileName) => {
+            setDxfUnderlay({ rings, fileName });
+            setShowDxfUnderlay(true);
+          }}
+          onSetRasterUnderlay={(u) => {
+            setRasterUnderlay(u);
+            if (u) setShowRasterUnderlay(true);
+          }}
+          rasterUnderlay={rasterUnderlay}
+          onClose={() => setShowM7Modal(false)}
+        />
+      )}
     </div>
   );
 };

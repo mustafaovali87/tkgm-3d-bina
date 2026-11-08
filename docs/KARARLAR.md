@@ -249,3 +249,19 @@
   - Değeri olmayan sayısal öznitelik yazılmaz; boş metin `<gen:value/>`.
   - `storeyUsage`: Ticari/Mesken + OA varsa 1003.
 - **Açıklık çıkarma:** LoD2 ↔ oda eşleşmesinde kot aralığı %50 örtüşmesi yeterli (Ornek4).
+
+## A.12 M7 Konumlandırma Sihirbazı ve İçe Aktarma (08.11.2026)
+
+- **Helmert ve Röleve / TIC (`src/core/importers/georefWizard.ts`):**
+  - Boylamdan (`λ`) `DOM = 27 + 3 · round((λ − 27) / 3)` ile `EPSG:5253…5259` önerisi (`K07`).
+  - 3B röleve köşe tablosu (`ID, E, N, Z`) doğrudan `building.tic` (`Pt3[]`) noktalarına ve tam sayı metre yerel orijine (`originE, originN`) dönüştürülür (`K08`, `K54`, `K69`).
+  - 2B Helmert en küçük kareler çözücüsünde maksimum kalıntı eşiği `50 mm` (`5 cm`) olarak uygulanır ve `>= 3` noktada `leave-one-out` sapan nokta (`outlierCandidate`) tespiti çalışır (`K76`).
+- **Raster Kat Planı Kalibrasyonu (`src/core/importers/rasterCalib.ts`):**
+  - 2 noktalı yatay referans açısından döndürme açısı, ayrı X ve Y ölçek kalibrasyonu (en az 2 X + 2 Y bilinen uzunluk + 3. kontrol ölçüsü) ve `>= 3` kontrol noktasıyla 6 parametreli en küçük kareler 2B afin dönüşümü uygulanır (`§8.1`, `KARAR D-23.5`).
+- **DXF İçe Aktarma (`src/core/importers/dxfImporter.ts`):**
+  - `$INSUNITS` (`4=mm`, `5=cm`, `6=m`) otomatik okunur; koordinatların zaten TUREF TM aralığında olup olmadığı (`300000 < E < 700000`, `2500000 < N < 5000000`) otomatik algılanır.
+  - `LWPOLYLINE` bulge yayları `<= 5°` ve `<= 5 cm` yay sehimiyle kırıklanır (`K63`), `CIRCLE` nesneleri 12-gen kolona çevrilir (`K63`), `LINE` yığınları `<= 1 mm` toleransla kapalı halkalara zincirlenir, `INSERT` blokları açılır ve `TEXT`/`MTEXT` oda etiketlerinden `Ek-A` `partUsage` kodu çıkarılır.
+  - İçe aktarılan `Part` (`BBK`) odaları kapsayan `SectionPart` poligonundan otomatik delik olarak düşülür (`K71`).
+- **Liste Beyan ve Malik Listesi (`src/core/importers/listeBeyan.ts`):**
+  - CSV/TSV/Akıllı Yapıştırma verilerinde `KAT_TANIMI` (`registeredFloorDefinition`) olduğu gibi korunur (`OY-04`), `NITELIK` ve `EKLENTI` Türkçe büyük harfe çevrilir (`K61`), kullanıcı önizlemeyi onaylamadan (`OY-06`) projeye yazılmaz ve tüm alanlar serbestçe düzenlenebilir kalır (`K88-yeni`).
+  - `Malik[]` listesi yalnızca `.tkgm3b` proje dosyasında saklanır; GML çıktısına asla yazılmaz (`K99`).

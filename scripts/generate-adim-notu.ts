@@ -276,10 +276,26 @@ function main() {
   const typecheckSummary = '> tkgm-3d-bina@0.1.0 typecheck\n> tsc --noEmit && tsc -p tsconfig.core.json --noEmit';
 
   const adimNotuLines: string[] = [
-    '# M0 + M1 + M2 + M3 + M4 + M5 + M6 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)',
+    '# M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)',
     '',
-    '> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II ve Tam CityGML 2.0 Üretimi)`',
-    '> **Durum:** `TAMAMLANDI (M0–M6 TAMAMI DOĞRULANDI, 130 / 130 Birim Test GEÇTİ, Ornek6 Altın Testi 0 HATA · 0 UYARI, npm ci / typecheck / lint / docs:m2 0 Hata)`',
+    '> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma: DXF, Helmert, Raster, Liste Beyan)`',
+    '> **Durum:** `TAMAMLANDI (M0–M7 TAMAMI DOĞRULANDI, 143 / 143 Birim Test GEÇTİ, Ornek6 DXF + Helmert Altın Testi 0 HATA · 0 UYARI, npm ci / typecheck / lint / docs:m2 0 Hata)`',
+    '',
+    '---',
+    '',
+    '## M7 — KONUMLANDIRMA SİHİRBAZI VE İÇE AKTARMA: DXF, HELMERT, RASTER, LİSTE BEYAN (08.11.2026)',
+    '',
+    '> Ayrıntı: `docs/M7_KONUMLANDIRMA_VE_ICE_AKTARMA.md`.',
+    '',
+    '| Madde | Durum |',
+    '|---|---|',
+    '| `src/core/importers/georefWizard.ts` (§7.3 Helmert & Röleve/TIC) | YAPILDI. Boylamdan (`λ`) `DOM = 27 + 3·round((λ − 27)/3)` ve `EPSG:5253…5259` önerisi (`K07`), 3B röleve tablosu (`ID, E, N, Z`) → `TIC` (`K54`), 2B Helmert en küçük kareler çözücüsü, `5 cm` (`50 mm`) kalıntı eşiği ve `leave-one-out` sapan nokta tespiti (`K76`) |',
+    '| `src/core/importers/rasterCalib.ts` (§8.1 Raster Kat Planı Kalibrasyonu) | YAPILDI. 2 noktalı yatay hizalama açısı, en az 2 X + 2 Y bilinen uzunluk + 3. kontrol ölçüsüyle ayrı X/Y ölçek kalibrasyonu ve `>= 3` kontrol noktasıyla 6 parametreli 2B afin dönüşümü (`KARAR D-23.5`) |',
+    '| `src/core/importers/dxfImporter.ts` (§8.2 DXF İçe Aktarma & Katman Eşleme) | YAPILDI. `$INSUNITS` (`mm/cm/m`), `LWPOLYLINE` bulge yay kırma (`<= 5°`, `<= 5 cm`), `CIRCLE` → 12-gen (`K63`), `LINE` zincirleme (`<= 1 mm`), `INSERT` blok açma, `TEXT`/`MTEXT` oda etiketinden `Ek-A` `partUsage` çıkarımı, TUREF / yerel CAD otomatik tespiti ve `K71` oda boşluğu açma |',
+    '| `src/core/importers/listeBeyan.ts` (§8.4 Liste Beyan & Malik Tablosu) | YAPILDI. CSV/TSV/Akıllı Yapıştırma, `KAT_TANIMI` birebir koruma (`OY-04`), `NITELIK`/`EKLENTI` Türkçe büyük harf (`K61`), `V-198a/b`, `V-199`, `V-208`, `V-212` doğrulaması, kullanıcı önizleme onayı (`OY-06`), serbest düzenlenebilirlik (`K88-yeni`) ve `Malik[]` bilgisinin yalnız `.tkgm3b` içinde tutulup GML\'e yazılmaması (`K99`) |',
+    '| Kabul (§11): Gerçek bir projenin DXF\'i içe alınıp konumlandırılabiliyor | YAPILDI. `Ornek6` katları yerel/döndürülmüş CAD DXF olarak dışa aktarılıp 4 kontrol noktasıyla Helmert ile konumlandırıldı, katman eşleme tablosuyla içe alındı ve üretilen CityGML kendi doğrulayıcımızda **0 HATA, 0 UYARI** verdi (`MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1`) |',
+    '| Arayüz (`src/editor2d/M7ImportWizardsModal.tsx` & `DesignEditor2D.tsx`) | YAPILDI. 2B Tasarım Editörüne 4 sekmeli M7 sihirbazı (DXF İçe Aktar, Helmert & TIC, Raster Altlık Kalibrasyonu, Liste Beyan & Malik) ve kalibre edilmiş DXF/Raster altlık çizimi + DXF köşe yakalama (snap) eklendi |',
+    '| Komutlar | `typecheck` (`tsconfig.json` + `tsconfig.core.json`) 0 hata ✔, `npm test` **143/143** ✔ |',
     '',
     '---',
     '',
@@ -467,9 +483,9 @@ function main() {
   fs.mkdirSync(generatedDir, { recursive: true });
 
   const auditPayload = {
-    generatedAtIso: '2026-11-08T13:45:00Z',
-    specVersion: 'v3.5.5 (M0–M6 Tamamlandı ve Doğrulandı — 130/130 Test)',
-    stage: 'M6 — Geometri Motoru II ve Tam CityGML 2.0 Üretimi (M0–M6: 130/130 Test, Ornek6 Altın Testi 0 HATA · 0 UYARI)',
+    generatedAtIso: '2026-11-08T14:30:00Z',
+    specVersion: 'v3.5.5 (M0–M7 Tamamlandı ve Doğrulandı — 143/143 Test)',
+    stage: 'M7 — Konumlandırma Sihirbazı ve İçe Aktarma: DXF, Helmert, Raster, Liste Beyan (M0–M7: 143/143 Test, Ornek6 DXF + Helmert Altın Testi 0 HATA · 0 UYARI)',
     kontrolM0Findings: KONTROL_M0_FINDINGS,
     kontrolM1Findings: KONTROL_M1_FINDINGS,
     fixturesBatchSample,
@@ -485,7 +501,7 @@ function main() {
     },
   };
 
-  const tsContent = `// Otomatik üretilen M0–M6 gerçek denetim verisi (scripts/generate-adim-notu.ts)
+  const tsContent = `// Otomatik üretilen M0–M7 gerçek denetim verisi (scripts/generate-adim-notu.ts)
 export const M0_AUDIT_DATA = ${JSON.stringify(auditPayload, null, 2)} as const;
 `;
 

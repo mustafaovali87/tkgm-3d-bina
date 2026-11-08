@@ -23,6 +23,7 @@
 | Dosya biçimi | ✔ CRLF, BOM yok, `utf-8`, `posList`, tam 3 ondalık; iki yazım bayt bayt aynı; malik alanı yok |
 | Komutlar | `typecheck` 0 hata, `npm test` **130/130** (M6: 16 yeni test) |
 | Tarayıcıda | ✔ Tasarım Editörü → "GML'den tasarım çıkar" → **GML üret ve doğrula**: `M-70125626-A.gml · 532 KB · H 0 · U 0 · 67 ms`. 3B önizlemede çatı, balkonlar, açıklıklar görünüyor. Konsolda hata yok. |
+| Resmi doğrulama (3dbinadogrula) | ✔ başarılı (08.11.2026) |
 
 **Yapay bina (sıfırdan):** Kod içinde tanımlı bina:
 - 10 × 6 m, 2 kat;

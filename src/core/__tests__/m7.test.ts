@@ -210,6 +210,8 @@ describe('M7 — Konumlandırma Sihirbazı ve İçe Aktarma (DXF, Helmert, Raste
       expect(inferPartUsageFromRoomLabel('TUVALET / WC')).toBe(1006);
       expect(inferPartUsageFromRoomLabel('ANTRE - HOL')).toBe(1008);
       expect(inferPartUsageFromRoomLabel('MERDİVEN EVİ')).toBe(1024);
+      expect(inferPartUsageFromRoomLabel('MERDİVEN HOLÜ')).toBe(1024);
+      expect(inferPartUsageFromRoomLabel('SPOR SALONU')).toBe(1020);
       expect(inferPartUsageFromRoomLabel('SIĞINAK')).toBe(1010);
 
       expect(suggestRoleForDxfLayerName('A-KAT_SINIRI').role).toBe('kat_siniri');
@@ -530,4 +532,241 @@ describe('M7 — Konumlandırma Sihirbazı ve İçe Aktarma (DXF, Helmert, Raste
       expect(tplPreview.rows).toHaveLength(2);
     });
   });
+
+  describe('6. KONTROL-M7 Regresyon Testleri (R1, R2, R3, R4, R5, R8)', () => {
+    it('R1: applyHelmertWizardToProject transformExistingGeometry=false iken mevcut geometrinin TUREF koordinatlarını ±1 mm içinde korur ve TIC ile aynı kökende hizalar', () => {
+      const origB = refProject.buildings[0]!;
+      const origVert = origB.storeys[0]!.outline[0]!.outer[0]!;
+      const origTurefE = refProject.georef.originE + origVert.x / 1000;
+      const origTurefN = refProject.georef.originN + origVert.y / 1000;
+
+      // Farklı bir originE/originN (ör. +25 m Doğu, +40 m Kuzey) üreten kontrol noktaları ve röleve noktaları
+      const shiftedSurvey = [
+        { id: 'S1', e: refProject.georef.originE + 25.4, n: refProject.georef.originN + 40.6, z: 1095.9 },
+        { id: 'S2', e: refProject.georef.originE + 35.4, n: refProject.georef.originN + 40.6, z: 1095.9 },
+        { id: 'S3', e: refProject.georef.originE + 35.4, n: refProject.georef.originN + 50.6, z: 1095.9 },
+      ];
+      const wiz = runHelmertGeorefWizard({
+        epsg: refProject.georef.epsg,
+        surveyPoints: shiftedSurvey,
+        pairs: [
+          { id: 'P1', localX: 0, localY: 0, targetE: shiftedSurvey[0]!.e, targetN: shiftedSurvey[0]!.n },
+          { id: 'P2', localX: 10, localY: 0, targetE: shiftedSurvey[1]!.e, targetN: shiftedSurvey[1]!.n },
+          { id: 'P3', localX: 10, localY: 10, targetE: shiftedSurvey[2]!.e, targetN: shiftedSurvey[2]!.n },
+        ],
+        zeroElevationOrthometricMm: 1095900,
+      });
+
+      // Raporun kendi kökeni mevcut projeden farklıdır (+25 m, +40 m)
+      expect(wiz.georef.originE).toBe(refProject.georef.originE + 25);
+      expect(wiz.georef.originN).toBe(refProject.georef.originN + 40);
+
+      // 1) transformExistingGeometry: false -> mevcut poligonların TUREF koordinatı değişmemeli ve TIC aynı kökende olmalı
+      const appliedFalse = applyHelmertWizardToProject(refProject, wiz, {
+        transformExistingGeometry: false,
+      });
+      const afterVertFalse = appliedFalse.buildings[0]!.storeys[0]!.outline[0]!.outer[0]!;
+      const afterTurefE = appliedFalse.georef.originE + afterVertFalse.x / 1000;
+      const afterTurefN = appliedFalse.georef.originN + afterVertFalse.y / 1000;
+      expect(Math.abs(afterTurefE - origTurefE) * 1000).toBeLessThanOrEqual(1);
+      expect(Math.abs(afterTurefN - origTurefN) * 1000).toBeLessThanOrEqual(1);
+
+      const tic0 = appliedFalse.buildings[0]!.tic![0]!;
+      const tic0TurefE = appliedFalse.georef.originE + tic0.x / 1000;
+      const tic0TurefN = appliedFalse.georef.originN + tic0.y / 1000;
+      expect(Math.abs(tic0TurefE - shiftedSurvey[0]!.e) * 1000).toBeLessThanOrEqual(1);
+      expect(Math.abs(tic0TurefN - shiftedSurvey[0]!.n) * 1000).toBeLessThanOrEqual(1);
+
+      // 2) transformExistingGeometry: true -> yeni köken kullanılır ve poligonlar Helmert ile dönüştürülür
+      const appliedTrue = applyHelmertWizardToProject(refProject, wiz, {
+        transformExistingGeometry: true,
+      });
+      expect(appliedTrue.georef.originE).toBe(wiz.georef.originE);
+      expect(appliedTrue.georef.originN).toBe(wiz.georef.originN);
+    });
+
+    it('R2: iki ayrı TUREF DXF ardışık iki kata aktarıldığında (farklı min E/N kutuları olsa bile) ilk katın TUREF koordinatları kaymaz', () => {
+      const gb = refProject.buildings[0]!;
+      const st0 = gb.storeys[0]!;
+      const st1 = gb.storeys[1]!;
+
+      // Boş proje oluştur
+      let proj: DesignProject = {
+        ...structuredClone(refProject),
+        georef: {
+          epsg: refProject.georef.epsg,
+          originE: 500000,
+          originN: 4000000,
+          zeroElevationOrthometric: st0.zBottom,
+        },
+        buildings: [
+          {
+            ...structuredClone(gb),
+            storeys: gb.storeys.map((s) => ({ ...structuredClone(s), outline: [] })),
+            sectionParts: [],
+            parts: [],
+            openings: [],
+            balconies: [],
+            tic: [],
+          },
+        ],
+      };
+
+      // 1. Kat_Z DXF'ini içe aktar (targetGeoref vermeden)
+      const dxf0 = exportDesignStoreyToDxf(refProject, st0.id, { unit: 'm' });
+      const parsed0 = parseDxfText(dxf0);
+      const geo0 = georeferenceDxfDocument(parsed0);
+      const map0: DxfLayerMappingTable = {};
+      for (const l of parsed0.layers) {
+        (map0 as Record<string, ReturnType<typeof suggestRoleForDxfLayerName>>)[l] =
+          suggestRoleForDxfLayerName(l);
+      }
+      proj = importDxfIntoDesignStorey(proj, geo0, st0.id, map0).project;
+
+      const zVertBefore = proj.buildings[0]!.storeys[0]!.outline[0]!.outer[0]!;
+      const zTurefEBefore = proj.georef.originE + zVertBefore.x / 1000;
+      const zTurefNBefore = proj.georef.originN + zVertBefore.y / 1000;
+
+      // 2. İkinci kat için min E/N değeri +15 m / +22 m kaydırılmış ikinci bir TUREF DXF oluştur ve targetGeoref vermeden içe aktar
+      const shiftedEast = refProject.georef.originE + 15.25;
+      const shiftedNorth = refProject.georef.originN + 22.75;
+      const dxf1 = [
+        '0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '6', '0', 'ENDSEC',
+        '0', 'SECTION', '2', 'ENTITIES',
+        '0', 'LWPOLYLINE', '8', 'KAT_SINIRI', '70', '1',
+        '10', shiftedEast.toFixed(3), '20', shiftedNorth.toFixed(3),
+        '10', (shiftedEast + 8).toFixed(3), '20', shiftedNorth.toFixed(3),
+        '10', (shiftedEast + 8).toFixed(3), '20', (shiftedNorth + 6).toFixed(3),
+        '10', shiftedEast.toFixed(3), '20', (shiftedNorth + 6).toFixed(3),
+        '0', 'ENDSEC', '0', 'EOF',
+      ].join('\n');
+
+      const parsed1 = parseDxfText(dxf1);
+      const geo1 = georeferenceDxfDocument(parsed1); // targetGeoref özellikle verilmedi!
+      expect(geo1.georef.originE).not.toBe(proj.georef.originE);
+
+      proj = importDxfIntoDesignStorey(proj, geo1, st1.id, {
+        KAT_SINIRI: { role: 'kat_siniri' },
+      }).project;
+
+      // Kat_Z TUREF koordinatları ±1 mm içinde sabit kalmalı
+      const zVertAfter = proj.buildings[0]!.storeys[0]!.outline[0]!.outer[0]!;
+      const zTurefEAfter = proj.georef.originE + zVertAfter.x / 1000;
+      const zTurefNAfter = proj.georef.originN + zVertAfter.y / 1000;
+      expect(Math.abs(zTurefEAfter - zTurefEBefore) * 1000).toBeLessThanOrEqual(1);
+      expect(Math.abs(zTurefNAfter - zTurefNBefore) * 1000).toBeLessThanOrEqual(1);
+
+      // Kat_1 köşesi de kendi gerçek TUREF koordinatında (shiftedEast, shiftedNorth) olmalı
+      const k1Vert = proj.buildings[0]!.storeys[1]!.outline[0]!.outer[0]!;
+      const k1TurefE = proj.georef.originE + k1Vert.x / 1000;
+      const k1TurefN = proj.georef.originN + k1Vert.y / 1000;
+      expect(Math.abs(k1TurefE - shiftedEast) * 1000).toBeLessThanOrEqual(1);
+      expect(Math.abs(k1TurefN - shiftedNorth) * 1000).toBeLessThanOrEqual(1);
+    });
+
+    it('R3, R4, R5, R8: numarasız BB katmanı için M7-DXF-SEC-GUESS uyarısı verir, Z=0 ve kotsuz TIC için M7-DXF-Z0 uyarısı verir, balkonu en yakın BB parçasına bağlar ve pencere denizliğini K46 (900 mm) ile hesaplar', () => {
+      const gb = refProject.buildings[0]!;
+      const st0 = gb.storeys[0]!;
+
+      // Numarasız BB katmanı ("BAGIMSIZ_BOLUM"), iki ayrı BB (BB_1 solda x:0..5, BB_2 sağda x:5..10),
+      // sağdaki BB_2'ye bitişik balkon (x:10..11.5, y:1..4), Z=0 TIC ve standart PENCERE içeren DXF
+      const e0 = refProject.georef.originE;
+      const n0 = refProject.georef.originN;
+      const dxf = [
+        '0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '6', '0', 'ENDSEC',
+        '0', 'SECTION', '2', 'ENTITIES',
+        // Kat sınırı (0..10 x 0..8)
+        '0', 'LWPOLYLINE', '8', 'KAT_SINIRI', '70', '1',
+        '10', String(e0), '20', String(n0),
+        '10', String(e0 + 10), '20', String(n0),
+        '10', String(e0 + 10), '20', String(n0 + 8),
+        '10', String(e0), '20', String(n0 + 8),
+        // BB_1 solda (0..5 x 0..8)
+        '0', 'LWPOLYLINE', '8', 'BB_1', '70', '1',
+        '10', String(e0), '20', String(n0),
+        '10', String(e0 + 5), '20', String(n0),
+        '10', String(e0 + 5), '20', String(n0 + 8),
+        '10', String(e0), '20', String(n0 + 8),
+        // BB_2 sağda (5..10 x 0..8)
+        '0', 'LWPOLYLINE', '8', 'BB_2', '70', '1',
+        '10', String(e0 + 5), '20', String(n0),
+        '10', String(e0 + 10), '20', String(n0),
+        '10', String(e0 + 10), '20', String(n0 + 8),
+        '10', String(e0 + 5), '20', String(n0 + 8),
+        // Eşleşmeyen numarasız BB katmanı
+        '0', 'LWPOLYLINE', '8', 'BAGIMSIZ_GENEL', '70', '1',
+        '10', String(e0 + 1), '20', String(n0 + 1),
+        '10', String(e0 + 4), '20', String(n0 + 1),
+        '10', String(e0 + 4), '20', String(n0 + 4),
+        '10', String(e0 + 1), '20', String(n0 + 4),
+        // Sağdaki BB_2'ye bitişik balkon (x:10..11.5, y:1..4)
+        '0', 'LWPOLYLINE', '8', 'BALKON', '70', '1',
+        '10', String(e0 + 10), '20', String(n0 + 1),
+        '10', String(e0 + 11.5), '20', String(n0 + 1),
+        '10', String(e0 + 11.5), '20', String(n0 + 4),
+        '10', String(e0 + 10), '20', String(n0 + 4),
+        // Pencere (denizliği katman adında belirtilmemiş -> K46 ile 2900 - 200 - 500 - 1300 = 900 mm olmalı)
+        '0', 'LINE', '8', 'PENCERE',
+        '10', String(e0 + 6), '20', String(n0),
+        '11', String(e0 + 7.5), '21', String(n0),
+        // Z=0 olan TIC katmanı
+        '0', 'LWPOLYLINE', '8', 'TIC', '70', '1',
+        '10', String(e0), '20', String(n0),
+        '10', String(e0 + 10), '20', String(n0),
+        '10', String(e0 + 10), '20', String(n0 + 8),
+        '0', 'ENDSEC', '0', 'EOF',
+      ].join('\n');
+
+      const doc = parseDxfText(dxf);
+      // R4: zeroElevationOrthometricMm verilmeden georeference çağrılır -> zeroElevationOrthometric = 0 olmalı (1_000_000 değil!)
+      const geo = georeferenceDxfDocument(doc);
+      expect(geo.georef.zeroElevationOrthometric).toBe(0);
+
+      const emptyProj: DesignProject = {
+        ...structuredClone(refProject),
+        georef: { epsg: 5254, originE: e0, originN: n0, zeroElevationOrthometric: 0 },
+        buildings: [
+          {
+            ...structuredClone(gb),
+            storeys: gb.storeys.map((s) => ({ ...structuredClone(s), outline: [] })),
+            sectionParts: [],
+            parts: [],
+            openings: [],
+            balconies: [],
+            tic: [],
+          },
+        ],
+      };
+
+      const res = importDxfIntoDesignStorey(emptyProj, geo, st0.id, {
+        KAT_SINIRI: { role: 'kat_siniri' },
+        BB_1: suggestRoleForDxfLayerName('BB_1'),
+        BB_2: suggestRoleForDxfLayerName('BB_2'),
+        BAGIMSIZ_GENEL: { role: 'bb' }, // sectionIdOrNumber yok -> M7-DXF-SEC-GUESS üretmeli
+        BALKON: { role: 'balkon' },
+        PENCERE: suggestRoleForDxfLayerName('PENCERE'),
+        TIC: { role: 'tic' },
+      });
+
+      // R3: BAGIMSIZ_GENEL rastgele BB'ye atanmamalı, M7-DXF-SEC-GUESS uyarısı üretilmeli
+      expect(res.importedSectionParts).toBe(2);
+      expect(res.issues.some((i) => i.code === 'M7-DXF-SEC-GUESS')).toBe(true);
+
+      // R4: Z=0 ve zeroElevationOrthometric=0 iken M7-DXF-Z0 uyarısı üretilmeli
+      expect(res.importedTicPoints).toBe(0);
+      expect(res.issues.some((i) => i.code === 'M7-DXF-Z0')).toBe(true);
+
+      // R5: Sağdaki balkon (x=10..11.5) soldaki BB_1'e değil sağdaki BB_2'nin SectionPart'ına bağlanmalı
+      const sec2 = emptyProj.buildings[0]!.sections.find((s) => s.number === '2')!;
+      const sp2 = res.project.buildings[0]!.sectionParts.find((sp) => sp.sectionId === sec2.id)!;
+      const importedBalcony = res.project.buildings[0]!.balconies![0]!;
+      expect(importedBalcony.sectionPartId).toBe(sp2.id);
+
+      // R8: Ornek6 Kat_Z (height=2900, slabThickness=200) için K46 varsayılan pencere denizliği 900 mm olmalı
+      const importedWin = res.project.buildings[0]!.openings![0]!;
+      expect(importedWin.sill).toBe(900);
+      expect(importedWin.height).toBe(1300);
+    });
+  });
 });
+

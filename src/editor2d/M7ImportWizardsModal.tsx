@@ -22,6 +22,7 @@ import {
   ParsedDxfDocument,
   parseListeBeyanText,
   parseSurveyPointsText,
+  projectHasGeometry,
   RasterAxisMeasurement,
   runHelmertGeorefWizard,
   suggestEpsgFromLongitude,
@@ -103,9 +104,13 @@ export const M7ImportWizardsModal: React.FC<M7ImportWizardsModalProps> = ({
   // ---- SEKME 1: HELMERT VE KONUMLANDIRMA DURUMU ----
   const [epsg, setEpsg] = useState<TurefEpsgCode>(project.georef.epsg);
   const [lonInput, setLonInput] = useState<string>('32.85');
-  const [zeroElevMeters, setZeroElevMeters] = useState<string>(
-    ((project.georef.zeroElevationOrthometric || 1095900) / 1000).toFixed(3)
-  );
+  const [zeroElevMeters, setZeroElevMeters] = useState<string>(() => {
+    if (project.georef.zeroElevationOrthometric > 0) {
+      return (project.georef.zeroElevationOrthometric / 1000).toFixed(3);
+    }
+    const lowestZ = b?.storeys[0]?.zBottom ?? 0;
+    return lowestZ > 0 ? (lowestZ / 1000).toFixed(3) : '';
+  });
   const [thresholdCm, setThresholdCm] = useState<string>('5.0');
   const [transformExisting, setTransformExisting] = useState<boolean>(false);
   const [pairsText, setPairsText] = useState<string>(
@@ -162,7 +167,11 @@ export const M7ImportWizardsModal: React.FC<M7ImportWizardsModalProps> = ({
     if (parsedControlPairs.error || parsedControlPairs.pairs.length < 2) return null;
     try {
       const surveyPts = surveyText.trim() ? parseSurveyPointsText(surveyText) : [];
-      const zMm = Math.round((Number(zeroElevMeters.replace(',', '.')) || 0) * 1000);
+      const zVal = zeroElevMeters.trim() !== '' ? Number(zeroElevMeters.replace(',', '.')) : NaN;
+      const zMm =
+        Number.isFinite(zVal) && zVal > 0
+          ? Math.round(zVal * 1000)
+          : project.georef.zeroElevationOrthometric;
       const thrMm = Math.max(1, (Number(thresholdCm.replace(',', '.')) || 5) * 10);
       return runHelmertGeorefWizard({
         pairs: parsedControlPairs.pairs,
@@ -174,7 +183,7 @@ export const M7ImportWizardsModal: React.FC<M7ImportWizardsModalProps> = ({
     } catch {
       return null;
     }
-  }, [parsedControlPairs, surveyText, zeroElevMeters, thresholdCm, epsg]);
+  }, [parsedControlPairs, surveyText, zeroElevMeters, thresholdCm, epsg, project.georef.zeroElevationOrthometric]);
 
   // ---- SEKME 2: DXF İÇE AKTARMA DURUMU ----
   const [dxfFileName, setDxfFileName] = useState<string>('ornek6_kat_plan.dxf');
@@ -296,11 +305,21 @@ export const M7ImportWizardsModal: React.FC<M7ImportWizardsModalProps> = ({
     try {
       const helmertToUse =
         dxfUseHelmert && helmertPreview ? helmertPreview.helmert : undefined;
+      const zVal = zeroElevMeters.trim() !== '' ? Number(zeroElevMeters.replace(',', '.')) : NaN;
+      const zMm =
+        Number.isFinite(zVal) && zVal > 0
+          ? Math.round(zVal * 1000)
+          : project.georef.zeroElevationOrthometric;
+      const hasGeom = projectHasGeometry(project);
       const georefRes = georeferenceDxfDocument(parsedDxf, {
         epsg,
-        zeroElevationOrthometricMm: Math.round((Number(zeroElevMeters.replace(',', '.')) || 1095.9) * 1000),
+        zeroElevationOrthometricMm: zMm,
         helmert: helmertToUse,
-        targetGeoref: parsedDxf.isAlreadyTuref || helmertToUse ? undefined : project.georef,
+        targetGeoref: hasGeom
+          ? project.georef
+          : parsedDxf.isAlreadyTuref || helmertToUse
+          ? undefined
+          : project.georef,
       });
 
       onSetDxfUnderlay(georefRes.allUnderlayRingsMm, dxfFileName);
@@ -504,8 +523,21 @@ export const M7ImportWizardsModal: React.FC<M7ImportWizardsModalProps> = ({
                   {parsedDxf && (
                     <div className="text-[11px] font-mono p-2 rounded bg-slate-900 border border-slate-800 space-y-0.5">
                       <div>Dosya: {dxfFileName} · Varlık: {parsedDxf.entities.length} · Katman: {parsedDxf.layers.length}</div>
-                      <div className={parsedDxf.isAlreadyTuref ? 'text-emerald-400' : 'text-amber-300'}>
-                        Koordinat Sistemi: {parsedDxf.isAlreadyTuref ? 'Doğrudan TUREF TM (Helmert gerekmez)' : 'Yerel CAD Koordinatı (Helmert önerilir)'}
+                      <div
+                        className={
+                          parsedDxf.entities.length === 0
+                            ? 'text-slate-400'
+                            : parsedDxf.isAlreadyTuref
+                            ? 'text-emerald-400'
+                            : 'text-amber-300'
+                        }
+                      >
+                        Koordinat Sistemi:{' '}
+                        {parsedDxf.entities.length === 0
+                          ? 'Koordinat sistemi belirlenemedi (varlık yok)'
+                          : parsedDxf.isAlreadyTuref
+                          ? 'Doğrudan TUREF TM (Helmert gerekmez)'
+                          : 'Yerel CAD Koordinatı (Helmert önerilir)'}
                       </div>
                     </div>
                   )}
@@ -584,15 +616,19 @@ export const M7ImportWizardsModal: React.FC<M7ImportWizardsModalProps> = ({
                                 )}
                                 {rule.role === 'bb' && (
                                   <select
-                                    value={rule.sectionIdOrNumber ?? b?.sections[0]?.id ?? ''}
+                                    value={rule.sectionIdOrNumber ?? ''}
                                     onChange={(e) =>
                                       setLayerRules((prev) => ({
                                         ...prev,
-                                        [layer]: { ...rule, sectionIdOrNumber: e.target.value },
+                                        [layer]: {
+                                          ...rule,
+                                          sectionIdOrNumber: e.target.value || undefined,
+                                        },
                                       }))
                                     }
                                     className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5"
                                   >
+                                    <option value="">— BB Seçiniz —</option>
                                     {b?.sections.map((s) => (
                                       <option key={s.id} value={s.id}>
                                         BB {s.number} ({s.registeredQuality})

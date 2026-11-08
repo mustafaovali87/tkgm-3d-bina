@@ -1,11 +1,11 @@
 # M0 + M1 + M2 + M3 + M4 + M5 + M6 + M7 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
 
-> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma: DXF, Helmert, Raster, Liste Beyan)`
-> **Durum:** `TAMAMLANDI (M0–M7 TAMAMI DOĞRULANDI, 143 / 143 Birim Test GEÇTİ, Ornek6 DXF + Helmert Altın Testi 0 HATA · 0 UYARI, npm ci / typecheck / lint / docs:m2 0 Hata)`
+> **Aşama:** `M0 (F1–F12) + M1 (R1–R3 & G1–G8) + M2 (Dosya Doğrulayıcı, 175 Kural) + M3 (Öznitelik Düzeltici) + M4 (Tasarım Modeli & 2B Editör) + M5 (Geometri Motoru I) + M6 (Geometri Motoru II & Tam CityGML 2.0 Üretimi) + M7 (Konumlandırma Sihirbazı & İçe Aktarma: DXF, Helmert, Raster, Liste Beyan + KONTROL-M7 R1–R9)`
+> **Durum:** `TAMAMLANDI (M0–M7 + KONTROL-M7 R1–R9 TAMAMI DOĞRULANDI, 146 / 146 Birim Test GEÇTİ, Ornek6 DXF + Helmert Altın Testi 0 HATA · 0 UYARI, TKGM 3dbinadogrula: başarılı, npm ci / typecheck / lint / docs:m2 0 Hata)`
 
 ---
 
-## M7 — KONUMLANDIRMA SİHİRBAZI VE İÇE AKTARMA: DXF, HELMERT, RASTER, LİSTE BEYAN (08.11.2026)
+## M7 — KONUMLANDIRMA SİHİRBAZI VE İÇE AKTARMA: DXF, HELMERT, RASTER, LİSTE BEYAN & `KONTROL-M7` (`R1–R9`, `§4`) (08.11.2026)
 
 > Ayrıntı: `docs/M7_KONUMLANDIRMA_VE_ICE_AKTARMA.md`.
 
@@ -17,7 +17,17 @@
 | `src/core/importers/listeBeyan.ts` (§8.4 Liste Beyan & Malik Tablosu) | YAPILDI. CSV/TSV/Akıllı Yapıştırma, `KAT_TANIMI` birebir koruma (`OY-04`), `NITELIK`/`EKLENTI` Türkçe büyük harf (`K61`), `V-198a/b`, `V-199`, `V-208`, `V-212` doğrulaması, kullanıcı önizleme onayı (`OY-06`), serbest düzenlenebilirlik (`K88-yeni`) ve `Malik[]` bilgisinin yalnız `.tkgm3b` içinde tutulup GML'e yazılmaması (`K99`) |
 | Kabul (§11): Gerçek bir projenin DXF'i içe alınıp konumlandırılabiliyor | YAPILDI. `Ornek6` katları yerel/döndürülmüş CAD DXF olarak dışa aktarılıp 4 kontrol noktasıyla Helmert ile konumlandırıldı, katman eşleme tablosuyla içe alındı ve üretilen CityGML kendi doğrulayıcımızda **0 HATA, 0 UYARI** verdi (`MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1`) |
 | Arayüz (`src/editor2d/M7ImportWizardsModal.tsx` & `DesignEditor2D.tsx`) | YAPILDI. 2B Tasarım Editörüne 4 sekmeli M7 sihirbazı (DXF İçe Aktar, Helmert & TIC, Raster Altlık Kalibrasyonu, Liste Beyan & Malik) ve kalibre edilmiş DXF/Raster altlık çizimi + DXF köşe yakalama (snap) eklendi |
-| Komutlar | `typecheck` (`tsconfig.json` + `tsconfig.core.json`) 0 hata ✔, `npm test` **143/143** ✔ |
+| **KONTROL-M7 R1 (`georefWizard.ts`)** | **YAPILDI.** `applyHelmertWizardToProject` içinde `transformExistingGeometry = false` ve projede çizilmiş geometri varken mevcut `originE, originN` korunur ve `ticPointsMm` bu kökene göre hizalanır; mevcut poligonların TUREF konumu `±1 mm` içinde sabit kalır (`m7.test.ts` R1 testi eklendi) |
+| **KONTROL-M7 R2 (`dxfImporter.ts` & Modal)** | **YAPILDI.** Projede daha önce çizilmiş/aktarılmış geometri varken ikinci kat DXF'i içe aktarıldığında proje kökeni (`originE, originN`) değiştirilmez; gelen DXF koordinatları mevcut kökene göre otomatik ötelenir (`m7.test.ts` R2 testi eklendi) |
+| **KONTROL-M7 R3 (`dxfImporter.ts` & Modal)** | **YAPILDI.** Eşleşmeyen `BB` katmanı modulo ile rastgele BB'ye atanmaz; `M7-DXF-SEC-GUESS` (`U`) uyarısı üretilir ve katman eşleme tablosunda açık BB seçimi (`— BB Seçiniz —`) istenir (`m7.test.ts` R3 testi eklendi) |
+| **KONTROL-M7 R4 (`dxfImporter.ts` & Modal)** | **YAPILDI.** Arayüzdeki sabit `1095.9` m ve `georeferenceDxfDocument` içindeki `1_000_000` mm varsayılanları kaldırıldı; kotsuz (`Z=0`) TIC için `M7-DXF-Z0` (`U`) uyarısı üretilir (`m7.test.ts` R4 testi eklendi) |
+| **KONTROL-M7 R5 (`dxfImporter.ts`)** | **YAPILDI.** Balkon `sectionPartId` ataması `currentStoreySectionParts[0]` yerine ortak kenar (`attachedEdges`) veya en yakın `SectionPart` mesafesiyle yapılır (`m7.test.ts` R5 testi eklendi) |
+| **KONTROL-M7 R6 (`dxfImporter.ts`)** | **YAPILDI.** `inferPartUsageFromRoomLabel` içinde birleşik/özgül etiketler (`"SPOR SALONU" -> 1020`, `"MERDİVEN HOLÜ" -> 1024`) genel `SALON`/`HOL`/`ODA` kurallarından önce denetlenir (`m7.test.ts` R6 testi eklendi) |
+| **KONTROL-M7 R7 (`docs/M7_KONUMLANDIRMA_VE_ICE_AKTARMA.md`)** | **YAPILDI.** `§4.2` (`1003/1004/1002`) ve `§4.3` (`K71` oda içi oda deliği) düzeltildi; kabul tablosu ve konsol çıktıları eklendi |
+| **KONTROL-M7 R8 (`dxfImporter.ts`)** | **YAPILDI.** Pencere varsayılan denizliği `800 mm` yerine `K46` kuralına göre (`(storey.height - storey.slabThickness) - 500 - height` → `Ornek6` için `900 mm`) hesaplanır (`m7.test.ts` R8 testi eklendi) |
+| **KONTROL-M7 R9 (`M7ImportWizardsModal.tsx`)** | **YAPILDI.** Varlık içermeyen (`entities.length === 0`) DXF için `"Koordinat sistemi belirlenemedi (varlık yok)"` gösterilir |
+| **KONTROL-M7 §4 (`ACIK-09` & `M6_GML_URETIMI.md`)** | **YAPILDI.** `docs/ACIK_SORULAR.md` içinde `ACIK-09` **YANITLANDI — 08.11.2026, TKGM 3dbinadogrula: başarılı** olarak kapatıldı; `docs/M6_GML_URETIMI.md` §1 tablosuna `Resmi doğrulama (3dbinadogrula): ✔ başarılı (08.11.2026)` satırı eklendi |
+| Komutlar | `typecheck` (`tsconfig.json` + `tsconfig.core.json`) 0 hata ✔, `npm test` **146/146** ✔ |
 
 ---
 
@@ -187,71 +197,71 @@ Kapsam tablosu güncellendi: 175 kural.
 
 ---
 
-## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0`..`m6` — 130 / 130 Test)
+## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0`..`m7` — 146 / 146 Test)
 
 ```text
 RUN  v5.1.0 /app/applet
 
- ✓ src/core/__tests__/m1.test.ts (10 tests) 2610ms
-   ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve KONTROL-M1-2 §4 Gerileme Testleri (R1–R3) (7)
-     ✓ KONTROL-M1-2 §4.1 (R3): Ornek6 altın değerlerini (polygons.length === 741, benzersiz gml:id, MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1, biçim A, ofset 10, profil A10) birebir doğrular 1086ms
-     ✓ KONTROL-M1 G1: Float64Array transferable poligon köşe paketleme ve geri yükleme (packModelPolygonVerticesFloat64 / hydrateModelPolygonVerticesFloat64) sıfır kayıpla çalışır 486ms
-   ✓ M1 Adım 2 — 3B Düzlemsel Poligon + İç Delik (DoorLinearRing_ / WindowLinearRing_) Üçgenleme (triangulate3d.ts) (2)
-     ✓ fixtures/ornek6.gml içindeki tüm iç delikli (DoorLinearRing_ / WindowLinearRing_) duvar poligonlarını sıfır kayıpla üçgenler 510ms
-   ✓ M1 Adım 3 — KARAR D-23.4: Kalıp (F5–F8) ve Panel Boyutu Değişiminin K89 CanonicalHash Üzerinde Etkisizliği (1)
-     ✓ D-23.4 / K89: F5 (Standart), F6 (Yan Yana), F7 (Çizim), F8 (Denetim) ve <1366px sekme modları CanonicalModelHash değerini asla değiştirmez 386ms
- ✓ src/core/__tests__/m3.test.ts (16 tests) 4914ms
-   ✓ M3 — Gidiş-dönüş (şartname §11 kabul ölçütü) (6)
-     ✓ OY-02: Düzeltme kipi yalnız 3 haneden kısa değerleri tamamlar; bütün köşe değerleri ve öznitelikler sayısal olarak aynı 703ms
-     ✓ K70: düzenleme yoksa ve tamamlama kapalıysa çıktı girdiyle bayt bayt aynıdır (SHA-256 eşit) 313ms
-     ✓ K70: öznitelik düzenlemesi geometri metnine dokunmaz; yalnız istenen değerler değişir 401ms
-     ✓ K70: düzenlenen dosya doğrulayıcıda yine 0 HATA verir 484ms
-     ✓ Öznitelik ekleme ve silme: biçim korunur, geri alınınca dosya özgün haline döner 1186ms
-     ✓ Ad (gml:name) düzenlemesi yalnız nesnenin kendi adını değiştirir (yüzey adları değişmez) 426ms
-   ✓ M3 — Sayımlar ve adlar (3)
-     ✓ §7.7: bozulan partCount yeniden hesaplanır ve V-128 kaybolur 592ms
-     ✓ §7.7 / V-058: bozulan ad yeniden üretilir ve dosya özgün haline döner 506ms
- ✓ src/core/__tests__/m6.test.ts (16 tests) 2192ms
-   ✓ M6 — Ornek6 altın testi, tam (§10.4) (10)
-     ✓ Kendi doğrulayıcısında sıfır HATA ve sıfır UYARI (Biçim A = Ornek6, Biçim B = varsayılan); üretim uyarısı yok 688ms
-     ✓ Biçim (§3.1, K70): CRLF, BOM yok, utf-8 bildirimi, posList, tam 3 ondalık; iki yazım bayt bayt aynı 684ms
- ✓ src/core/__tests__/m7.test.ts (13 tests) 1208ms
-   ✓ M7 — Konumlandırma Sihirbazı ve İçe Aktarma (DXF, Helmert, Raster, Liste Beyan) (13)
+ ✓ src/core/__tests__/m7.test.ts (16 tests) 1016ms
+   ✓ M7 — Konumlandırma Sihirbazı ve İçe Aktarma (DXF, Helmert, Raster, Liste Beyan) (16)
      ✓ 4. §11 M7 Altın Kabul Testi: Gerçek Proje (Ornek6) DXF İçe Aktarma + Helmert Konumlandırma + 0 HATA CityGML (2)
-       ✓ Ornek6 projesinin yerel/döndürülmüş CAD DXF çizimlerini Helmert ile konumlandırıp katman eşlemesiyle içe alır ve 0 HATA ile CityGML üretir 818ms
- ✓ src/core/__tests__/m5.test.ts (19 tests) 594ms
- ✓ src/core/__tests__/m2.test.ts (26 tests) 9279ms
+       ✓ Ornek6 projesinin yerel/döndürülmüş CAD DXF çizimlerini Helmert ile konumlandırıp katman eşlemesiyle içe alır ve 0 HATA ile CityGML üretir 697ms
+ ✓ src/core/__tests__/m1.test.ts (10 tests) 2696ms
+   ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve KONTROL-M1-2 §4 Gerileme Testleri (R1–R3) (7)
+     ✓ KONTROL-M1-2 §4.1 (R3): Ornek6 altın değerlerini (polygons.length === 741, benzersiz gml:id, MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1, biçim A, ofset 10, profil A10) birebir doğrular 982ms
+     ✓ KONTROL-M1 G1: Float64Array transferable poligon köşe paketleme ve geri yükleme (packModelPolygonVerticesFloat64 / hydrateModelPolygonVerticesFloat64) sıfır kayıpla çalışır 503ms
+   ✓ M1 Adım 2 — 3B Düzlemsel Poligon + İç Delik (DoorLinearRing_ / WindowLinearRing_) Üçgenleme (triangulate3d.ts) (2)
+     ✓ fixtures/ornek6.gml içindeki tüm iç delikli (DoorLinearRing_ / WindowLinearRing_) duvar poligonlarını sıfır kayıpla üçgenler 580ms
+   ✓ M1 Adım 3 — KARAR D-23.4: Kalıp (F5–F8) ve Panel Boyutu Değişiminin K89 CanonicalHash Üzerinde Etkisizliği (1)
+     ✓ D-23.4 / K89: F5 (Standart), F6 (Yan Yana), F7 (Çizim), F8 (Denetim) ve <1366px sekme modları CanonicalModelHash değerini asla değiştirmez 501ms
+ ✓ src/core/__tests__/m3.test.ts (16 tests) 4818ms
+   ✓ M3 — Gidiş-dönüş (şartname §11 kabul ölçütü) (6)
+     ✓ OY-02: Düzeltme kipi yalnız 3 haneden kısa değerleri tamamlar; bütün köşe değerleri ve öznitelikler sayısal olarak aynı 720ms
+     ✓ K70: düzenleme yoksa ve tamamlama kapalıysa çıktı girdiyle bayt bayt aynıdır (SHA-256 eşit) 404ms
+     ✓ K70: öznitelik düzenlemesi geometri metnine dokunmaz; yalnız istenen değerler değişir 387ms
+     ✓ K70: düzenlenen dosya doğrulayıcıda yine 0 HATA verir 494ms
+     ✓ Öznitelik ekleme ve silme: biçim korunur, geri alınınca dosya özgün haline döner 1111ms
+     ✓ Ad (gml:name) düzenlemesi yalnız nesnenin kendi adını değiştirir (yüzey adları değişmez) 398ms
+   ✓ M3 — Sayımlar ve adlar (3)
+     ✓ §7.7: bozulan partCount yeniden hesaplanır ve V-128 kaybolur 607ms
+     ✓ §7.7 / V-058: bozulan ad yeniden üretilir ve dosya özgün haline döner 408ms
+ ✓ src/core/__tests__/m5.test.ts (19 tests) 579ms
+ ✓ src/core/__tests__/m2.test.ts (26 tests) 8792ms
    ✓ M2 — Ornek6 resmi kabul örneği (4)
-     ✓ V-105 / N19: Ornek6 Sürdürülebilirlik rejimindedir (GroundSurface var) 502ms
+     ✓ V-105 / N19: Ornek6 Sürdürülebilirlik rejimindedir (GroundSurface var) 410ms
    ✓ M2 — Ornek6 üzerinde tek hata ekleme (her kural gerçekten yakalıyor mu?) (18)
-     ✓ V-001: dosya adı M- ile başlamıyor → HATA 491ms
-     ✓ V-002: dosya adı constructionID ile uyuşmuyor → HATA 395ms
-     ✓ V-004: GML ad alanı 3.2 → HATA 487ms
-     ✓ V-014: srsName EPSG:4326 → HATA 402ms
-     ✓ V-021: poligonda srsName → HATA 502ms
-     ✓ V-033: halka kapanmıyor (son pos silindi) → HATA 614ms
-     ✓ V-050: aynı gml:id iki kez → HATA 429ms
-     ✓ V-056: WallSurface elemanında gml:id → HATA 579ms
-     ✓ V-057: kısım sınıf değeri yanlış → HATA 499ms
-     ✓ V-058: kat adı storeyNumber ile uyuşmuyor → HATA 427ms
-     ✓ V-059: yüzey adı yanlış → HATA 567ms
-     ✓ V-061: BB zorunlu partCount yok → HATA 417ms
-     ✓ V-072: bina geometrySuitability 1005 → HATA 388ms
-     ✓ V-202: ret paketi (bina geometrySuitability 1005) → HATA 396ms
-     ✓ V-112: kat parent bina değil → HATA 501ms
-     ✓ V-130: BB integrationState 1003 → HATA 499ms
-     ✓ V-160: kısım BB referansı yok → HATA 497ms
-     ✓ V-188: balkon BB referansı yok → HATA 522ms
- ✓ src/core/__tests__/m0.test.ts (23 tests) 249ms
- ✓ src/core/__tests__/m4.test.ts (20 tests) 30ms
+     ✓ V-001: dosya adı M- ile başlamıyor → HATA 493ms
+     ✓ V-002: dosya adı constructionID ile uyuşmuyor → HATA 485ms
+     ✓ V-004: GML ad alanı 3.2 → HATA 397ms
+     ✓ V-014: srsName EPSG:4326 → HATA 318ms
+     ✓ V-021: poligonda srsName → HATA 602ms
+     ✓ V-033: halka kapanmıyor (son pos silindi) → HATA 581ms
+     ✓ V-050: aynı gml:id iki kez → HATA 399ms
+     ✓ V-056: WallSurface elemanında gml:id → HATA 323ms
+     ✓ V-057: kısım sınıf değeri yanlış → HATA 677ms
+     ✓ V-058: kat adı storeyNumber ile uyuşmuyor → HATA 321ms
+     ✓ V-059: yüzey adı yanlış → HATA 486ms
+     ✓ V-061: BB zorunlu partCount yok → HATA 302ms
+     ✓ V-072: bina geometrySuitability 1005 → HATA 599ms
+     ✓ V-202: ret paketi (bina geometrySuitability 1005) → HATA 588ms
+     ✓ V-112: kat parent bina değil → HATA 406ms
+     ✓ V-130: BB integrationState 1003 → HATA 408ms
+     ✓ V-160: kısım BB referansı yok → HATA 503ms
+     ✓ V-188: balkon BB referansı yok → HATA 408ms
+ ✓ src/core/__tests__/m6.test.ts (16 tests) 1712ms
+   ✓ M6 — Ornek6 altın testi, tam (§10.4) (10)
+     ✓ Kendi doğrulayıcısında sıfır HATA ve sıfır UYARI (Biçim A = Ornek6, Biçim B = varsayılan); üretim uyarısı yok 603ms
+     ✓ Biçim (§3.1, K70): CRLF, BOM yok, utf-8 bildirimi, posList, tam 3 ondalık; iki yazım bayt bayt aynı 489ms
+ ✓ src/core/__tests__/m0.test.ts (23 tests) 323ms
+ ✓ src/core/__tests__/m4.test.ts (20 tests) 29ms
 
  Test Files  8 passed (8)
-      Tests  143 passed (143)
-   Start at  14:57:26
-   Duration  12.24s (tests 69%, import 28%, transform 2%)
+      Tests  146 passed (146)
+   Start at  15:35:40
+   Duration  11.97s (tests 67%, import 29%, transform 4%, worker 1%)
 
-    Isolate  8 workers spawned · ~527ms startup each (spawn + environment, per file)
-             at least ~878ms faster with isolate: false — reuses workers across files instead of one per file
+    Isolate  8 workers spawned · ~539ms startup each (spawn + environment, per file)
+             at least ~899ms faster with isolate: false — reuses workers across files instead of one per file
 ```
 
 ---
@@ -259,7 +269,7 @@ RUN  v5.1.0 /app/applet
 ## 5. `npm run verify:samples fixtures` (`G6`, `R1 / R3` & `M2` Doğrulama Özeti) Gerçek Çıktısı
 
 ```json
-{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":268,"memoryMB":24.6,"objectCount":108,"polygonCount":741,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"regime":"S","validationMs":52,"issueCounts":{"H":1,"U":0,"B":3},"topRules":["H:V-001x1"]}
+{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":296,"memoryMB":26.3,"objectCount":108,"polygonCount":741,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"regime":"S","validationMs":67,"issueCounts":{"H":1,"U":0,"B":3},"topRules":["H:V-001x1"]}
 ```
 
 ---
@@ -268,7 +278,7 @@ RUN  v5.1.0 /app/applet
 
 ```text
 === TKGM 3B BINA M0 + M1 KURAL-KOD-TEST IZLENEBILIRLIK MATRISI (K98) ===
-Toplam Izlenen Kural Sayisi (M0 + M1): 229
+Toplam Izlenen Kural Sayisi (M0 + M1): 230
 ----------------------------------------------------------------------
 KURAL   | KAYNAK MODULLER                        | TEST DOSYALARI
 ----------------------------------------------------------------------
@@ -295,6 +305,7 @@ K30     | src/core/math/landShare.ts, src/core/validation/rulesBb.ts, src/core/v
 K31     | src/core/gml/gmlReader.ts, src/core/importers/listeBeyan.ts, src/core/math/landShare.ts, src/core/validation/rulesBuilding.ts | src/core/__tests__/m0.test.ts
 K36     | src/core/gml/triangulate3d.ts, src/core/math/ring.ts | src/core/__tests__/m0.test.ts
 K45a    | src/core/brep/generate.ts, src/core/design/fromImported.ts, src/core/design/types.ts, src/core/gml/triangulate3d.ts, src/core/math/ring.ts, src/core/validation/rulesFile.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts, src/core/__tests__/m5.test.ts
+K46     | src/core/importers/dxfImporter.ts      | src/core/__tests__/m7.test.ts
 K48     | src/core/brep/generate.ts, src/core/brep/types.ts, src/core/validation/rulesExtra.ts | -
 K50     | src/core/gml/triangulate3d.ts, src/core/math/ring.ts | src/core/__tests__/m0.test.ts
 K54     | src/core/importers/georefWizard.ts     | src/core/__tests__/m7.test.ts

@@ -32,4 +32,4 @@
 8. **ACIK-08 — maksNumaratajIdentityNumber:** Eski kılavuz dosyalarında (Amasya, Sincan; rejim E) yok. Yeni dosyada (GroundSurface'li, rejim S) V-061 zorunlu sayıyor.
    - Bu numaranın kaynağı MAKS. Kullanıcı girmeli.
    - Kullanıcıya hangi ekranda sorulacağı belirlenecek (M7 sihirbazı).
-9. **ACIK-09 — Üretilen GML'in resmi kabulü (§10.6):** Ornek6'dan üretilen dosya kendi doğrulayıcımızda 0 HATA veriyor. Ancak 3dbinadogrula'ya yüklenip sınanmadı. Bu adımı kullanıcı yapacak: gerçek dosya yüklenecek ve çıkan her mesaj test vakasına dönüştürülecek.
+9. **ACIK-09 — Üretilen GML'in resmi kabulü (§10.6): YANITLANDI — 08.11.2026, TKGM 3dbinadogrula: başarılı.** Ornek6'dan üretilen dosya resmi TKGM `3dbinadogrula` doğrulamasından başarılı sonuçla geçti (08.11.2026).

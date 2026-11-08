@@ -369,9 +369,29 @@ export function applyHelmertToPolyMm(
 }
 
 /**
+ * Projede herhangi bir katta çizilmiş geometri (kat sınırı, BB, kısım, açıklık, balkon veya TIC)
+ * bulunup bulunmadığını döndürür (`R1`, `R2`).
+ */
+export function projectHasGeometry(project: DesignProject): boolean {
+  for (const b of project.buildings) {
+    if ((b.tic?.length ?? 0) > 0) return true;
+    if (b.sectionParts.length > 0) return true;
+    if (b.parts.length > 0) return true;
+    if ((b.openings?.length ?? 0) > 0) return true;
+    if ((b.balconies?.length ?? 0) > 0) return true;
+    for (const st of b.storeys) {
+      if (st.outline.length > 0) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Tasarım projesinin (`DesignProject`) tüm 2B geometrisini, açıklıklarını, balkonlarını, `Georef` bilgisini
  * ve `TIC` noktalarını Helmert sihirbazı çıktısıyla konumlandırır (`§7.3`, `// K54`, `// K76`).
- * Eğer `transformExistingGeometry` `true` ise mevcut yerel mm koordinatları da Helmert ile dönüştürülür.
+ * - `transformExistingGeometry === true` ise mevcut yerel mm koordinatları Helmert ile dönüştürülerek yeni `report.georef` kökenine taşınır.
+ * - `transformExistingGeometry === false` ve projede zaten çizilmiş geometri varsa, mevcut geometrinin TUREF koordinatlarının
+ *   kaymaması için mevcut `originE, originN` korunur ve `ticPointsMm` bu kökene göre hizalanır (`R1`).
  */
 // K54
 // K76
@@ -382,26 +402,48 @@ export function applyHelmertWizardToProject(
 ): DesignProject {
   const { helmert, georef, ticPointsMm } = report;
   const transformGeom = options.transformExistingGeometry ?? false;
+  const hasExistingGeom = projectHasGeometry(project);
+
+  const effectiveGeoref: Georef =
+    !transformGeom && hasExistingGeom
+      ? {
+          epsg: georef.epsg,
+          originE: project.georef.originE,
+          originN: project.georef.originN,
+          zeroElevationOrthometric: georef.zeroElevationOrthometric,
+        }
+      : georef;
+
+  const ticDxMm = Math.round((georef.originE - effectiveGeoref.originE) * 1000);
+  const ticDyMm = Math.round((georef.originN - effectiveGeoref.originN) * 1000);
+  const effectiveTicPointsMm: readonly Pt3[] =
+    ticDxMm === 0 && ticDyMm === 0
+      ? ticPointsMm
+      : ticPointsMm.map((pt) => ({
+          x: pt.x + ticDxMm,
+          y: pt.y + ticDyMm,
+          z: pt.z,
+        }));
 
   const transformBuilding = (b: DesignBuilding): DesignBuilding => {
     const nextStoreys = transformGeom
       ? b.storeys.map((st) => ({
           ...st,
-          outline: st.outline.map((poly) => applyHelmertToPolyMm(poly, helmert, georef)),
+          outline: st.outline.map((poly) => applyHelmertToPolyMm(poly, helmert, effectiveGeoref)),
         }))
       : b.storeys;
 
     const nextSectionParts = transformGeom
       ? b.sectionParts.map((sp) => ({
           ...sp,
-          outline: applyHelmertToPolyMm(sp.outline, helmert, georef),
+          outline: applyHelmertToPolyMm(sp.outline, helmert, effectiveGeoref),
         }))
       : b.sectionParts;
 
     const nextParts = transformGeom
       ? b.parts.map((pt) => ({
           ...pt,
-          polygon: applyHelmertToPolyMm(pt.polygon, helmert, georef),
+          polygon: applyHelmertToPolyMm(pt.polygon, helmert, effectiveGeoref),
         }))
       : b.parts;
 
@@ -414,13 +456,13 @@ export function applyHelmertWizardToProject(
                 op.anchor.a.x / 1000,
                 op.anchor.a.y / 1000,
                 helmert,
-                georef
+                effectiveGeoref
               ),
               b: transformLocalMetersToDesignMm(
                 op.anchor.b.x / 1000,
                 op.anchor.b.y / 1000,
                 helmert,
-                georef
+                effectiveGeoref
               ),
             },
           }))
@@ -430,12 +472,12 @@ export function applyHelmertWizardToProject(
       transformGeom && b.balconies
         ? b.balconies.map((bal) => ({
             ...bal,
-            outline: applyHelmertToRingMm(bal.outline, helmert, georef),
+            outline: applyHelmertToRingMm(bal.outline, helmert, effectiveGeoref),
             attachedEdges: bal.attachedEdges.map(
               ([p1, p2]) =>
                 [
-                  transformLocalMetersToDesignMm(p1.x / 1000, p1.y / 1000, helmert, georef),
-                  transformLocalMetersToDesignMm(p2.x / 1000, p2.y / 1000, helmert, georef),
+                  transformLocalMetersToDesignMm(p1.x / 1000, p1.y / 1000, helmert, effectiveGeoref),
+                  transformLocalMetersToDesignMm(p2.x / 1000, p2.y / 1000, helmert, effectiveGeoref),
                 ] as const
             ),
           }))
@@ -448,13 +490,14 @@ export function applyHelmertWizardToProject(
       parts: nextParts,
       ...(nextOpenings !== undefined ? { openings: nextOpenings } : {}),
       ...(nextBalconies !== undefined ? { balconies: nextBalconies } : {}),
-      ...(ticPointsMm.length >= 3 ? { tic: ticPointsMm } : {}),
+      ...(effectiveTicPointsMm.length >= 3 ? { tic: effectiveTicPointsMm } : {}),
     };
   };
 
   return {
     ...project,
-    georef,
+    georef: effectiveGeoref,
     buildings: project.buildings.map((b, i) => (i === 0 ? transformBuilding(b) : b)),
   };
 }
+

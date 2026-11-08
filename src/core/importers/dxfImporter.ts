@@ -26,6 +26,7 @@ import type {
 import {
   computeOriginFromTurefPoints,
   isValidTurefCoord,
+  projectHasGeometry,
   TurefEpsgCode,
 } from './georefWizard.ts';
 
@@ -156,7 +157,8 @@ interface DxfTagPair {
 }
 
 /**
- * Şartname Ek-A `partUsage` karşılık tablosuna göre mahal etiketinden otomatik kullanım kodu önerir (`§8.2`, `Ek-A`).
+ * Şartname Ek-A `partUsage` karşılık tablosuna göre mahal etiketinden otomatik kullanım kodu önerir (`§8.2`, `Ek-A`, `R6`).
+ * Birleşik/özgül ifadeler (`SPOR SALONU`, `MERDİVEN HOLÜ`, `ASANSÖR HOLÜ` vb.) genel `SALON`/`HOL`/`ODA` kurallarından önce denetlenir.
  */
 export function inferPartUsageFromRoomLabel(rawLabel: string): number | null {
   const up = rawLabel
@@ -166,17 +168,10 @@ export function inferPartUsageFromRoomLabel(rawLabel: string): number | null {
     .toUpperCase();
   if (!up) return null;
 
-  // Önce spesifik eşleşmeler
-  if (up.includes('EBEVEYN BANYO') || up.includes('BANYO') || up.includes('JAKUZİ') || up.includes('SAUNA')) return 1002; // Banyo
-  if (up.includes('TUVALET') || up === 'WC' || up.includes(' WC') || up.startsWith('WC ') || up.includes('HELA') || up.includes('LAVABO')) return 1006; // Tuvalet
-  if (up.includes('SALON') || up.includes('YAŞAM ALANI') || up.includes('YEMEK ODASI')) return 1003; // Salon
-  if (up.includes('MUTFAK')) return 1004; // Mutfak
-  if (up.includes('KİLER') || up.includes('ÇAMAŞIR') || up.includes('ÜTÜ') || up.includes('SANDIK') || up.includes('GİYİNME')) {
-    return up.includes('GİYİNME') ? 1001 : 1005; // Giyinme -> Oda (1001), diğerleri -> Kiler (1005)
-  }
-  if (up.includes('KIŞ BAHÇESİ')) return 1007;
-  if (up.includes('ANTRE') || up.includes('HOL') || up.includes('SOFA') || up.includes('KORİDOR') || up.includes('GİRİŞ')) return 1008; // Hol
-  if (up.includes('DÜKKAN') || up.includes('MAĞAZA') || up.includes('OFİS BÜRO')) return 1009; // Dükkan
+  // 1. Özgül ve birleşik mahal etiketleri (R6: SPOR SALONU -> 1020, MERDİVEN HOLÜ -> 1024)
+  if (up.includes('SPOR')) return 1020; // Spor Alanı
+  if (up.includes('MERDİVEN')) return 1024; // Merdiven
+  if (up.includes('ASANSÖR')) return 1029; // Asansör
   if (up.includes('SIĞINAK')) return 1010;
   if (up.includes('DANIŞMA')) return 1011;
   if (up.includes('KALORİFER') || up.includes('KAZAN')) return 1012;
@@ -187,15 +182,24 @@ export function inferPartUsageFromRoomLabel(rawLabel: string): number | null {
   if (up.includes('GÜVENLİK')) return 1017;
   if (up.includes('HAVUZ')) return 1018;
   if (up.includes('SOSYAL')) return 1019;
-  if (up.includes('SPOR')) return 1020;
   if (up.includes('ÇÖP')) return 1021;
-  if (up.includes('MERDİVEN')) return 1024;
   if (up.includes('SU MERKEZİ') || up.includes('SU DEPOSU') || up.includes('HİDROFOR')) return 1025;
   if (up.includes('MESCİT') || up.includes('DİNİ')) return 1026;
   if (up.includes('MÜŞTEMİLAT')) return 1027;
   if (up.includes('TEKNİK')) return 1028;
-  if (up.includes('ASANSÖR')) return 1029;
   if (up.includes('DEPO') || up.includes('KÖMÜRLÜK') || up.includes('BODRUM')) return 1030;
+  if (up.includes('KIŞ BAHÇESİ')) return 1007;
+  if (up.includes('EBEVEYN BANYO') || up.includes('BANYO') || up.includes('JAKUZİ') || up.includes('SAUNA')) return 1002; // Banyo
+  if (up.includes('TUVALET') || up === 'WC' || up.includes(' WC') || up.startsWith('WC ') || up.includes('HELA') || up.includes('LAVABO')) return 1006; // Tuvalet
+  if (up.includes('MUTFAK')) return 1004; // Mutfak
+  if (up.includes('KİLER') || up.includes('ÇAMAŞIR') || up.includes('ÜTÜ') || up.includes('SANDIK') || up.includes('GİYİNME')) {
+    return up.includes('GİYİNME') ? 1001 : 1005; // Giyinme -> Oda (1001), diğerleri -> Kiler (1005)
+  }
+  if (up.includes('DÜKKAN') || up.includes('MAĞAZA') || up.includes('OFİS BÜRO')) return 1009; // Dükkan
+
+  // 2. Genel mahal etiketleri (SALON, HOL, ODA)
+  if (up.includes('SALON') || up.includes('YAŞAM ALANI') || up.includes('YEMEK ODASI')) return 1003; // Salon
+  if (up.includes('ANTRE') || up.includes('HOL') || up.includes('SOFA') || up.includes('KORİDOR') || up.includes('GİRİŞ')) return 1008; // Hol
   if (up.includes('ODA') || up.includes('YATAK') || up.includes('OTURMA') || up.includes('ÇOCUK') || up.includes('ÇALIŞMA') || up.includes('MİSAFİR')) return 1001; // Oda
   return null;
 }
@@ -255,7 +259,8 @@ export function suggestRoleForDxfLayerName(layerName: string): DxfLayerMappingRu
       };
     }
     const uMatch = /(?:PENCERE|WINDOW|PEN)[_\-](\d+)$/.exec(up);
-    return { role: 'pencere', usageCode: uMatch ? Number(uMatch[1]) : 1001, sillMm: 800, heightMm: 1300 };
+    // K46 (R8): Katman adında açık denizlik yoksa sillMm tanımsız bırakılır; kat yüksekliği ve döşeme kalınlığından hesaplanır.
+    return { role: 'pencere', usageCode: uMatch ? Number(uMatch[1]) : 1001, heightMm: 1300 };
   }
   if (up.includes('SUTUN') || up.includes('KOLON') || up.includes('COLUMN')) {
     return { role: 'sutun' };
@@ -944,10 +949,11 @@ export function georeferenceDxfDocument(
   } = {}
 ): GeoreferencedDxfResult {
   const epsg = options.epsg ?? options.targetGeoref?.epsg ?? 5254;
+  // R4: Sabit 1_000_000 (1000 m) varsayılanı kaldırıldı; verilmemişse 0 tutulur ve Z=0 TIC için uyarı üretilir.
   const zeroElevMm =
     options.zeroElevationOrthometricMm ??
     options.targetGeoref?.zeroElevationOrthometric ??
-    1_000_000;
+    0;
 
   const toTurefEN = (xM: number, yM: number): { readonly e: number; readonly n: number } => {
     if (options.helmert) {
@@ -1019,8 +1025,15 @@ export function georeferenceDxfDocument(
       const mmPts = ent.vertices.map((v) => toDesignPt2(v.x, v.y));
       for (const v of ent.vertices) {
         const p2 = toDesignPt2(v.x, v.y);
-        const zMm = v.z !== 0 ? Math.round(v.z * 1000) : activeGeoref.zeroElevationOrthometric;
-        layerRec.points3dMm.push({ x: p2.x, y: p2.y, z: zMm });
+        if (v.z !== 0) {
+          layerRec.points3dMm.push({ x: p2.x, y: p2.y, z: Math.round(v.z * 1000) });
+        } else if (activeGeoref.zeroElevationOrthometric > 0) {
+          layerRec.points3dMm.push({
+            x: p2.x,
+            y: p2.y,
+            z: activeGeoref.zeroElevationOrthometric,
+          });
+        }
       }
       const first = mmPts[0];
       const last = mmPts[mmPts.length - 1];
@@ -1150,6 +1163,30 @@ export function importDxfIntoDesignStorey(
     return id;
   };
 
+  // R2: Projede daha önce çizilmiş/aktarılmış geometri varsa proje kökeni (originE, originN) değiştirilmez;
+  // gelen DXF koordinatları mevcut proje kökenine göre otomatik ötelenir.
+  const hasExistingGeom = projectHasGeometry(project);
+  const effectiveGeoref: Georef = hasExistingGeom
+    ? {
+        epsg: project.georef.epsg,
+        originE: project.georef.originE,
+        originN: project.georef.originN,
+        zeroElevationOrthometric:
+          project.georef.zeroElevationOrthometric > 0
+            ? project.georef.zeroElevationOrthometric
+            : georefDxf.georef.zeroElevationOrthometric,
+      }
+    : georefDxf.georef;
+
+  const shiftDxMm = Math.round((georefDxf.georef.originE - effectiveGeoref.originE) * 1000);
+  const shiftDyMm = Math.round((georefDxf.georef.originN - effectiveGeoref.originN) * 1000);
+  const shiftPt2 = (p: Pt2): Pt2 =>
+    shiftDxMm === 0 && shiftDyMm === 0 ? p : { x: p.x + shiftDxMm, y: p.y + shiftDyMm };
+  const shiftRing = (r: Ring2): Ring2 =>
+    shiftDxMm === 0 && shiftDyMm === 0 ? r : r.map(shiftPt2);
+  const shiftPt3 = (p: Pt3): Pt3 =>
+    shiftDxMm === 0 && shiftDyMm === 0 ? p : { x: p.x + shiftDxMm, y: p.y + shiftDyMm, z: p.z };
+
   const issues: DxfImportIssue[] = [...georefDxf.issues];
   const newOutlines: Poly2[] = [...storey.outline];
   const newSectionParts: SectionPart[] = [
@@ -1172,7 +1209,9 @@ export function importDxfIntoDesignStorey(
   let importedTicPoints = 0;
 
   // Tüm TEXT etiketlerini topla (kısım kullanım tespiti için)
-  const allTexts = Object.values(georefDxf.byLayer).flatMap((l) => l.textsMm);
+  const allTexts = Object.values(georefDxf.byLayer).flatMap((l) =>
+    l.textsMm.map((t) => ({ ...t, pos: shiftPt2(t.pos) }))
+  );
 
   // 1. Geçiş: Kat sınırı ve TIC
   for (const [layerName, layerData] of Object.entries(georefDxf.byLayer)) {
@@ -1180,7 +1219,8 @@ export function importDxfIntoDesignStorey(
     if (!rule || rule.role === 'yok_say' || rule.role === 'altlik') continue;
 
     if (rule.role === 'kat_siniri') {
-      for (const ring of layerData.closedRingsMm) {
+      for (const rawRing of layerData.closedRingsMm) {
+        const ring = shiftRing(rawRing);
         if (!isSimpleRing(ring)) {
           issues.push({
             code: 'V-034',
@@ -1195,8 +1235,16 @@ export function importDxfIntoDesignStorey(
       }
     } else if (rule.role === 'tic') {
       if (layerData.points3dMm.length >= 3) {
-        nextTic = layerData.points3dMm;
+        nextTic = layerData.points3dMm.map(shiftPt3);
         importedTicPoints = layerData.points3dMm.length;
+      } else if (layerData.closedRingsMm.length > 0 && effectiveGeoref.zeroElevationOrthometric <= 0) {
+        // R4: Z=0 ve ±0.00 ortometrik kotu girilmemişse sahte kot atama, U uyarısı üret
+        issues.push({
+          code: 'M7-DXF-Z0',
+          severity: 'U',
+          layer: layerName,
+          message: `Katman "${layerName}" için ±0.00 ortometrik kotu girilmediği ve DXF Z=0 olduğu için TIC kotu atanamadı.`,
+        });
       }
     }
   }
@@ -1206,31 +1254,39 @@ export function importDxfIntoDesignStorey(
     const rule = layerMapping[layerName];
     if (!rule || rule.role !== 'bb') continue;
 
-    for (const ring of layerData.closedRingsMm) {
+    for (const rawRing of layerData.closedRingsMm) {
+      const ring = shiftRing(rawRing);
       if (!isSimpleRing(ring)) continue;
       const poly = normalizeOrientation({ outer: ring, holes: [] });
-      // Hangi BB'ye bağlanacağını bul
-      let section = b0.sections.find(
-        (s) =>
-          s.id === rule.sectionIdOrNumber ||
-          s.number === rule.sectionIdOrNumber
-      );
+
+      if (b0.sections.length === 0) {
+        issues.push({
+          code: 'M7-DXF-NO-SEC',
+          severity: 'U',
+          layer: layerName,
+          message: `Projede bağımsız bölüm tanımı yok; önce liste beyan ekleyin (${layerName}).`,
+        });
+        continue;
+      }
+
+      // Hangi BB'ye bağlanacağını bul (R3: eşleşmezse modulo ile rastgele BB seçme!)
+      let section = rule.sectionIdOrNumber
+        ? b0.sections.find(
+            (s) => s.id === rule.sectionIdOrNumber || s.number === rule.sectionIdOrNumber
+          )
+        : undefined;
       if (!section) {
-        // Katman adında BB_<no> varsa veya içinde TEXT etiketi varsa ara
         const layerNumMatch = /(?:BB[_\-\s]*)(\w+)$/i.exec(layerName);
         if (layerNumMatch) {
           section = b0.sections.find((s) => s.number === layerNumMatch[1]);
         }
       }
       if (!section) {
-        section = b0.sections[importedSectionParts % Math.max(1, b0.sections.length)];
-      }
-      if (!section) {
         issues.push({
-          code: 'M7-DXF-NO-SEC',
+          code: 'M7-DXF-SEC-GUESS',
           severity: 'U',
           layer: layerName,
-          message: `Projede bağımsız bölüm tanımı yok; önce liste beyan ekleyin (${layerName}).`,
+          message: `Katman "${layerName}" için bağımsız bölüm seçilmedi veya eşleşmedi; katman eşleme tablosundan bağımsız bölüm seçin.`,
         });
         continue;
       }
@@ -1253,7 +1309,8 @@ export function importDxfIntoDesignStorey(
     if (!rule || (rule.role !== 'kisim' && rule.role !== 'oa')) continue;
 
     const kind: Part['kind'] = rule.role === 'kisim' ? 'BBK' : 'OA';
-    for (const ring of layerData.closedRingsMm) {
+    for (const rawRing of layerData.closedRingsMm) {
+      const ring = shiftRing(rawRing);
       if (!isSimpleRing(ring)) continue;
       const poly = normalizeOrientation({ outer: ring, holes: [] });
       const centroid = ringCentroid(poly.outer);
@@ -1344,11 +1401,21 @@ export function importDxfIntoDesignStorey(
     return d <= tol && t >= -tol && t <= L + tol;
   };
 
+  const pointToSegmentDistMm = (p: Pt2, a: Pt2, b: Pt2): number => {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1) return Math.hypot(p.x - a.x, p.y - a.y);
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  };
+
   for (const [layerName, layerData] of Object.entries(georefDxf.byLayer)) {
     const rule = layerMapping[layerName];
     if (!rule || rule.role !== 'balkon') continue;
 
-    for (const ring of layerData.closedRingsMm) {
+    for (const rawRing of layerData.closedRingsMm) {
+      const ring = shiftRing(rawRing);
       if (!isSimpleRing(ring)) continue;
       const poly = normalizeOrientation({ outer: ring, holes: [] });
       const r = poly.outer;
@@ -1364,7 +1431,33 @@ export function importDxfIntoDesignStorey(
           attachedEdges.push([a, b]);
         }
       }
-      const nearestSp = currentStoreySectionParts[0] ?? null;
+
+      // R5: Balkonu ilk BB'ye değil, attachedEdges ile ortak kenar paylaşan veya en yakın olan SectionPart'a bağla
+      let nearestSp: SectionPart | null = null;
+      let bestDistMm = Number.POSITIVE_INFINITY;
+      const probePts: readonly Pt2[] =
+        attachedEdges.length > 0
+          ? attachedEdges.flatMap(([ea, eb]) => [
+              ea,
+              eb,
+              { x: Math.round((ea.x + eb.x) / 2), y: Math.round((ea.y + eb.y) / 2) },
+            ])
+          : r;
+      for (const sp of currentStoreySectionParts) {
+        const spRing = sp.outline.outer;
+        for (let i = 0; i < spRing.length; i++) {
+          const sa = spRing[i];
+          const sb = spRing[(i + 1) % spRing.length];
+          for (const pt of probePts) {
+            const d = pointToSegmentDistMm(pt, sa, sb);
+            if (d < bestDistMm) {
+              bestDistMm = d;
+              nearestSp = sp;
+            }
+          }
+        }
+      }
+
       currentBalconies.push({
         id: allocId('blkn'),
         kind: layerName.toUpperCase().includes('TERAS') ? 'Teras' : 'Balkon',
@@ -1387,18 +1480,25 @@ export function importDxfIntoDesignStorey(
 
     const kind: Opening['kind'] = rule.role === 'kapi' ? 'door' : 'window';
     const usage = rule.usageCode ?? (kind === 'door' ? 1004 : 1001);
-    const sill = rule.sillMm ?? (kind === 'door' ? 10 : 800);
     const height = rule.heightMm ?? (kind === 'door' ? 2100 : 1300);
+    // K46 (R8): Konutta pencere üst kotu tavandan 0.50 m (500 mm) aşağıda ve yüksekliği 1.30 m (1300 mm)
+    // (standart kat / Ornek6 için 900 mm; daha yüksek katlarda (storey.height - storey.slabThickness) - 500 - height).
+    const clearHeightMm = Math.max(2000, storey.height - storey.slabThickness);
+    const defaultWindowSillMm =
+      clearHeightMm >= 2700 ? Math.max(0, clearHeightMm - 500 - height) : 900;
+    const sill = rule.sillMm ?? (kind === 'door' ? 10 : defaultWindowSillMm);
 
-    for (const seg of layerData.lineSegmentsMm) {
-      const len = Math.hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y);
+    for (const rawSeg of layerData.lineSegmentsMm) {
+      const segA = shiftPt2(rawSeg.a);
+      const segB = shiftPt2(rawSeg.b);
+      const len = Math.hypot(segB.x - segA.x, segB.y - segA.y);
       if (len < 200) continue; // 20 cm'den kısa çizgileri atla
       currentOpenings.push({
         id: allocId(kind === 'door' ? 'kapi' : 'pen'),
         kind,
         usage,
         storeyId: targetStoreyId,
-        anchor: { a: seg.a, b: seg.b },
+        anchor: { a: segA, b: segB },
         sill,
         height,
       });
@@ -1432,7 +1532,7 @@ export function importDxfIntoDesignStorey(
     project: {
       ...project,
       idSeq,
-      georef: georefDxf.georef,
+      georef: effectiveGeoref,
       buildings: project.buildings.map((b, idx) => (idx === 0 ? nextBuilding : b)),
     },
     importedStoreyOutlines,
@@ -1441,7 +1541,7 @@ export function importDxfIntoDesignStorey(
     importedOpenings,
     importedBalconies,
     importedTicPoints,
-    underlayRingsMm: georefDxf.allUnderlayRingsMm,
+    underlayRingsMm: georefDxf.allUnderlayRingsMm.map(shiftRing),
     issues,
   };
 }

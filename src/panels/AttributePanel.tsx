@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { ImportedCityObject, ImportedModel } from '../core/gml/gmlReader.ts';
 import { formatBigIntFraction } from '../core/math/landShare.ts';
+import type { GenericAttributeType } from '../core/model/index.ts';
 import {
   DEFAULT_BEYAN_DUZENLEME_AYAR,
   Malik,
@@ -14,15 +15,70 @@ export interface AttributePanelProps {
   readonly selectedObject: ImportedCityObject | null;
   readonly malikler: readonly Malik[];
   readonly maximizedPanelId: MaximizedPanelId;
+  /** M3: Öznitelik değeri düzenleme (Düzeltme kipi, K70). */
+  readonly onEditAttribute: (gmlId: string, name: string, type: GenericAttributeType, value: string) => void;
+  /** M3: Nesne adı (gml:name) düzenleme. */
+  readonly onRenameObject: (gmlId: string, value: string) => void;
   readonly onAddMalik: (malik: Malik) => void;
   readonly onToggleMaximizePanel: () => void;
 }
+
+/** Birden fazla değer alabilen öznitelikler bu sürümde tek tek düzenlenmez. */
+const MULTI_VALUED = new Set(['independentSectionCardinalDirection', 'storeyUsage']);
+
+/** Tıklayınca düzenlenen değer hücresi; Enter veya odak kaybında kaydeder, Esc ile vazgeçer. */
+const EditableValue: React.FC<{
+  readonly value: string;
+  readonly disabled?: boolean;
+  readonly disabledReason?: string;
+  readonly onCommit: (v: string) => void;
+}> = ({ value, disabled, disabledReason, onCommit }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  if (disabled) {
+    return <span title={disabledReason}>{value}</span>;
+  }
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+        title="Düzenlemek için tıklayın"
+        className="text-left w-full rounded px-1 -mx-1 hover:bg-slate-700/60 focus:outline-none focus:ring-1 focus:ring-amber-400"
+      >
+        {value === '' ? <span className="text-slate-500 italic">(boş)</span> : value}
+      </button>
+    );
+  }
+  const commit = () => {
+    setEditing(false);
+    if (draft !== value) onCommit(draft);
+  };
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') setEditing(false);
+      }}
+      className="w-full px-1 py-0.5 bg-slate-950 border border-amber-500/60 rounded text-slate-100 font-mono text-[11px]"
+    />
+  );
+};
 
 export const AttributePanel: React.FC<AttributePanelProps> = ({
   model,
   selectedObject,
   malikler,
   maximizedPanelId,
+  onEditAttribute,
+  onRenameObject,
   onAddMalik,
   onToggleMaximizePanel,
 }) => {
@@ -114,8 +170,12 @@ export const AttributePanel: React.FC<AttributePanelProps> = ({
                       <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
                         {selectedObject.prefix}
                       </span>
-                      <span className="font-semibold text-slate-100">
-                        {selectedObject.gmlName || selectedObject.gmlId}
+                      <span className="font-semibold text-slate-100 min-w-[8rem]">
+                        <EditableValue
+                          key={`name-${selectedObject.gmlId}-${selectedObject.gmlName}`}
+                          value={selectedObject.gmlName}
+                          onCommit={(v) => onRenameObject(selectedObject.gmlId, v)}
+                        />
                       </span>
                     </div>
                     <div className="text-[11px] font-mono text-slate-400 mt-0.5">
@@ -167,9 +227,9 @@ export const AttributePanel: React.FC<AttributePanelProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                      {selectedObject.attributes.map((attr) => (
+                      {selectedObject.attributes.map((attr, idx) => (
                         <tr
-                          key={`${attr.name}-${attr.type}`}
+                          key={`${attr.name}-${attr.type}-${idx}`}
                           className={
                             attr.name === 'partUsage' ||
                             attr.name === 'independentSectionUsage' ||
@@ -182,7 +242,15 @@ export const AttributePanel: React.FC<AttributePanelProps> = ({
                             {attr.name}
                           </td>
                           <td className="py-1 px-2 text-slate-400">{attr.type}</td>
-                          <td className="py-1 px-2 text-slate-100">{attr.rawValue}</td>
+                          <td className="py-1 px-2 text-slate-100">
+                            <EditableValue
+                              key={`${selectedObject.gmlId}-${attr.name}-${idx}-${attr.rawValue}`}
+                              value={attr.rawValue}
+                              disabled={MULTI_VALUED.has(attr.name)}
+                              disabledReason="Bu öznitelik birden fazla değer alabilir; bu sürümde tek tek düzenlenmez."
+                              onCommit={(v) => onEditAttribute(selectedObject.gmlId, attr.name, attr.type, v)}
+                            />
+                          </td>
                           <td className="py-1 px-2 font-sans">
                             {attr.codelistDescription ? (
                               <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px]">

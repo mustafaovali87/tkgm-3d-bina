@@ -192,3 +192,20 @@
   - Şu an tek kayıt: Ornek2 V-186 (balkon 1002).
   - Eşleşen bulgu silinmez, BİLGİ'ye düşer ve gerekçesi gösterilir.
 - **Kabul ölçütü (M2 ve sonrası):** 8 kabul dosyasında 0 HATA; ret dosyasında V-202 HATA. Bir kural değişikliği bu ölçütü bozarsa geri alınır.
+
+---
+
+## A.8 M3 Düzeltici ve Yazıcı (Claude, 08.11.2026)
+
+- **Düzeltme kipi (varsayılan, K70):**
+  - Yalnız öznitelik ve ad metinleri değişir.
+  - Geometri metni korunur; 3 haneden kısa koordinatlar sıfırla 3'e tamamlanır (OY-02).
+  - Düzenleme yoksa ve tamamlanacak koordinat yoksa çıktı girdiyle bayt bayt aynıdır.
+- **Normalize:**
+  - `posList` + tam 3 ondalık; ardışık eş noktalar silinir; int/double değerler kırpılır; CRLF, BOM yok.
+  - Sonrasında doğrulama yeniden çalışır ve kural bazında öncesi/sonrası farkı gösterilir.
+- **Alanlar:** `calculatedArea` (kısım ve OA), taban poligonlarının alanından 2 ondalıkla yeniden yazılabilir. Normalize sonrası V-155 için önerilir.
+- **Ad kuralları:** Tek kaynak `src/core/gml/names.ts`. V-058 denetimi ve "Adlar" düğmesi bu dosyayı kullanır.
+- **Yazıcı güvenliği:**
+  - Beyaz liste dışı öznitelik yazılmaz (K99). Malik alanları bu yüzden GML'e yazılamaz.
+  - Var olan özniteliğin tipi değiştirilmez; tekrar eden öznitelik düzenlenmez.

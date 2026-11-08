@@ -5,6 +5,20 @@
 
 ---
 
+## M3 — ÖZNİTELİK DÜZELTİCİ VE GML YAZICISI (Claude, 08.11.2026)
+
+> Ayrıntı: `docs/M3_DUZELTICI.md`.
+
+| Madde | Durum |
+|---|---|
+| `src/core/gml/gmlWriter.ts` | YAPILDI. `applyAttributeEdits` (Düzeltme kipi, K70/OY-02), `normalizeGml`, `computeRecountEdits`, `computeRenameEdits`, `computeAreaEdits` |
+| `src/core/gml/names.ts` | YAPILDI. Ad kuralları; V-058 ve "Adlar" düğmesi aynı fonksiyonu kullanır |
+| Gidiş-dönüş testi (§11 kabul ölçütü) | YAPILDI. Boş düzenleme → SHA-256 aynı; düzenlemede halkaların ham metni birebir aynı |
+| 9 dosya ölçümü | YAPILDI. Düzeltme kipi hiçbir dosyada doğrulamayı değiştirmiyor. Normalize + Alanlar sonrası 8 kabul dosyası 0 HATA |
+| Arayüz | YAPILDI. Değer ve ad düzenleme; Sayımlar / Adlar / Alanlar / Normalize / Geri al / Kaydet; öncesi/sonrası özet şeridi. Tarayıcıda denendi |
+| Komutlar | `typecheck` 0 hata ✔, `npm test` 75/75 ✔ |
+---
+
 ## M2 — DOSYA DOĞRULAYICI (Claude, 08.11.2026)
 
 > Gemini'nin günlük limiti dolduğu için M2'yi kullanıcının isteğiyle Claude yazdı. Ayrıntı: `docs/M2_DOGRULAYICI.md`.

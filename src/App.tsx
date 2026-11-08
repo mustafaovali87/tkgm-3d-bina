@@ -31,6 +31,15 @@ import {
 } from './state/workspaceState.ts';
 import { CityGmlViewport3D } from './viewer3d/CityGmlViewport3D.tsx';
 import { validateCityGml, type Finding, type ValidationReport } from './core/validation/index.ts';
+import {
+  applyAttributeEdits,
+  computeAreaEdits,
+  computeRecountEdits,
+  computeRenameEdits,
+  normalizeGml,
+  type AttributeEdit,
+} from './core/gml/gmlWriter.ts';
+import type { GenericAttributeType } from './core/model/index.ts';
 import { FloorPlanPreview2D } from './viewer3d/FloorPlanPreview2D.tsx';
 import { parseCityGmlInWorker } from './workers/gmlWorkerClient.ts';
 
@@ -44,6 +53,15 @@ interface WorkerReadState {
 
 export function App() {
   const [model, setModel] = useState<ImportedModel>(() => getDefaultOrnek6Model());
+  // M3: Düzelticinin üzerinde çalıştığı kaynak metin, dosya adı, geri alma geçmişi ve son işlem özeti.
+  const [sourceXml, setSourceXml] = useState<string>(ORNEK6_RAW_XML);
+  const [currentFileName, setCurrentFileName] = useState<string>('M-70125626-A.gml');
+  const [editHistory, setEditHistory] = useState<string[]>([]);
+  const [editMessage, setEditMessage] = useState<{
+    readonly kind: 'ok' | 'info' | 'error';
+    readonly text: string;
+    readonly diff?: readonly string[];
+  } | null>(null);
   // M2: Dosya doğrulayıcı raporu (şartname §6). Okuyucu, arsa payı ve kural bulgularının tamamı.
   const [validation, setValidation] = useState<ValidationReport>(() =>
     validateCityGml(ORNEK6_RAW_XML, 'M-70125626-A.gml', getDefaultOrnek6Model(), getOfflineCodelistRegistry())
@@ -184,7 +202,13 @@ export function App() {
   }, [selectedObject, model.buildingGmlId]);
 
   // G1 (PERF-01): Web Worker üzerinden CityGML okuma (ilerleme çubuğu + İptal düğmesi)
-  const loadGmlViaWorker = async (xmlText: string, fileName: string) => {
+  // M3: Başarılı okumada kaynak metin saklanır (düzeltici bu metin üzerinde çalışır). Doğrulama raporu döner.
+  const loadGmlViaWorker = async (
+    xmlText: string,
+    fileName: string,
+    opts?: { readonly keepSelection?: boolean }
+  ): Promise<ValidationReport | null> => {
+    const keepId = opts?.keepSelection ? selectedGmlId : null;
     if (workerReadState) {
       workerReadState.cancel();
     }
@@ -217,11 +241,18 @@ export function App() {
       setLastWorkerDurationMs(durationMs);
       setModel(parsed);
       setValidation(report);
-      setActiveStoreyId(null);
+      setSourceXml(xmlText);
+      setCurrentFileName(fileName);
       setHighlightedRulePolygonId(null);
-      setSelectedGmlId(
-        parsed.objects.find((o) => o.prefix === 'BBK_')?.gmlId ?? parsed.buildingGmlId
-      );
+      if (keepId && parsed.objectsById[keepId]) {
+        setSelectedGmlId(keepId);
+      } else {
+        setActiveStoreyId(null);
+        setSelectedGmlId(
+          parsed.objects.find((o) => o.prefix === 'BBK_')?.gmlId ?? parsed.buildingGmlId
+        );
+      }
+      return report;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes('iptal edildi')) {
@@ -231,11 +262,94 @@ export function App() {
           getOfflineCodelistRegistry()
         );
         setModel(fallback);
-        setValidation(validateCityGml(xmlText, fileName, fallback, getOfflineCodelistRegistry()));
+        const report = validateCityGml(xmlText, fileName, fallback, getOfflineCodelistRegistry());
+        setValidation(report);
+        setSourceXml(xmlText);
+        setCurrentFileName(fileName);
+        return report;
       }
+      return null;
     } finally {
       setWorkerReadState(null);
     }
+  };
+
+  // ---------------- M3: Öznitelik düzeltici ve yazıcı (şartname §7.7, K70) ----------------
+  const pushHistory = () => setEditHistory((h) => [...h.slice(-19), sourceXml]);
+
+  const applyEdits = async (edits: readonly AttributeEdit[], label: string) => {
+    if (edits.length === 0) {
+      setEditMessage({ kind: 'info', text: `${label}: değişiklik gerekmiyor (değerler zaten doğru).` });
+      return;
+    }
+    const r = applyAttributeEdits(sourceXml, edits);
+    if (r.applied.length === 0) {
+      setEditMessage({ kind: 'error', text: `${label}: uygulanamadı — ${r.errors.map((e) => e.message).join(' ')}` });
+      return;
+    }
+    pushHistory();
+    const before = validation.counts;
+    const after = await loadGmlViaWorker(r.xml, currentFileName, { keepSelection: true });
+    const parts = [`${label}: ${r.applied.length} değişiklik uygulandı.`];
+    if (r.paddedCoordinates > 0) parts.push(`${r.paddedCoordinates} koordinat 3 haneye tamamlandı (OY-02, değer değişmez).`);
+    if (r.errors.length > 0) parts.push(`${r.errors.length} düzenleme reddedildi: ${r.errors[0].message}`);
+    if (after) parts.push(`Doğrulama: H ${before.H}→${after.counts.H}, U ${before.U}→${after.counts.U}, B ${before.B}→${after.counts.B}.`);
+    setEditMessage({ kind: r.errors.length > 0 ? 'error' : 'ok', text: parts.join(' ') });
+  };
+
+  const handleEditAttribute = (gmlId: string, name: string, type: GenericAttributeType, value: string) =>
+    void applyEdits([{ kind: 'set', gmlId, name, type, value }], `${name} düzenlendi`);
+  const handleRenameObject = (gmlId: string, value: string) =>
+    void applyEdits([{ kind: 'name', gmlId, value }], 'Ad düzenlendi');
+
+  const handleNormalize = async () => {
+    const before = validation;
+    const n = normalizeGml(sourceXml);
+    pushHistory();
+    const after = await loadGmlViaWorker(n.xml, currentFileName, { keepSelection: true });
+    if (!after) return;
+    const count = (r: ValidationReport) => {
+      const m = new Map<string, number>();
+      for (const f of r.findings) if (f.severity !== 'B') m.set(`${f.severity} ${f.ruleId}`, (m.get(`${f.severity} ${f.ruleId}`) ?? 0) + 1);
+      return m;
+    };
+    const a = count(before);
+    const b = count(after);
+    const diff = [...new Set([...a.keys(), ...b.keys()])]
+      .filter((k) => (a.get(k) ?? 0) !== (b.get(k) ?? 0))
+      .sort()
+      .map((k) => `${k}: ${a.get(k) ?? 0} → ${b.get(k) ?? 0}`);
+    setEditMessage({
+      kind: after.counts.H > before.counts.H ? 'error' : 'ok',
+      text:
+        `Normalize (K70): ${n.ringsRewritten} halka/çizgi posList + 3 haneye yazıldı, ${n.removedDuplicateVertices} ardışık tekrar silindi, ${n.trimmedValues} değer kırpıldı` +
+        `${n.warnings.length > 0 ? `, ${n.warnings.length} uyarı` : ''}. Köşeler en çok 0.5 mm kayar. ` +
+        `Doğrulama öncesi → sonrası: H ${before.counts.H}→${after.counts.H}, U ${before.counts.U}→${after.counts.U}.` +
+        (after.findings.some((f) => f.ruleId === 'V-155' && f.severity === 'H') ? ' Taban alanı değişen kısımlar için "Alanları yeniden hesapla" kullanılabilir.' : ''),
+      diff,
+    });
+  };
+
+  const handleUndo = () => {
+    const prev = editHistory[editHistory.length - 1];
+    if (prev === undefined) return;
+    setEditHistory((h) => h.slice(0, -1));
+    void loadGmlViaWorker(prev, currentFileName, { keepSelection: true }).then(() =>
+      setEditMessage({ kind: 'info', text: 'Son işlem geri alındı.' })
+    );
+  };
+
+  const handleSaveGml = () => {
+    const blob = new Blob([sourceXml], { type: 'application/gml+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = currentFileName.endsWith('.gml') ? currentFileName : `${currentFileName}.gml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setEditMessage({ kind: 'ok', text: `${a.download} kaydedildi (H ${validation.counts.H}, U ${validation.counts.U}, B ${validation.counts.B}).` });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -427,6 +541,8 @@ export function App() {
       selectedObject={selectedObject}
       malikler={malikler}
       maximizedPanelId={maximizedPanelId}
+      onEditAttribute={handleEditAttribute}
+      onRenameObject={handleRenameObject}
       onAddMalik={(m) => setMalikler((prev) => [...prev, m])}
       onToggleMaximizePanel={() => toggleMaximizePanel('attributes')}
     />
@@ -472,6 +588,59 @@ export function App() {
               className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
             >
               ⚡ Ornek6 (Worker{lastWorkerDurationMs !== null ? ` · ${lastWorkerDurationMs}ms` : ''})
+            </button>
+          </div>
+
+          {/* M3: Öznitelik düzeltici ve yazıcı (şartname §7.7, K70) */}
+          <div className="flex items-center gap-1 pl-2 border-l border-slate-700" aria-label="M3 düzeltici">
+            <button
+              type="button"
+              onClick={() => void applyEdits(computeRecountEdits(model), 'Sayımlar yeniden hesaplandı')}
+              title="totalIndependentSectionCount, Kat independentSectionCount ve BB partCount değerlerini dosyadan yeniden sayar"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+            >
+              Sayımlar
+            </button>
+            <button
+              type="button"
+              onClick={() => void applyEdits(computeRenameEdits(model, getOfflineCodelistRegistry()), 'Adlar yeniden üretildi')}
+              title="Nesne adlarını V-058 kurallarına göre yeniden üretir (Kat_Z, <blok>_<giriş>_<no>_<kullanım> …)"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+            >
+              Adlar
+            </button>
+            <button
+              type="button"
+              onClick={() => void applyEdits(computeAreaEdits(model), 'Alanlar geometriden yeniden hesaplandı')}
+              title="Kısım ve ortak alanlarda calculatedArea değerini taban poligonlarının alanından yeniden yazar (V-155)"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"
+            >
+              Alanlar
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleNormalize()}
+              title="Normalize kayıt (K70): tüm koordinatlar gml:posList + tam 3 ondalık; öncesi/sonrası doğrulama karşılaştırması gösterilir"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-700/60"
+            >
+              Normalize
+            </button>
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={editHistory.length === 0}
+              title="Son düzeltme işlemini geri al"
+              className="px-2 py-1 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 disabled:opacity-40"
+            >
+              ↶ Geri al
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveGml}
+              title={`Düzeltme kipinde kaydet: ${currentFileName}`}
+              className="px-2 py-1 text-[11px] font-medium rounded bg-emerald-600 hover:bg-emerald-500 text-white"
+            >
+              💾 Kaydet
             </button>
           </div>
         </div>
@@ -544,6 +713,37 @@ export function App() {
           </button>
         </div>
       </header>
+
+      {/* M3: Son düzeltici işleminin özeti (Normalize'da öncesi/sonrası kural farkları — K70) */}
+      {editMessage && (
+        <div
+          role="status"
+          className={`flex items-start gap-2 px-3 py-1.5 text-[11px] border-b shrink-0 ${
+            editMessage.kind === 'error'
+              ? 'bg-red-950/50 border-red-800/60 text-red-200'
+              : editMessage.kind === 'ok'
+              ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-200'
+              : 'bg-sky-950/40 border-sky-800/60 text-sky-200'
+          }`}
+        >
+          <div className="flex-1 min-w-0">
+            <div>{editMessage.text}</div>
+            {editMessage.diff && editMessage.diff.length > 0 && (
+              <div className="mt-0.5 font-mono text-[10px] opacity-90">
+                Kural farkları: {editMessage.diff.join(' · ')}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditMessage(null)}
+            aria-label="Kapat"
+            className="px-1.5 rounded hover:bg-white/10"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* G1 (PERF-01): WEB WORKER OKUMA İLERLEME ÇUBUĞU VE İPTAL DÜĞMESİ */}
       {workerReadState && (

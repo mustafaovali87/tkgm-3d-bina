@@ -1,6 +1,6 @@
 // M2 — Şartname §6.2 Dosya ve şema, §6.3 CityModel ve Envelope, §6.4 Halka geometrisi, §6.5 ID, ad ve sınıf
 import { ALLOWED_TUREF_EPSG_CODES, ALLOWED_SURFACE_NAMES } from '../model/index.ts';
-import type { ImportedCityObject } from '../gml/gmlReader.ts';
+import { expectedObjectName } from '../gml/names.ts';
 import {
   dropAxisOf,
   newellNormal,
@@ -713,73 +713,12 @@ function runRingTopology(ctx: RuleContext, emit: Emit): void {
   }
 }
 
-// ---------- V-058 nesne adları ----------
+// ---------- V-058 nesne adları (src/core/gml/names.ts ile ortak) ----------
 function runNameRules(ctx: RuleContext, emit: Emit): void {
-  const cid = ctx.building?.attributesMap.constructionID ?? '';
-  // Adlarda boş blockName / entrance "-1" olarak yazılır (9 resmi dosyada ölçüldü).
-  const part = (v: string | undefined) => (v === undefined || v.trim() === '' ? '-1' : v.trim());
-  const bbPrefixOf = (bb: ImportedCityObject | undefined): string | null => {
-    if (!bb) return null;
-    const a = bb.attributesMap;
-    return `${part(a.blockName)}_${part(a.entrance)}_${a.independentSectionNumber ?? ''}`;
-  };
-  const check = (o: ImportedCityObject, expected: string) => {
-    if (o.gmlName !== expected) {
-      emit({ message: `${o.gmlId}: ad "${expected}" olmalı (bulunan: "${o.gmlName}").`, targetGmlId: o.gmlId, tkgmMessage: 'İsimlendirme hatası.' });
-    }
-  };
-  const label = (list: Parameters<RuleContext['codelists']['getDescription']>[0], v: string | undefined) => {
-    const n = Number.parseInt(v ?? '', 10);
-    return Number.isFinite(n) ? ctx.codelists.getDescription(list, n) : undefined;
-  };
   for (const o of ctx.model.objects) {
-    const a = o.attributesMap;
-    switch (o.prefix) {
-      case 'MB_':
-        if (cid) check(o, `Mimari Bina_${cid}`);
-        break;
-      case 'MBG_':
-        if (cid) check(o, `Mimari Bina Grup_${cid}`);
-        break;
-      case 'K_':
-        if (a.storeyNumber !== undefined) check(o, `Kat_${a.storeyNumber}`);
-        break;
-      case 'BB_': {
-        const pre = bbPrefixOf(o);
-        if (pre) check(o, `${pre}_Bağımsız Bölüm`);
-        break;
-      }
-      case 'BBK_': {
-        const pre = bbPrefixOf(ctx.obj(o.referencedBbGmlId));
-        const lbl = label('partUsage', a.partUsage);
-        if (pre && lbl) check(o, `${pre}_${lbl}`);
-        break;
-      }
-      case 'OA_': {
-        const lbl = label('commonAreaUsage', a.commonAreaUsage);
-        if (lbl) check(o, `${lbl}_Ortak Alan`);
-        break;
-      }
-      case 'BLKN_': {
-        const pre = bbPrefixOf(ctx.obj(o.referencedBbGmlId));
-        if (pre) check(o, `${pre}_Balkon`);
-        break;
-      }
-      case 'TRS_':
-        if ((a.independentSectionObjectReference ?? '') === '-1') check(o, '-1_-1_-1_Teras');
-        break;
-      case 'KAPI_': {
-        const lbl = label('doorUsage', a.doorUsage);
-        if (lbl) check(o, lbl);
-        break;
-      }
-      case 'PEN_': {
-        const lbl = label('windowUsage', a.windowUsage);
-        if (lbl) check(o, lbl);
-        break;
-      }
-      default:
-        break;
+    const expected = expectedObjectName(ctx.model, ctx.codelists, o);
+    if (expected !== null && o.gmlName !== expected) {
+      emit({ message: `${o.gmlId}: ad "${expected}" olmalı (bulunan: "${o.gmlName}").`, targetGmlId: o.gmlId, tkgmMessage: 'İsimlendirme hatası.' });
     }
   }
 }

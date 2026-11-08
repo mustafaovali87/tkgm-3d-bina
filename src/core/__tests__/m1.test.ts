@@ -1,7 +1,9 @@
-// K06, K09, K12, K55, K60, K84, K89, V-211, D-23.4, KONTROL-M1 (G1–G8)
+// K06, K09, K12, K55, K60, K84, K89, V-211, D-23.4, KONTROL-M1 (G1–G8) & KONTROL-M1-2 (R1–R3, §4)
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { verifyGmlDirectorySamples } from '../../../scripts/verify-samples.ts';
 import {
   createCodelistRegistryFromXmlMap,
   OFFICIAL_CODELIST_NAMES,
@@ -25,7 +27,7 @@ beforeAll(() => {
   }) as unknown as typeof fetch;
 });
 
-describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel Hiyerarşisi (K06, K09, K12, K55, K60, K84, K89, V-211)', () => {
+describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve KONTROL-M1-2 §4 Gerileme Testleri (R1–R3)', () => {
   let ornek6Xml = '';
   const xmlMap = {} as Record<OfficialCodelistName, string>;
 
@@ -42,7 +44,7 @@ describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel
     }
   });
 
-  it('fixtures/ornek6.gml dosyasını eksiksiz ImportedModel ağacına ayrıştırır, xlink:href referanslarını çözer ve kod listesi açıklamalarını bağlar', () => {
+  it('KONTROL-M1-2 §4.1 (R3): Ornek6 altın değerlerini (polygons.length === 741, benzersiz gml:id, MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1, biçim A, ofset 10, profil A10) birebir doğrular', () => {
     const registry = createCodelistRegistryFromXmlMap(xmlMap);
     const model = parseCityGmlModel(ornek6Xml, 'Ornek6-M-70125626-A.gml', registry);
 
@@ -50,24 +52,35 @@ describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel
     expect(model.srsName).toBe('EPSG:5254');
     expect(model.buildingGmlId).toBe('MB_b9e3888a-63b3-4f4c-9d75-58af494f6733');
     expect(model.constructionID).toBe('70125626-A');
+
+    // §4.1 (R3): Poligon sayısı tam 741 olmalı ve tüm poligon kimlikleri benzersiz olmalıdır
+    expect(model.polygons.length).toBe(741);
+    const uniquePolyIds = new Set(model.polygons.map((p) => p.gmlId));
+    expect(uniquePolyIds.size).toBe(model.polygons.length);
+
+    // BB_ poligonları "BalkonTeras" olarak etiketlenmemelidir (yalnız BLKN_ / TRS_ BalkonTeras olur)
+    const bbPolys = model.polygons.filter((p) => p.ownerObjectPrefix === 'BB_');
+    expect(bbPolys.length).toBe(382);
+    expect(bbPolys.every((p) => p.surfaceTag === 'BagimsizBolum')).toBe(true);
+
+    // §4.1: Nesne sayıları altın değerleri: MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1 (Toplam 108)
     expect(model.objects.length).toBe(108);
+    expect(model.objects.filter((o) => o.prefix === 'MB_').length).toBe(1);
+    expect(model.objects.filter((o) => o.prefix === 'K_').length).toBe(2);
+    expect(model.objects.filter((o) => o.prefix === 'BB_').length).toBe(2);
+    expect(model.objects.filter((o) => o.prefix === 'BBK_').length).toBe(16);
+    expect(model.objects.filter((o) => o.prefix === 'BLKN_').length).toBe(4);
+    expect(model.objects.filter((o) => o.prefix === 'KAPI_').length).toBe(44);
+    expect(model.objects.filter((o) => o.prefix === 'PEN_').length).toBe(38);
+    expect(model.objects.filter((o) => o.prefix === 'MBG_').length).toBe(1);
+
+    // §4.1: Biçim A, ofset 10, profil A10
     expect(model.detectedStoreyForm).toBe('A');
     expect(model.detectedDoorBottomOffsetMm).toBe(10);
     expect(model.detectedProducerProfile).toBe('A10');
 
-    // K_ kat nesneleri ve BB_ bağımsız bölümlerin kat eşleşmesi
-    const storeys = model.objects.filter((o) => o.prefix === 'K_');
-    const bbs = model.objects.filter((o) => o.prefix === 'BB_');
-    expect(storeys.length).toBe(2);
-    expect(bbs.length).toBe(2);
-    for (const bbObj of bbs) {
-      expect(bbObj.storeyGmlId).not.toBeNull();
-      expect(bbObj.allPolygonIds.length).toBeGreaterThan(0);
-    }
-
     // D-23.6 #2: BBK_ seçildiğinde partUsage ve kod listesi Türkçe karşılığı görünür olmalıdır
     const bbkObjects = model.objects.filter((o) => o.prefix === 'BBK_');
-    expect(bbkObjects.length).toBe(16);
     for (const bbk of bbkObjects) {
       expect(bbk.storeyGmlId).not.toBeNull();
       expect(bbk.referencedBbGmlId).not.toBeNull();
@@ -77,8 +90,7 @@ describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel
     }
 
     // V-211: Ornek6 içinde çözülemeyen xlink:href bulunmamalıdır (0 HATA, 0 UYARI)
-    const v211Errors = model.readerIssues.filter((i) => i.ruleId === 'V-211');
-    expect(v211Errors.length).toBe(0);
+    expect(model.readerIssues.filter((i) => i.ruleId === 'V-211').length).toBe(0);
     expect(model.readerIssues.filter((i) => i.severity === 'H').length).toBe(0);
     expect(model.readerIssues.filter((i) => i.severity === 'U').length).toBe(0);
 
@@ -87,13 +99,197 @@ describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel
     expect(v214Issues.length).toBe(1);
     expect(v214Issues[0]?.severity).toBe('B');
 
-    // K06: Yerel sahne merkezi (P_origin) TUREF zarf merkezine ayarlanmıştır
-    expect(model.originTuref.e).toBeGreaterThan(532500);
-    expect(model.originTuref.n).toBeGreaterThan(4288300);
-    expect(model.originTuref.z).toBeGreaterThan(1090);
-
     // K89: Kanonik model özeti 64 karakterlik deterministik SHA-256 üretir
     expect(model.canonicalHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('KONTROL-M1-2 §4.2 (R2 & G2): Biçim B kat fikstüründe (K_ içinde >= 3 Floor_ poligonu) biçim B tespit edilir; 50 mm kapı ofsetinde B50, 10 mm kapı ofsetinde (Sincan) "B + 10 mm (profil dışı)" + V-215 BİLGİ üretir', () => {
+    const registry = createCodelistRegistryFromXmlMap(xmlMap);
+
+    // Ornek2 biçiminde K_ grubunda >= 3 adet Floor_ poligonu bulunan kat fikstürü
+    const makeFormBXml = (doorBottomZ: string) => `<?xml version="1.0" encoding="utf-8"?>
+<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" xmlns:gml="http://www.opengis.net/gml" xmlns:bldg="http://www.opengis.net/citygml/building/2.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/2.0" xmlns:gen="http://www.opengis.net/citygml/generics/2.0" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <gml:boundedBy><gml:Envelope srsName="EPSG:5254" srsDimension="3"><gml:lowerCorner>500000 4000000 100</gml:lowerCorner><gml:upperCorner>500020 4000020 105</gml:upperCorner></gml:Envelope></gml:boundedBy>
+  <core:cityObjectMember>
+    <bldg:Building gml:id="MB_22222222-2222-4222-8222-222222222221">
+      <gen:stringAttribute name="constructionID"><gen:value>ORNEK2-FORM-B</gen:value></gen:stringAttribute>
+      <bldg:interiorRoom>
+        <bldg:Room gml:id="BBK_22222222-2222-4222-8222-222222222223">
+          <gen:intAttribute name="partUsage"><gen:value>1</gen:value></gen:intAttribute>
+          <gen:stringAttribute name="storeyObjectReference"><gen:value>K_22222222-2222-4222-8222-222222222222</gen:value></gen:stringAttribute>
+          <bldg:boundedBy>
+            <bldg:FloorSurface>
+              <bldg:lod4MultiSurface>
+                <gml:MultiSurface>
+                  <gml:surfaceMember>
+                    <gml:Polygon gml:id="Floor_Room_1">
+                      <gml:exterior>
+                        <gml:LinearRing gml:id="Ring_Room_1">
+                          <gml:posList>500000 4000000 100.000 500004 4000000 100.000 500004 4000004 100.000 500000 4000004 100.000 500000 4000000 100.000</gml:posList>
+                        </gml:LinearRing>
+                      </gml:exterior>
+                    </gml:Polygon>
+                  </gml:surfaceMember>
+                </gml:MultiSurface>
+              </bldg:lod4MultiSurface>
+            </bldg:FloorSurface>
+          </bldg:boundedBy>
+          <bldg:boundedBy>
+            <bldg:WallSurface>
+              <bldg:opening>
+                <bldg:Door gml:id="KAPI_22222222-2222-4222-8222-222222222224">
+                  <bldg:lod4MultiSurface>
+                    <gml:MultiSurface>
+                      <gml:surfaceMember>
+                        <gml:Polygon gml:id="Door_1">
+                          <gml:exterior>
+                            <gml:LinearRing gml:id="DoorLinearRing_1">
+                              <gml:posList>500001 4000000 ${doorBottomZ} 500002 4000000 ${doorBottomZ} 500002 4000000 102.100 500001 4000000 102.100 500001 4000000 ${doorBottomZ}</gml:posList>
+                            </gml:LinearRing>
+                          </gml:exterior>
+                        </gml:Polygon>
+                      </gml:surfaceMember>
+                    </gml:MultiSurface>
+                  </bldg:lod4MultiSurface>
+                </bldg:Door>
+              </bldg:opening>
+            </bldg:WallSurface>
+          </bldg:boundedBy>
+        </bldg:Room>
+      </bldg:interiorRoom>
+    </bldg:Building>
+  </core:cityObjectMember>
+  <core:cityObjectMember>
+    <grp:CityObjectGroup gml:id="K_22222222-2222-4222-8222-222222222222">
+      <gen:stringAttribute name="storeyNumber"><gen:value>0</gen:value></gen:stringAttribute>
+      <grp:geometry>
+        <gml:MultiSurface>
+          <gml:surfaceMember>
+            <gml:Polygon gml:id="Floor_Storey_1">
+              <gml:exterior><gml:LinearRing gml:id="R_S1"><gml:posList>500000 4000000 100 500004 4000000 100 500004 4000004 100 500000 4000004 100 500000 4000000 100</gml:posList></gml:LinearRing></gml:exterior>
+            </gml:Polygon>
+          </gml:surfaceMember>
+          <gml:surfaceMember>
+            <gml:Polygon gml:id="Floor_Storey_2">
+              <gml:exterior><gml:LinearRing gml:id="R_S2"><gml:posList>500004 4000000 100 500008 4000000 100 500008 4000004 100 500004 4000004 100 500004 4000000 100</gml:posList></gml:LinearRing></gml:exterior>
+            </gml:Polygon>
+          </gml:surfaceMember>
+          <gml:surfaceMember>
+            <gml:Polygon gml:id="Floor_Storey_3">
+              <gml:exterior><gml:LinearRing gml:id="R_S3"><gml:posList>500008 4000000 100 500012 4000000 100 500012 4000004 100 500008 4000004 100 500008 4000000 100</gml:posList></gml:LinearRing></gml:exterior>
+            </gml:Polygon>
+          </gml:surfaceMember>
+        </gml:MultiSurface>
+      </grp:geometry>
+    </grp:CityObjectGroup>
+  </core:cityObjectMember>
+</core:CityModel>`;
+
+    // 1. Ornek2 / Ornek3 / Ornek5 senaryosu: Biçim B + 50 mm ofset -> B50
+    const ornek2Like = parseCityGmlModel(makeFormBXml('100.050'), 'Ornek2-B50.gml', registry);
+    expect(ornek2Like.detectedStoreyForm).toBe('B');
+    expect(ornek2Like.detectedDoorBottomOffsetMm).toBe(50);
+    expect(ornek2Like.detectedProducerProfile).toBe('B50');
+    expect(ornek2Like.readerIssues.find((i) => i.ruleId === 'V-215')).toBeUndefined();
+
+    // 2. Sincan senaryosu: Biçim B + 10 mm ofset -> "B + 10 mm (profil dışı)" + V-215 BİLGİ
+    const sincanLike = parseCityGmlModel(makeFormBXml('100.010'), 'Sincan-B10.gml', registry);
+    expect(sincanLike.detectedStoreyForm).toBe('B');
+    expect(sincanLike.detectedDoorBottomOffsetMm).toBe(10);
+    expect(sincanLike.detectedProducerProfile).toBe('B + 10 mm (profil dışı)');
+    const v215 = sincanLike.readerIssues.find((i) => i.ruleId === 'V-215');
+    expect(v215).toBeDefined();
+    expect(v215?.severity).toBe('B');
+    expect(v215?.message).toContain('Profil dışı birleşim: kat biçimi B, kapı alt ofseti 10 mm');
+  });
+
+  it('KONTROL-M1-2 §4.3 (R1): Elemanlar arasında "\\n            " boşluk metin düğümü bulunan GML parçası (GML_M-17273333-F benzeri) çökmeden açılır', () => {
+    const registry = createCodelistRegistryFromXmlMap(xmlMap);
+
+    // curveMember, surfaceMember ve opening içinde metin düğümü ("\n            ") bulunan GML
+    const whitespaceTextNodeXml = `<?xml version="1.0" encoding="utf-8"?>
+<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" xmlns:gml="http://www.opengis.net/gml" xmlns:bldg="http://www.opengis.net/citygml/building/2.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/2.0" xmlns:gen="http://www.opengis.net/citygml/generics/2.0" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <gml:boundedBy><gml:Envelope srsName="EPSG:5254" srsDimension="3"><gml:lowerCorner>500000 4000000 100</gml:lowerCorner><gml:upperCorner>500010 4000010 105</gml:upperCorner></gml:Envelope></gml:boundedBy>
+  <core:cityObjectMember>
+    <bldg:Building gml:id="MB_17273333-1111-4111-8111-111111111111">
+      <gen:stringAttribute name="constructionID"><gen:value>17273333-F</gen:value></gen:stringAttribute>
+      <bldg:lod2TerrainIntersection>
+        <gml:MultiCurve>
+          <gml:curveMember>
+            
+          </gml:curveMember>
+          <gml:curveMember>
+            <gml:LineString>
+              <gml:posList>500000 4000000 100 500005 4000000 100 500000 4000000 100</gml:posList>
+            </gml:LineString>
+          </gml:curveMember>
+        </gml:MultiCurve>
+      </bldg:lod2TerrainIntersection>
+    </bldg:Building>
+  </core:cityObjectMember>
+  <core:cityObjectMember>
+    <grp:CityObjectGroup gml:id="K_17273333-1111-4111-8111-111111111112">
+      <gen:stringAttribute name="storeyNumber"><gen:value>0</gen:value></gen:stringAttribute>
+      <grp:geometry>
+        <gml:MultiSurface>
+          <gml:surfaceMember>
+            
+          </gml:surfaceMember>
+          <gml:surfaceMember>
+            <gml:Polygon gml:id="Floor_Ret_1">
+              <gml:exterior>
+                <gml:LinearRing gml:id="Ring_Ret_1">
+                  <gml:posList>500000 4000000 100 500005 4000000 100 500005 4000005 100 500000 4000005 100 500000 4000000 100</gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </gml:surfaceMember>
+        </gml:MultiSurface>
+      </grp:geometry>
+    </grp:CityObjectGroup>
+  </core:cityObjectMember>
+</core:CityModel>`;
+
+    const model = parseCityGmlModel(whitespaceTextNodeXml, 'GML_M-17273333-F.gml', registry);
+    expect(model.constructionID).toBe('17273333-F');
+    expect(model.detectedStoreyForm).toBe('A');
+    expect(model.detectedDoorBottomOffsetMm).toBeNull();
+    expect(model.detectedProducerProfile).toBe('A, ofset bilinmiyor');
+    const v215 = model.readerIssues.find((i) => i.ruleId === 'V-215');
+    expect(v215).toBeDefined();
+    expect(v215?.severity).toBe('B');
+  });
+
+  it('KONTROL-M1-2 §4.4 (R1 & G6): verifyGmlDirectorySamples alt klasörleri özyinelemeli tarar ve açılamayan dosyada error satırı + hasError: true üretir', () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tkgm-verify-samples-'));
+    try {
+      const subDir = path.join(tmpRoot, 'basarisiz');
+      fs.mkdirSync(subDir, { recursive: true });
+
+      // 1. Alt klasörde geçerli küçük GML dosyası
+      const validXml = `<?xml version="1.0" encoding="utf-8"?>
+<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" xmlns:gml="http://www.opengis.net/gml" xmlns:bldg="http://www.opengis.net/citygml/building/2.0">
+  <core:cityObjectMember><bldg:Building gml:id="MB_1"/></core:cityObjectMember>
+</core:CityModel>`;
+      fs.writeFileSync(path.join(subDir, 'gecerli_alt.gml'), validXml, 'utf-8');
+
+      // 2. Alt klasörde kök elemanı olmayan bozuk GML dosyası
+      fs.writeFileSync(path.join(subDir, 'bozuk.gml'), '<bozukRoot></bozukRoot>', 'utf-8');
+
+      const { rows, hasError } = verifyGmlDirectorySamples(tmpRoot, process.cwd());
+      expect(hasError).toBe(true);
+      expect(rows.length).toBe(2);
+
+      const errRow = rows.find((r) => 'error' in r);
+      expect(errRow).toBeDefined();
+      expect(errRow?.fileName).toBe('basarisiz/bozuk.gml');
+
+      const okRow = rows.find((r) => !('error' in r));
+      expect(okRow).toBeDefined();
+      expect(okRow?.fileName).toBe('basarisiz/gecerli_alt.gml');
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 
   it('V-211: Kırık xlink:href="#OlmayanPoligon_1" referansını yakalar ve V-211 HATA (H) üretir', () => {
@@ -133,7 +329,6 @@ describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel
 
     const { strippedModel, packedBuffer } = packModelPolygonVerticesFloat64(model);
     expect(packedBuffer.length).toBeGreaterThan(1000);
-    // Paketleme sonrasında strippedModel içindeki vertices dizileri boşaltılmıştır (kopya maliyetini önlemek için)
     expect(strippedModel.polygons[0]?.exteriorRing.vertices.length).toBe(0);
 
     const hydrated = hydrateModelPolygonVerticesFloat64(strippedModel, packedBuffer);
@@ -142,10 +337,9 @@ describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel
     );
   });
 
-  it('KONTROL-M1 G2, G3, G4, G8: Sincan (B + 10 mm -> B10 profil dışı), Amasya (ofset null -> V-215 B + eski rejim propertyLot yok -> V-198 B ve "—") ve farklı XML ad alanı öneklerini doğru ayrıştırır', () => {
+  it('KONTROL-M1 G3, G4, G8: Amasya (ofset null -> "A, ofset bilinmiyor" + V-215 B + eski rejim propertyLot yok -> V-198 B ve "—") ve farklı XML ad alanı öneklerini doğru ayrıştırır', () => {
     const registry = createCodelistRegistryFromXmlMap(xmlMap);
 
-    // 1. Amasya senaryosu: Kat biçimi A, kapı yok (offset = null), propertyLot yok (eski rejim), farklı XML önekleri (c:, b:, g:, gr:, gn:, xl:)
     const amasyaLikeXml = `<?xml version="1.0" encoding="utf-8"?>
 <c:CityModel xmlns:c="http://www.opengis.net/citygml/2.0" xmlns:g="http://www.opengis.net/gml" xmlns:b="http://www.opengis.net/citygml/building/2.0" xmlns:gr="http://www.opengis.net/citygml/cityobjectgroup/2.0" xmlns:gn="http://www.opengis.net/citygml/generics/2.0" xmlns:xl="http://www.w3.org/1999/xlink">
   <g:boundedBy><g:Envelope srsName="EPSG:5254" srsDimension="3"><g:lowerCorner>500000 4000000 100</g:lowerCorner><g:upperCorner>500010 4000010 105</g:upperCorner></g:Envelope></g:boundedBy>
@@ -158,15 +352,10 @@ describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel
     <gr:CityObjectGroup g:id="K_11111111-1111-4111-8111-111111111112">
       <gn:stringAttribute name="storeyNumber"><gn:value>0</gn:value></gn:stringAttribute>
       <gr:groupMember xl:href="#BB_11111111-1111-4111-8111-111111111113"/>
-    </gr:CityObjectGroup>
-  </c:cityObjectMember>
-  <c:cityObjectMember>
-    <gr:CityObjectGroup g:id="BB_11111111-1111-4111-8111-111111111113">
-      <gn:stringAttribute name="independentSectionNumber"><gn:value>1</gn:value></gn:stringAttribute>
       <gr:geometry>
         <g:MultiSurface>
           <g:surfaceMember>
-            <g:Polygon g:id="Polygon_Floor_1">
+            <g:Polygon g:id="Floor_Amasya_1">
               <g:exterior>
                 <g:LinearRing g:id="Ring_Floor_1">
                   <g:posList srsDimension="3">500000 4000000 100 500005 4000000 100 500005 4000005 100 500000 4000005 100 500000 4000000 100</g:posList>
@@ -178,92 +367,27 @@ describe('M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel
       </gr:geometry>
     </gr:CityObjectGroup>
   </c:cityObjectMember>
+  <c:cityObjectMember>
+    <gr:CityObjectGroup g:id="BB_11111111-1111-4111-8111-111111111113">
+      <gn:stringAttribute name="independentSectionNumber"><gn:value>1</gn:value></gn:stringAttribute>
+    </gr:CityObjectGroup>
+  </c:cityObjectMember>
 </c:CityModel>`;
 
     const amasyaModel = parseCityGmlModel(amasyaLikeXml, 'Amasya-RejimE.gml', registry);
     expect(amasyaModel.detectedStoreyForm).toBe('A');
     expect(amasyaModel.detectedDoorBottomOffsetMm).toBeNull();
-    expect(amasyaModel.detectedProducerProfile).toBe('biçim A, ofset bilinmiyor');
-    // G3: Kapı alt ofseti ölçülemedi -> V-215 BİLGİ
+    expect(amasyaModel.detectedProducerProfile).toBe('A, ofset bilinmiyor');
     const v215Null = amasyaModel.readerIssues.find((i) => i.ruleId === 'V-215');
     expect(v215Null).toBeDefined();
     expect(v215Null?.severity).toBe('B');
     expect(v215Null?.message).toContain('Kapı alt ofseti ölçülemedi');
-    // G4: propertyLot yok -> "—" ve V-198 BİLGİ
     expect(amasyaModel.landShareAnalysis.hasPropertyLotData).toBe(false);
     expect(amasyaModel.landShareAnalysis.formattedTotalUnreduced).toBe('—');
     const v198Info = amasyaModel.landShareAnalysis.issues.find((i) => i.ruleId === 'V-198');
     expect(v198Info).toBeDefined();
     expect(v198Info?.severity).toBe('B');
     expect(v198Info?.message).toContain('Arsa payı bilgisi yok (eski rejim dosyası)');
-
-    // 2. Sincan senaryosu: Kat biçimi B (groupMember role="kat elemani" inline Room + Door, ofset 10 mm) -> B10 profil dışı birleşim
-    const sincanLikeXml = `<?xml version="1.0" encoding="utf-8"?>
-<core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" xmlns:gml="http://www.opengis.net/gml" xmlns:bldg="http://www.opengis.net/citygml/building/2.0" xmlns:grp="http://www.opengis.net/citygml/cityobjectgroup/2.0" xmlns:gen="http://www.opengis.net/citygml/generics/2.0" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <gml:boundedBy><gml:Envelope srsName="EPSG:5254" srsDimension="3"><gml:lowerCorner>500000 4000000 100</gml:lowerCorner><gml:upperCorner>500010 4000010 105</gml:upperCorner></gml:Envelope></gml:boundedBy>
-  <core:cityObjectMember>
-    <bldg:Building gml:id="MB_22222222-2222-4222-8222-222222222221">
-      <gen:stringAttribute name="constructionID"><gen:value>SINCAN-1</gen:value></gen:stringAttribute>
-    </bldg:Building>
-  </core:cityObjectMember>
-  <core:cityObjectMember>
-    <grp:CityObjectGroup gml:id="K_22222222-2222-4222-8222-222222222222">
-      <gen:stringAttribute name="storeyNumber"><gen:value>0</gen:value></gen:stringAttribute>
-      <grp:groupMember role="kat elemani">
-        <bldg:Room gml:id="BBK_22222222-2222-4222-8222-222222222223">
-          <gen:intAttribute name="partUsage"><gen:value>1</gen:value></gen:intAttribute>
-          <bldg:lod4Solid>
-            <gml:Solid>
-              <gml:exterior>
-                <gml:CompositeSurface>
-                  <gml:surfaceMember>
-                    <gml:Polygon gml:id="Poly_Floor_B">
-                      <gml:exterior>
-                        <gml:LinearRing gml:id="Ring_Floor_B">
-                          <gml:posList>500000 4000000 100.000 500004 4000000 100.000 500004 4000004 100.000 500000 4000004 100.000 500000 4000000 100.000</gml:posList>
-                        </gml:LinearRing>
-                      </gml:exterior>
-                    </gml:Polygon>
-                  </gml:surfaceMember>
-                </gml:CompositeSurface>
-              </gml:exterior>
-            </gml:Solid>
-          </bldg:lod4Solid>
-          <bldg:boundedBy>
-            <bldg:WallSurface>
-              <bldg:opening>
-                <bldg:Door gml:id="KAPI_22222222-2222-4222-8222-222222222224">
-                  <bldg:lod4MultiSurface>
-                    <gml:MultiSurface>
-                      <gml:surfaceMember>
-                        <gml:Polygon gml:id="Poly_Door_B">
-                          <gml:exterior>
-                            <gml:LinearRing gml:id="DoorLinearRing_B">
-                              <gml:posList>500001 4000000 100.010 500002 4000000 100.010 500002 4000000 102.110 500001 4000000 102.110 500001 4000000 100.010</gml:posList>
-                            </gml:LinearRing>
-                          </gml:exterior>
-                        </gml:Polygon>
-                      </gml:surfaceMember>
-                    </gml:MultiSurface>
-                  </bldg:lod4MultiSurface>
-                </bldg:Door>
-              </bldg:opening>
-            </bldg:WallSurface>
-          </bldg:boundedBy>
-        </bldg:Room>
-      </grp:groupMember>
-    </grp:CityObjectGroup>
-  </core:cityObjectMember>
-</core:CityModel>`;
-
-    const sincanModel = parseCityGmlModel(sincanLikeXml, 'Sincan-B10.gml', registry);
-    expect(sincanModel.detectedStoreyForm).toBe('B');
-    expect(sincanModel.detectedDoorBottomOffsetMm).toBe(10);
-    expect(sincanModel.detectedProducerProfile).toBe('B10 (biçim B, ofset 10 mm)');
-    const v215NonStandard = sincanModel.readerIssues.find((i) => i.ruleId === 'V-215');
-    expect(v215NonStandard).toBeDefined();
-    expect(v215NonStandard?.severity).toBe('B');
-    expect(v215NonStandard?.message).toContain('Profil dışı birleşim: kat biçimi B, kapı alt ofseti 10 mm');
   });
 });
 

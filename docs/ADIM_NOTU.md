@@ -1,22 +1,25 @@
 # M0 + M1 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
 
-> **Aşama:** `M0 (F1–F12) + M1 (G1–G8 Düzeltmeleri + Web Worker GML Okuyucu + Three.js 3B Sahne + KARAR D-23 5 Panelli Ana Pencere Yerleşimi)`
-> **Durum:** `TAMAMLANDI (KONTROL-M1 G1–G8 ve KONTROL-M0 F1–F12 TAMAMI YAPILDI, 30 / 30 Birim Test GEÇTİ, 15 / 15 Resmi Dosya SHA-256 DOĞRULANDI, npm ci / typecheck / lint 0 Hata)`
+> **Aşama:** `M0 (F1–F12) + M1 (KONTROL-M1-2 R1–R3 Gerileme Düzeltmeleri + G1–G8 + Web Worker GML Okuyucu + Three.js 3B Sahne + KARAR D-23)`
+> **Durum:** `TAMAMLANDI (KONTROL-M1-2 R1–R3, KONTROL-M1 G1–G8 ve KONTROL-M0 F1–F12 TAMAMI YAPILDI, 33 / 33 Birim Test GEÇTİ, Ornek6 741 Tekil Poligon Doğrulandı, npm ci / typecheck / lint 0 Hata)`
 
 ---
 
-## 0. `KONTROL-M1.md` Bulguları (`G1–G8`) Durum Tablosu
+## 0. `KONTROL-M1-2.md` (`R1–R3`) ve `KONTROL-M1.md` (`G1–G8`) Durum Tablosu
 
 | Kod | Önem | Durum | Açıklama ve Uygulanan Çözüm |
 |---|---|---|---|
+| **R1** | HATA (Gerileme — M2 öncesi zorunlu) | **YAPILDI** | Reddedilmiş örnek dosya (GML_M-17273333-F.gml) okunurken boşluk metin düğümünde ("\n            ") getNodeByLocalName çökmesi + verify:samples özyinelemeli alt klasör taraması — *getNodeByLocalName ve getAttrByLocalName girişlerine "if (record === null || typeof record !== 'object') return ..." koruması eklendi. Ayrıca scripts/verify-samples.ts alt klasörleri özyinelemeli tarayacak ve açılamayan dosyada {"fileName":...,"error":...} basıp çıkış kodu 1 dönecek şekilde güncellendi (§4.3 ve §4.4 gerileme testleri eklendi).* |
+| **R2** | HATA (Gerileme — M2 öncesi zorunlu) | **YAPILDI** | Kat biçimi tespitinin bozulması (Biçim B katlarında Floor_ >= 3 olduğunda A'ya düşmesi) ve G2 profil birleşimi (Sincan B + 10 mm -> "B + 10 mm (profil dışı)") — *Kat biçimi kuralı geri alındı: Floor_ = 1 -> A, = 2 -> C, >= 3 -> B (N2, N26). G2 bunun üzerine kuruldu: Ornek1/4/6 -> A10, Ornek2/3/5 -> B50, Sincan -> "B + 10 mm (profil dışı)" + V-215 BİLGİ, Amasya ve GML_M-17273333-F -> "A, ofset bilinmiyor" + V-215 BİLGİ (§4.2 gerileme testi eklendi).* |
+| **R3** | HATA (Gerileme — M2 öncesi zorunlu) | **YAPILDI** | Poligon listesinin kopyalanması (Ornek6 içinde 741 yerine 1.123 poligon; BB_ poligonlarının ikinci kez "BalkonTeras" olarak eklenmesi) — *directContainers içindeki çift localKey: "lod2Geometry" kaldırıldı; BB_ poligonları artık yalnızca "BagimsizBolum" olarak okunur ("BalkonTeras" yalnız BLKN_/TRS_ için kullanılır). Ayrıca model.polygons her gml:id için tek kayıt tutar ve çoklu sahiplikte ownerObjectGmlIds: string[] alanını kullanır. Ornek6 poligon sayısı 741 olarak doğrulandı (§4.1 gerileme testi eklendi).* |
 | **G1** | Orta (M2 öncesi zorunlu) | **YAPILDI** | GML okuma ve ayrıştırmanın Web Worker içine taşınması (PERF-01) + İlerleme Çubuğu + İptal düğmesi + Transferable Float64Array — *src/workers/gmlReader.worker.ts ve src/workers/gmlWorkerClient.ts oluşturuldu. parseCityGmlModel Web Worker içinde çalışır; poligon köşeleri packModelPolygonVerticesFloat64 ile tek bir Float64Array (Transferable ArrayBuffer) olarak ana iş parçacığına sıfır kopya maliyetiyle aktarılır; üst şeritte canlı %0–%100 ilerleme çubuğu ve worker.terminate() çağıran "İptal" düğmesi eklendi.* |
-| **G2** | Düşük | **YAPILDI** | detectedProducerProfile değerinin kat biçimi + kapı alt ofsetini birlikte değerlendirmesi (Sincan B + 10 mm -> B10 profil dışı birleşim) — *resolveProducerProfileFromFormAndOffset eklendi: A+10->"A10", B+50->"B50", C+50->"C50"; ofset null ise "biçim A, ofset bilinmiyor"; Sincan (B+10 mm) gibi standart dışı kombinasyonlarda "B10 (biçim B, ofset 10 mm)" döndürülür ve V-215 BİLGİ ("Profil dışı birleşim...") üretilir.* |
-| **G3** | Düşük | **YAPILDI** | detectedDoorBottomOffsetMm === null olduğunda (Amasya) readerIssues içine V-215 BİLGİ eklenmesi — *Oda tabanı ile eşleşen kapı bulunamadığında readerIssues dizisine V-215 BİLGİ ("Kapı alt ofseti ölçülemedi (dosyada oda tabanı ile eşleşen kapı bulunamadı).") eklenir.* |
+| **G2** | Düşük | **YAPILDI** | detectedProducerProfile değerinin kat biçimi + kapı alt ofsetini birlikte değerlendirmesi (Sincan B + 10 mm -> "B + 10 mm (profil dışı)") — *resolveProducerProfileFromFormAndOffset eklendi: A+10->"A10", B+50->"B50", C+50->"C50"; ofset null ise "<Form>, ofset bilinmiyor"; Sincan (B+10 mm) gibi standart dışı kombinasyonlarda "B + 10 mm (profil dışı)" döndürülür ve V-215 BİLGİ ("Profil dışı birleşim...") üretilir.* |
+| **G3** | Düşük | **YAPILDI** | detectedDoorBottomOffsetMm === null olduğunda (Amasya, GML_M-17273333-F) readerIssues içine V-215 BİLGİ eklenmesi — *Oda tabanı ile eşleşen kapı bulunamadığında readerIssues dizisine V-215 BİLGİ ("Kapı alt ofseti ölçülemedi (dosyada oda tabanı ile eşleşen kapı bulunamadı).") eklenir.* |
 | **G4** | Düşük | **YAPILDI** | Eski rejim dosyalarında (Amasya, Sincan) propertyLot olmadığında 0/1 yerine "—" gösterilmesi ve V-198 BİLGİ üretilmesi — *analyzeBuildingLandShares içinde hasPropertyLotData bayrağı eklendi; hiçbir BB_ üzerinde propertyLot yoksa formattedTotalUnreduced = "—" döndürülür, V-198 BİLGİ ("Arsa payı bilgisi yok (eski rejim dosyası).") üretilir ve arayüzde 0/1 yerine "—" gösterilir.* |
 | **G5** | Düşük | **YAPILDI** | V-214 (intAttribute/doubleAttribute baş/son boşluk, ör. Ornek6 maksIdentityNumber = "\t5129820196") önem derecesinin UYARI yerine BİLGİ (B) yapılması — *gmlReader.ts içinde V-214 severity alanı "B" (BİLGİ) olarak güncellendi; Ornek6 okunduğunda artık HATA: 0, UYARI: 0, BİLGİ: 2 üretir.* |
-| **G6** | Bilgi | **YAPILDI** | npm run verify:samples <klasör> komutunun klasördeki tüm .gml dosyalarını parseCityGmlModel ile okuyup tek satır JSON özet basması — *scripts/verify-samples.ts içine verifyGmlDirectorySamples eklendi; komut satırından klasör veya dosya yolu verildiğinde süre, bellek, nesne/poligon sayısı, kat biçimi, kapı ofseti, profil, arsa payı ve H/U/B sayılarını tek satır JSON olarak basar.* |
+| **G6** | Bilgi | **YAPILDI** | npm run verify:samples <klasör> komutunun alt klasörleri özyinelemeli taraması, tek satır JSON özet basması ve hata durumunda çıkış kodu 1 dönmesi — *scripts/verify-samples.ts içine özyinelemeli verifyGmlDirectorySamples eklendi; klasör ve alt klasörlerdeki tüm .gml dosyalarını okur, açılamayan dosyada {"fileName":...,"error":...} basıp çıkış kodu 1 döner.* |
 | **G7** | Bilgi | **YAPILDI** | src/App.tsx dosyasının modüler parçalara (TreePanel, AttributePanel, ValidationPanel, WorkspaceLayout, workspaceState) bölünmesi ve ağaç etiket tıklama düzeltmesi — *src/state/workspaceState.ts, src/panels/TreePanel.tsx, src/panels/AttributePanel.tsx, src/panels/ValidationPanel.tsx ve src/layout/WorkspaceLayout.tsx oluşturuldu; TreePanel içindeki metin/rozet elemanlarına pointer-events-none eklenerek satırın neresine tıklanırsa tıklansın seçimin tetiklenmesi sağlandı.* |
-| **G8** | Bilgi | **YAPILDI** | gmlReader.ts içinde sabit XML ad alanı öneklerine (core:, bldg:, gml:, grp:, gen:, xlink:) bağımlılığın kaldırılması — *getNodeByLocalName ve getAttrByLocalName yardımcıları eklendi; hızlı yol (fast-path) bilinen önekleri kontrol ettikten sonra herhangi bir özel ad alanı önekini (:localName) yerel adıyla eşleştirir.* |
+| **G8** | Bilgi | **YAPILDI** | gmlReader.ts içinde sabit XML ad alanı öneklerine (core:, bldg:, gml:, grp:, gen:, xlink:) bağımlılığın kaldırılması — *getNodeByLocalName ve getAttrByLocalName yardımcıları (R1 metin düğümü korumasıyla birlikte) eklendi; bilinen önekleri kontrol ettikten sonra herhangi bir özel ad alanı önekini (:localName) yerel adıyla eşleştirir.* |
 
 ---
 
@@ -41,14 +44,14 @@
 
 ## 2. `M0` ve `M1` Kapsamında Oluşturulan / Doğrulanan Dosyalar
 
-### M1 — Web Worker GML Okuyucu (`G1`), 3B Delikli Üçgenleme, Modüler Paneller (`G7`) ve KARAR D-23 Çalışma Alanı
-- `src/core/gml/gmlReader.ts` (`M1` Saf TS CityGML 2.0 okuyucu: `G1` `onProgress` + `packModelPolygonVerticesFloat64` / `hydrateModelPolygonVerticesFloat64`, `G2` `resolveProducerProfileFromFormAndOffset`, `G3` `V-215 B` kapısız oda bildirimi, `G5` `V-214 B` baş/son boşluk bildirimi, `G8` ad alanı önek bağımsızlığı)
+### M1 — Web Worker GML Okuyucu (`G1`), `R1–R3` Düzeltmeleri, 3B Delikli Üçgenleme, Modüler Paneller (`G7`) ve KARAR D-23 Çalışma Alanı
+- `src/core/gml/gmlReader.ts` (`M1` Saf TS CityGML 2.0 okuyucu: `R1` boşluk metin düğümü koruması, `R2` `Floor_ = 1 -> A, = 2 -> C, >= 3 -> B` kat biçimi + `G2` `resolveProducerProfileFromFormAndOffset`, `R3` tekil `gml:id` poligon listesi `741` poligon + `ownerObjectGmlIds`, `G1` `onProgress` + `packModelPolygonVerticesFloat64` / `hydrateModelPolygonVerticesFloat64`, `G3` `V-215 B`, `G5` `V-214 B`, `G8` ad alanı önek bağımsızlığı)
 - `src/workers/gmlReader.worker.ts` ve `src/workers/gmlWorkerClient.ts` (`G1` `PERF-01` Web Worker GML ayrıştırıcı, `Transferable` `Float64Array` poligon köşe aktarımı, canlı `%0–%100` ilerleme bildirimi ve `worker.terminate()` ile anında iptal)
 - `src/state/workspaceState.ts`, `src/panels/TreePanel.tsx`, `src/panels/AttributePanel.tsx`, `src/panels/ValidationPanel.tsx`, `src/layout/WorkspaceLayout.tsx` (`G7` modüler panel mimarisi ve ağaç satırı `pointer-events-none` tıklama düzeltmesi)
 - `src/core/gml/triangulate3d.ts` (`M1` Saf TS 3B düzlemsel poligon + `DoorLinearRing_` / `WindowLinearRing_` iç delik köprüleme + kulak kesme üçgenleme motoru ve `K06` `P_local = P_TUREF - P_origin` yerel merkezleme)
 - `src/viewer3d/CityGmlViewport3D.tsx` ve `src/viewer3d/FloorPlanPreview2D.tsx` (Three.js 3B sahne ve 2B kat izdüşümü + `D-23.1` M4 yer tutucusu)
-- `src/App.tsx` (Modüler ana uygulama kabuğu, Web Worker ilerleme çubuğu + `"İptal"` düğmesi, `KONTROL-M1 G1–G8` ve `KONTROL-M0 F1–F12` denetim çekmecesi)
-- `src/core/__tests__/m1.test.ts` (`M1` + `G1–G8` birim testleri)
+- `src/App.tsx` (Modüler ana uygulama kabuğu, Web Worker ilerleme çubuğu + `"İptal"` düğmesi, `KONTROL-M1-2 R1–R3` / `G1–G8` ve `KONTROL-M0 F1–F12` denetim çekmecesi)
+- `src/core/__tests__/m1.test.ts` (`M1` + `G1–G8` + `KONTROL-M1-2 §4` zorunlu gerileme testleri)
 
 ---
 
@@ -62,28 +65,28 @@
 
 ---
 
-## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0.test.ts` + `m1.test.ts`)
+## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0.test.ts` + `m1.test.ts` — 33 / 33 Test)
 
 ```text
 RUN  v5.1.0 /app/applet
 
- ✓ src/core/__tests__/m0.test.ts (23 tests) 226ms
- ✓ src/core/__tests__/m1.test.ts (7 tests) 1062ms
-   ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel Hiyerarşisi (K06, K09, K12, K55, K60, K84, K89, V-211) (4)
-     ✓ fixtures/ornek6.gml dosyasını eksiksiz ImportedModel ağacına ayrıştırır, xlink:href referanslarını çözer ve kod listesi açıklamalarını bağlar 511ms
+ ✓ src/core/__tests__/m0.test.ts (23 tests) 298ms
+ ✓ src/core/__tests__/m1.test.ts (10 tests) 939ms
+   ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve KONTROL-M1-2 §4 Gerileme Testleri (R1–R3) (7)
+     ✓ KONTROL-M1-2 §4.1 (R3): Ornek6 altın değerlerini (polygons.length === 741, benzersiz gml:id, MB 1, K 2, BB 2, BBK 16, BLKN 4, KAPI 44, PEN 38, MBG 1, biçim A, ofset 10, profil A10) birebir doğrular 449ms
 
  Test Files  2 passed (2)
-      Tests  30 passed (30)
-   Start at  02:42:10
-   Duration  1.52s (tests 83%, import 10%, transform 6%, worker 1%)
+      Tests  33 passed (33)
+   Start at  07:35:59
+   Duration  1.72s (tests 57%, transform 30%, import 11%, worker 2%)
 ```
 
 ---
 
-## 5. `npm run verify:samples fixtures` (`G6` Toplu Klasör Okuma) Gerçek Çıktısı
+## 5. `npm run verify:samples fixtures` (`G6` & `R1 / R3` Özyinelemeli Klasör Okuma) Gerçek Çıktısı
 
 ```json
-{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":272,"memoryMB":22.5,"objectCount":108,"polygonCount":1123,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"issueCounts":{"H":0,"U":0,"B":2}}
+{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":292,"memoryMB":22.8,"objectCount":108,"polygonCount":741,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"issueCounts":{"H":0,"U":0,"B":2}}
 ```
 
 ---

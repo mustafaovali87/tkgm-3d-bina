@@ -2,7 +2,7 @@
 // K87
 // K99
 // V-060
-// KONTROL-M1 G6: npm run verify:samples <klasör> desteği (klasördeki tüm .gml dosyalarını parseCityGmlModel ile okuyup tek satır JSON özet basar)
+// KONTROL-M1 G6 & KONTROL-M1-2 R1 / §4.4: npm run verify:samples <klasör> özyinelemeli (recursive) tarama + hata yakalama ve çıkış kodu 1 desteği
 import fs from 'node:fs';
 import path from 'node:path';
 import { sha256Hex } from '../src/core/hash/canonical.ts';
@@ -92,14 +92,54 @@ export function verifySamplesAndReferenceFiles(rootDir: string = process.cwd()) 
   };
 }
 
+export type SampleVerificationRow =
+  | {
+      readonly fileName: string;
+      readonly sizeMB: number;
+      readonly durationMs: number;
+      readonly memoryMB: number;
+      readonly objectCount: number;
+      readonly polygonCount: number;
+      readonly detectedStoreyForm: string;
+      readonly detectedDoorBottomOffsetMm: number | null;
+      readonly detectedProducerProfile: string;
+      readonly landShareTotal: string;
+      readonly hasPropertyLotData: boolean;
+      readonly issueCounts: {
+        readonly H: number;
+        readonly U: number;
+        readonly B: number;
+      };
+    }
+  | {
+      readonly fileName: string;
+      readonly error: string;
+    };
+
+function collectGmlFilesRecursive(dirPath: string, outFiles: string[]): void {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      collectGmlFilesRecursive(fullPath, outFiles);
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.gml')) {
+      outFiles.push(fullPath);
+    }
+  }
+}
+
 /**
- * G6: Klasör yolu verildiğinde klasördeki tüm .gml dosyalarını parseCityGmlModel ile okur
- * ve her dosya için tek satırlık JSON özeti döndürür.
+ * G6 & R1 (§4.4): Klasör yolu verildiğinde klasörü ve alt klasörlerini özyinelemeli tarayarak
+ * tüm .gml dosyalarını parseCityGmlModel ile okur.
+ * Açılamayan dosya için `{"fileName":...,"error":...}` satırı üretir ve `hasError: true` döndürür.
  */
 export function verifyGmlDirectorySamples(
   targetPath: string,
   rootDir: string = process.cwd()
-) {
+): {
+  readonly rows: readonly SampleVerificationRow[];
+  readonly hasError: boolean;
+} {
   const registry = loadDefaultCodelistRegistry(rootDir);
   const resolved = path.resolve(rootDir, targetPath);
   const stat = fs.statSync(resolved);
@@ -108,53 +148,67 @@ export function verifyGmlDirectorySamples(
   if (stat.isFile() && resolved.toLowerCase().endsWith('.gml')) {
     gmlFiles.push(resolved);
   } else if (stat.isDirectory()) {
-    const entries = fs.readdirSync(resolved, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.toLowerCase().endsWith('.gml')) {
-        gmlFiles.push(path.join(resolved, entry.name));
-      }
-    }
+    collectGmlFilesRecursive(resolved, gmlFiles);
     gmlFiles.sort();
   }
 
-  return gmlFiles.map((filePath) => {
-    const fileName = path.basename(filePath);
-    const fileSize = fs.statSync(filePath).size;
-    const sizeMB = Number((fileSize / (1024 * 1024)).toFixed(2));
-    const xmlText = fs.readFileSync(filePath, 'utf-8');
+  let hasError = false;
+  const rows: SampleVerificationRow[] = gmlFiles.map((filePath) => {
+    const relFromTarget = stat.isDirectory()
+      ? path.relative(resolved, filePath).replace(/\\/g, '/')
+      : path.basename(filePath);
+    const fileName = relFromTarget || path.basename(filePath);
 
-    const startTime = performance.now();
-    const model = parseCityGmlModel(xmlText, fileName, registry);
-    const durationMs = Math.round(performance.now() - startTime);
-    const memoryMB = Number(
-      (process.memoryUsage().heapUsed / (1024 * 1024)).toFixed(1)
-    );
+    try {
+      const fileSize = fs.statSync(filePath).size;
+      const sizeMB = Number((fileSize / (1024 * 1024)).toFixed(2));
+      const xmlText = fs.readFileSync(filePath, 'utf-8');
 
-    const allIssues = [...model.readerIssues, ...model.landShareAnalysis.issues];
-    let H = 0;
-    let U = 0;
-    let B = 0;
-    for (const issue of allIssues) {
-      if (issue.severity === 'H') H++;
-      else if (issue.severity === 'U') U++;
-      else B++;
+      const startTime = performance.now();
+      const model = parseCityGmlModel(xmlText, fileName, registry);
+      const durationMs = Math.round(performance.now() - startTime);
+      const memoryMB = Number(
+        (process.memoryUsage().heapUsed / (1024 * 1024)).toFixed(1)
+      );
+
+      const allIssues = [
+        ...model.readerIssues,
+        ...model.landShareAnalysis.issues,
+      ];
+      let H = 0;
+      let U = 0;
+      let B = 0;
+      for (const issue of allIssues) {
+        if (issue.severity === 'H') H++;
+        else if (issue.severity === 'U') U++;
+        else B++;
+      }
+
+      return {
+        fileName,
+        sizeMB,
+        durationMs,
+        memoryMB,
+        objectCount: model.objects.length,
+        polygonCount: model.polygons.length,
+        detectedStoreyForm: model.detectedStoreyForm,
+        detectedDoorBottomOffsetMm: model.detectedDoorBottomOffsetMm,
+        detectedProducerProfile: model.detectedProducerProfile,
+        landShareTotal: model.landShareAnalysis.formattedTotalUnreduced,
+        hasPropertyLotData: model.landShareAnalysis.hasPropertyLotData,
+        issueCounts: { H, U, B },
+      };
+    } catch (err) {
+      hasError = true;
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        fileName,
+        error: message,
+      };
     }
-
-    return {
-      fileName,
-      sizeMB,
-      durationMs,
-      memoryMB,
-      objectCount: model.objects.length,
-      polygonCount: model.polygons.length,
-      detectedStoreyForm: model.detectedStoreyForm,
-      detectedDoorBottomOffsetMm: model.detectedDoorBottomOffsetMm,
-      detectedProducerProfile: model.detectedProducerProfile,
-      landShareTotal: model.landShareAnalysis.formattedTotalUnreduced,
-      hasPropertyLotData: model.landShareAnalysis.hasPropertyLotData,
-      issueCounts: { H, U, B },
-    };
   });
+
+  return { rows, hasError };
 }
 
 const isMain =
@@ -163,9 +217,12 @@ const isMain =
 if (isMain) {
   const folderArg = process.argv[2];
   if (folderArg) {
-    const summaries = verifyGmlDirectorySamples(folderArg);
-    for (const row of summaries) {
+    const { rows, hasError } = verifyGmlDirectorySamples(folderArg);
+    for (const row of rows) {
       console.log(JSON.stringify(row));
+    }
+    if (hasError) {
+      process.exit(1);
     }
   } else {
     const result = verifySamplesAndReferenceFiles();

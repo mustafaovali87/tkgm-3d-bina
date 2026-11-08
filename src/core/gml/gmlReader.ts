@@ -72,6 +72,7 @@ export interface ImportedPolygon {
   readonly gmlId: string;
   readonly prefix: PolygonIdPrefix | string;
   readonly ownerObjectGmlId: string;
+  readonly ownerObjectGmlIds: readonly string[];
   readonly ownerObjectPrefix: ObjectIdPrefix | string;
   readonly storeyGmlId: string | null;
   readonly surfaceTag: string; // WallSurface, RoofSurface, FloorSurface, InteriorWallSurface, CeilingSurface, GroundSurface, Door, Window, MultiSurface, Solid...
@@ -234,40 +235,42 @@ function asArray<T>(val: T | T[] | undefined | null): T[] {
 }
 
 /**
- * G8: Ad alanı önekine (core:, bldg:, gml:, grp:, gen:, xlink: vb.) bağımlılığı ortadan kaldıran hızlı erişim yardımcısı.
- * Önce standart önekli anahtarı, ardından önsüz yerel adı, son olarak da '*:localName' eşleşmesini kontrol eder.
+ * G8 & R1: Ad alanı önekine (core:, bldg:, gml:, grp:, gen:, xlink: vb.) bağımlılığı ortadan kaldıran hızlı erişim yardımcısı.
+ * R1: fast-xml-parser metin düğümü olarak boşluk dizesi ("\n  ") döndürdüğünde 'in' operatörü çökmemesi için typeof record !== 'object' kontrolü yapar.
  */
 function getNodeByLocalName(
-  record: Record<string, unknown> | undefined | null,
+  record: unknown,
   stdPrefixedKey: string,
   localName: string
 ): unknown {
-  if (!record) return undefined;
-  if (stdPrefixedKey in record) return record[stdPrefixedKey];
-  if (localName in record) return record[localName];
+  if (record === null || typeof record !== 'object') return undefined;
+  const rec = record as Record<string, unknown>;
+  if (stdPrefixedKey in rec) return rec[stdPrefixedKey];
+  if (localName in rec) return rec[localName];
   const suffix = `:${localName}`;
-  for (const k of Object.keys(record)) {
-    if (k.endsWith(suffix)) return record[k];
+  for (const k of Object.keys(rec)) {
+    if (k.endsWith(suffix)) return rec[k];
   }
   return undefined;
 }
 
 function getAttrByLocalName(
-  record: Record<string, unknown> | undefined | null,
+  record: unknown,
   stdAttrKey: string,
   localAttrKey: string
 ): string {
-  if (!record) return '';
-  if (stdAttrKey in record && record[stdAttrKey] !== undefined) {
-    return String(record[stdAttrKey]).trim();
+  if (record === null || typeof record !== 'object') return '';
+  const rec = record as Record<string, unknown>;
+  if (stdAttrKey in rec && rec[stdAttrKey] !== undefined) {
+    return String(rec[stdAttrKey]).trim();
   }
-  if (localAttrKey in record && record[localAttrKey] !== undefined) {
-    return String(record[localAttrKey]).trim();
+  if (localAttrKey in rec && rec[localAttrKey] !== undefined) {
+    return String(rec[localAttrKey]).trim();
   }
   const suffix = `:${localAttrKey.replace(/^@_/, '')}`;
-  for (const k of Object.keys(record)) {
-    if (k.startsWith('@_') && k.endsWith(suffix) && record[k] !== undefined) {
-      return String(record[k]).trim();
+  for (const k of Object.keys(rec)) {
+    if (k.startsWith('@_') && k.endsWith(suffix) && rec[k] !== undefined) {
+      return String(rec[k]).trim();
     }
   }
   return '';
@@ -465,6 +468,7 @@ function parsePolygonNode(
     gmlId,
     prefix,
     ownerObjectGmlId,
+    ownerObjectGmlIds: [ownerObjectGmlId],
     ownerObjectPrefix,
     storeyGmlId: null, // Kat eşleştirmesi sonrasında doldurulur
     surfaceTag,
@@ -653,7 +657,7 @@ export function resolveProducerProfileFromFormAndOffset(
 } {
   if (doorOffsetMm === null) {
     return {
-      profile: `biçim ${form}, ofset bilinmiyor`,
+      profile: `${form}, ofset bilinmiyor`,
       issue: {
         ruleId: 'V-215',
         severity: 'B',
@@ -672,7 +676,7 @@ export function resolveProducerProfileFromFormAndOffset(
     return { profile: 'C50', issue: null };
   }
   return {
-    profile: `${form}${doorOffsetMm} (biçim ${form}, ofset ${doorOffsetMm} mm)`,
+    profile: `${form} + ${doorOffsetMm} mm (profil dışı)`,
     issue: {
       ruleId: 'V-215',
       severity: 'B',
@@ -996,7 +1000,8 @@ export function parseCityGmlModel(
       }
     }
 
-    // 4. Doğrudan Geometri kapları (G8: ad alanı önekinden bağımsız)
+    // 4. Doğrudan Geometri kapları (G8 & R3: ad alanı önekinden bağımsız, BB_ poligonlarını BalkonTeras olarak iki kez okumaz)
+    const isBalconyOrTerrace = prefix === 'BLKN_' || prefix === 'TRS_';
     const directContainers: ReadonlyArray<{
       key: string;
       localKey: string;
@@ -1005,8 +1010,12 @@ export function parseCityGmlModel(
     }> = [
       { key: 'bldg:lod2MultiSurface', localKey: 'lod2MultiSurface', lod: 'lod2', surfTag: 'MultiSurface' },
       { key: 'bldg:lod4MultiSurface', localKey: 'lod4MultiSurface', lod: 'lod4', surfTag: tagName },
-      { key: 'gen:lod2Geometry', localKey: 'lod2Geometry', lod: 'lod2', surfTag: 'BagimsizBolum' },
-      { key: 'bldg:lod2Geometry', localKey: 'lod2Geometry', lod: 'lod2', surfTag: 'BalkonTeras' },
+      {
+        key: isBalconyOrTerrace ? 'bldg:lod2Geometry' : 'gen:lod2Geometry',
+        localKey: 'lod2Geometry',
+        lod: 'lod2',
+        surfTag: isBalconyOrTerrace ? 'BalkonTeras' : 'BagimsizBolum',
+      },
       { key: 'bldg:lod4Geometry', localKey: 'lod4Geometry', lod: 'lod4', surfTag: 'IcYapi' },
       { key: 'grp:geometry', localKey: 'geometry', lod: 'group', surfTag: 'Kat' },
     ];
@@ -1313,17 +1322,41 @@ export function parseCityGmlModel(
     objectsById[o.gmlId] = o;
   }
 
-  const enrichedPolygons: ImportedPolygon[] = polygons.map((p) => {
+  // R3: model.polygons her gml:id için tek kayıt tutar; birden fazla sahibi varsa ownerObjectGmlIds dizisinde birleştirilir
+  const uniquePolygonsMap = new Map<string, ImportedPolygon>();
+  const enrichedPolygons: ImportedPolygon[] = [];
+  let anonPolySeq = 0;
+
+  for (const p of polygons) {
     const owner = objectsById[p.ownerObjectGmlId];
-    return {
-      ...p,
-      storeyGmlId: owner?.storeyGmlId ?? null,
-    };
-  });
+    const key = p.gmlId ? p.gmlId : `__anon_poly_${++anonPolySeq}`;
+    const existing = uniquePolygonsMap.get(key);
+    if (existing) {
+      if (!existing.ownerObjectGmlIds.includes(p.ownerObjectGmlId)) {
+        const updated: ImportedPolygon = {
+          ...existing,
+          ownerObjectGmlIds: [...existing.ownerObjectGmlIds, p.ownerObjectGmlId],
+        };
+        uniquePolygonsMap.set(key, updated);
+        const idx = enrichedPolygons.findIndex((ep) => ep.gmlId === p.gmlId);
+        if (idx >= 0) enrichedPolygons[idx] = updated;
+      }
+    } else {
+      const enriched: ImportedPolygon = {
+        ...p,
+        ownerObjectGmlIds: [p.ownerObjectGmlId],
+        storeyGmlId: owner?.storeyGmlId ?? null,
+      };
+      uniquePolygonsMap.set(key, enriched);
+      enrichedPolygons.push(enriched);
+    }
+  }
 
   const polygonsById: Record<string, ImportedPolygon> = {};
   for (const p of enrichedPolygons) {
-    polygonsById[p.gmlId] = p;
+    if (p.gmlId) {
+      polygonsById[p.gmlId] = p;
+    }
   }
 
   // xlink:href doğrulaması (V-211)
@@ -1378,15 +1411,13 @@ export function parseCityGmlModel(
     z: computedBounds.minZ,
   };
 
-  // Kat biçimi (A/B/C) ve kapı alt ofseti (mm) tespiti
+  // R2: Kat biçimi (A/B/C) kuralı: Floor_ = 1 -> A, = 2 -> C, >= 3 -> B (N2, N26)
   const detectedStoreyForms: StoreyGeometryForm[] = storeyObjects.map((st) => {
-    if (storeyHasKatElemaniRole.has(st.gmlId)) {
-      return 'B';
-    }
     const floorCount = st.inlinePolygons.filter((p) => p.prefix === 'Floor_').length;
-    if (floorCount === 2) return 'C';
     if (floorCount === 1) return 'A';
-    return st.inlinePolygons.length > 0 || st.groupMemberHrefs.length > 0 ? 'A' : 'B';
+    if (floorCount === 2) return 'C';
+    if (floorCount >= 3) return 'B';
+    return storeyHasKatElemaniRole.has(st.gmlId) ? 'B' : 'A';
   });
   const detectedStoreyForm: StoreyGeometryForm =
     detectedStoreyForms.length > 0 ? detectedStoreyForms[0] : 'A';

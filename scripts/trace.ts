@@ -23,7 +23,7 @@ function walkTsFiles(dir: string, acc: string[] = []): string[] {
 
 function extractRuleTagsFromContent(content: string): Set<string> {
   const found = new Set<string>();
-  const re = /\b(K\d{2,3}a?|V-\d{3}[ab]?)\b/g;
+  const re = /\b(K\d{2,3}a?|V-\d{3}[ab]?|D-23(?:\.[1-6])?)\b/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
     found.add(m[1]);
@@ -37,7 +37,12 @@ export function generateTraceabilityReport(rootDir: string = process.cwd()): {
 } {
   const coreDir = path.join(rootDir, 'src', 'core');
   const platformDir = path.join(rootDir, 'src', 'platform');
-  const allFiles = [...walkTsFiles(coreDir), ...walkTsFiles(platformDir)];
+  const viewerDir = path.join(rootDir, 'src', 'viewer3d');
+  const allFiles = [
+    ...walkTsFiles(coreDir),
+    ...walkTsFiles(platformDir),
+    ...walkTsFiles(viewerDir),
+  ];
 
   const sourceFiles = allFiles.filter((f) => !f.includes('__tests__') && !f.endsWith('.test.ts'));
   const testFiles = allFiles.filter((f) => f.includes('__tests__') || f.endsWith('.test.ts'));
@@ -82,8 +87,8 @@ export function generateTraceabilityReport(rootDir: string = process.cwd()): {
   });
 
   const lines: string[] = [
-    '=== TKGM 3B BINA M0 KURAL-KOD-TEST IZLENEBILIRLIK MATRISI (K98) ===',
-    `Toplam Izlenen Kural Sayisi (M0 Cekirdek): ${rows.length}`,
+    '=== TKGM 3B BINA M0 + M1 KURAL-KOD-TEST IZLENEBILIRLIK MATRISI (K98) ===',
+    `Toplam Izlenen Kural Sayisi (M0 + M1): ${rows.length}`,
     '----------------------------------------------------------------------',
     'KURAL   | KAYNAK MODULLER                        | TEST DOSYALARI',
     '----------------------------------------------------------------------',

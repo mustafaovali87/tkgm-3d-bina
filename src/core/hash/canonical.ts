@@ -319,6 +319,13 @@ export interface IgnoredUiViewState {
   readonly activeTab?: string;
   readonly zoomLevel?: number;
   readonly darkMode?: boolean;
+  readonly preset?: string;
+  readonly panelSizes?: Readonly<Record<string, number>>;
+  readonly groupLayouts?: Readonly<Record<string, unknown>>;
+  readonly activeStoreyId?: string | null;
+  readonly explosionFactor?: number;
+  readonly narrowViewportTabs?: boolean;
+  readonly narrowCenterTab?: string;
 }
 
 function canonicalStringifyValue(val: unknown): string {

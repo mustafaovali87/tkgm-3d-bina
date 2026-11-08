@@ -1,1287 +1,1620 @@
-import React, { useMemo, useState } from 'react';
+// KARAR D-23 (D-23.1, D-23.2, D-23.3, D-23.4, D-23.5, D-23.6) — Ana Pencere Yerleşimi ve M1 3B GML Görüntüleyici
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Group, Layout, Panel, Separator } from 'react-resizable-panels';
 import {
-  CheckCircle2,
-  Download,
-  FileCheck2,
-  FileCode2,
-  Filter,
-  FolderCheck,
-  Hash,
-  Layers,
-  Scale,
-  Search,
-  ShieldCheck,
-  Terminal,
-  Users,
-} from 'lucide-react';
-import { M0_AUDIT_DATA } from './generated/m0AuditData.ts';
-import {
-  ALLOWED_GENERIC_ATTRIBUTES,
-  checkCoordinateDecimalPlaces,
-  EXTRA_OA_AND_INSTALLATION_ATTRIBUTES,
-  ProducerProfile,
-} from './core/model/index.ts';
-import {
-  analyzeBuildingLandShares,
-  formatBigIntFraction,
-  IndependentSectionShareInput,
-} from './core/math/landShare.ts';
+  ImportedCityObject,
+  ImportedModel,
+  ImportedTreeNode,
+  parseCityGmlModel,
+} from './core/gml/gmlReader.ts';
+import { compareCodeUnits, computeCanonicalModelHash } from './core/hash/canonical.ts';
+import { formatBigIntFraction } from './core/math/landShare.ts';
 import {
   DEFAULT_BEYAN_DUZENLEME_AYAR,
   Malik,
   validateBbMalikShares,
 } from './core/model/malik.ts';
+import { metersToMm, ValidationIssue } from './core/model/index.ts';
 import {
-  detectOutlierLeaveOneOut,
-  HelmertControlPair,
-  solveHelmert2D,
-} from './core/math/helmert2d.ts';
-import {
-  checkHoleToOuterRingClearance2D,
-  ringOrientation2D,
-  signedArea2D,
-} from './core/math/ring.ts';
-import {
-  computeCanonicalModelHash,
-  deterministicGmlId,
-} from './core/hash/canonical.ts';
+  getDefaultOrnek6Model,
+  getOfflineCodelistRegistry,
+} from './data/offlineFixtures.ts';
+import { M0_AUDIT_DATA } from './generated/m0AuditData.ts';
+import { CityGmlViewport3D } from './viewer3d/CityGmlViewport3D.tsx';
+import { FloorPlanPreview2D } from './viewer3d/FloorPlanPreview2D.tsx';
 
-type ActiveSection =
-  | 'overview'
-  | 'codelists'
-  | 'sandbox'
-  | 'trace'
-  | 'docs';
+export type LayoutPresetId = 'F5_STANDART' | 'F6_YAN_YANA' | 'F7_CIZIM' | 'F8_DENETIM';
+
+const LAYOUT_STORAGE_KEY = 'tkgm3d_d23_layout_v1';
+
+interface PersistedWorkspaceState {
+  preset: LayoutPresetId;
+  groupLayouts: Record<string, Layout>;
+  collapsedPanels: Record<string, boolean>;
+}
+
+const DEFAULT_MALIKLER: Malik[] = [
+  {
+    bbAnahtari: '-1||1',
+    adSoyadVeyaUnvan: 'ÖRNEK MALİK 1 (Kat İrtifakı Beyan Örneği)',
+    tcKimlikVeyaVergiNo: '11111111110',
+    hissePay: 1n,
+    hissePayda: 2n,
+    not: 'Kat İrtifakı Tesisi',
+  },
+  {
+    bbAnahtari: '-1||1',
+    adSoyadVeyaUnvan: 'ÖRNEK MALİK 2 (Kat İrtifakı Beyan Örneği)',
+    tcKimlikVeyaVergiNo: '22222222220',
+    hissePay: 1n,
+    hissePayda: 2n,
+    not: 'Kat İrtifakı Tesisi',
+  },
+  {
+    bbAnahtari: '-1||2',
+    adSoyadVeyaUnvan: 'ÖRNEK MALİK 3 (Kat İrtifakı Beyan Örneği)',
+    tcKimlikVeyaVergiNo: '33333333330',
+    hissePay: 1n,
+    hissePayda: 1n,
+    not: 'Satış',
+  },
+];
+
+function loadPersistedWorkspaceState(): PersistedWorkspaceState {
+  try {
+    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<PersistedWorkspaceState>;
+      return {
+        preset:
+          parsed.preset === 'F5_STANDART' ||
+          parsed.preset === 'F6_YAN_YANA' ||
+          parsed.preset === 'F7_CIZIM' ||
+          parsed.preset === 'F8_DENETIM'
+            ? parsed.preset
+            : 'F5_STANDART',
+        groupLayouts: parsed.groupLayouts ?? {},
+        collapsedPanels: parsed.collapsedPanels ?? {},
+      };
+    }
+  } catch {
+    // localStorage erişilemezse varsayılan kalıp kullanılır
+  }
+  return {
+    preset: 'F5_STANDART',
+    groupLayouts: {},
+    collapsedPanels: {},
+  };
+}
 
 export function App() {
-  const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
-  const [attrQuery, setAttrQuery] = useState('');
-  const [selectedCodelist, setSelectedCodelist] = useState<string>(
-    M0_AUDIT_DATA.codelistsDetailed[0]?.listName ?? 'buildingType'
+  const [model, setModel] = useState<ImportedModel>(() => getDefaultOrnek6Model());
+  const [selectedGmlId, setSelectedGmlId] = useState<string | null>(() => {
+    const m = getDefaultOrnek6Model();
+    return m.objects.find((o) => o.prefix === 'BBK_')?.gmlId ?? m.buildingGmlId;
+  });
+  const [activeStoreyId, setActiveStoreyId] = useState<string | null>(null);
+  const [highlightedRulePolygonId, setHighlightedRulePolygonId] = useState<
+    string | null
+  >(null);
+
+  // D-23.2: Yerleşim kalıpları (F5, F6, F7, F8) ve localStorage kalıcılığı
+  const [workspaceState, setWorkspaceState] = useState<PersistedWorkspaceState>(
+    loadPersistedWorkspaceState
   );
-  const [codelistQuery, setCodelistQuery] = useState('');
-  const [activeDocTab, setActiveDocTab] = useState<'adimNotu' | 'kararlar' | 'acikSorular'>('adimNotu');
+  const [maximizedPanelId, setMaximizedPanelId] = useState<
+    'tree' | 'cad2d' | 'scene3d' | 'validation' | 'attributes' | null
+  >(null);
 
-  // Canlı Çekirdek Laboratuvarı durumları
-  const [landSharePreset, setLandSharePreset] = useState<'ornek1_41' | 'fua5p9' | 'dubleks'>('ornek1_41');
-  const [malikRows, setMalikRows] = useState<
-    Array<{ ad: string; kimlik: string; pay: string; payda: string }>
-  >([
-    { ad: 'ÖRNEK MALİK 1', kimlik: '11111111110', pay: '1', payda: '2' },
-    { ad: 'ÖRNEK MALİK 2', kimlik: '22222222220', pay: '2', payda: '4' },
-  ]);
-  const [otomatikOneriAyar, setOtomatikOneriAyar] = useState<'kapali' | 'acik'>(
-    DEFAULT_BEYAN_DUZENLEME_AYAR.otomatikOneri
+  // D-23.2 #5: Küçük ekran (< 1366 px) sekme modu + tek tıkla simülasyon anahtarı
+  const [windowWidth, setWindowWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1600
   );
-  const [helmertOutlierMm, setHelmertOutlierMm] = useState<number>(850);
-  const [doorOffsetMmInput, setDoorOffsetMmInput] = useState<number>(10);
-  const [coordTokenInput, setCoordTokenInput] = useState<string>('1095.90');
-  const [hashProfile, setHashProfile] = useState<ProducerProfile>('A10');
-  const [cameraAngleDeg, setCameraAngleDeg] = useState<number>(45);
+  const [simulateNarrowScreen, setSimulateNarrowScreen] = useState<boolean>(false);
+  const [narrowCenterTab, setNarrowCenterTab] = useState<'2d' | '3d'>('3d');
+  const [narrowTreeDrawerOpen, setNarrowTreeDrawerOpen] = useState<boolean>(false);
 
-  const ornek6 = M0_AUDIT_DATA.sampleReport.ornek6Inspection;
+  // Proje ağacı filtreleri ve açık düğümler
+  const [treeSearch, setTreeSearch] = useState<string>('');
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
-  const filteredAttributes = useMemo(() => {
-    const q = attrQuery.trim().toLowerCase();
-    const ornek6Map = new Map<string, number>();
-    for (const item of ornek6.uniqueGenericAttributes) {
-      ornek6Map.set(item.spec, item.occurrenceCount);
+  // Doğrulama paneli filtreleri
+  const [validationSeverityFilter, setValidationSeverityFilter] = useState<
+    'ALL' | 'H' | 'U' | 'B'
+  >('ALL');
+  const [validationSearch, setValidationSearch] = useState<string>('');
+
+  // Öznitelik paneli alt sekmesi
+  const [attrTab, setAttrTab] = useState<'attributes' | 'landshare' | 'malik'>('attributes');
+  const [malikler, setMalikler] = useState<Malik[]>(DEFAULT_MALIKLER);
+  const [newMalikName, setNewMalikName] = useState<string>('');
+  const [newMalikShare, setNewMalikShare] = useState<string>('1/1');
+
+  // M0/M1 Denetim & F1-F12 Rapor Çekmecesi
+  const [showAuditModal, setShowAuditModal] = useState<boolean>(false);
+  const [auditModalTab, setAuditModalTab] = useState<
+    'kontrol_m0' | 'adim_notu' | 'kararlar' | 'codelists' | 'trace'
+  >('kontrol_m0');
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Pencere genişliği takibi (< 1366 px kuralı D-23.2 #5)
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // localStorage kaydetme
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(workspaceState));
+    } catch {
+      // ignore
     }
-    const extraSet = new Set<string>(EXTRA_OA_AND_INSTALLATION_ATTRIBUTES);
+  }, [workspaceState]);
 
-    return ALLOWED_GENERIC_ATTRIBUTES.map((spec) => {
-      const [name, type] = spec.split(':');
-      const countInOrnek6 = ornek6Map.get(spec) ?? 0;
-      const sourceGroup = extraSet.has(spec)
-        ? 'OA_ / BBKIY_ Ek Beyaz Liste (Ornek1, Ornek2, Sincan)'
-        : 'Ornek6-M-70125626-A.gml (42 Temel Öznitelik)';
-      return {
-        spec,
-        name,
-        type,
-        countInOrnek6,
-        sourceGroup,
-      };
-    }).filter(
-      (item) =>
-        !q ||
-        item.name.toLowerCase().includes(q) ||
-        item.type.toLowerCase().includes(q) ||
-        item.sourceGroup.toLowerCase().includes(q)
+  // F5, F6, F7, F8 klavye kısayolları (D-23.2)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F5') {
+        e.preventDefault();
+        setMaximizedPanelId(null);
+        setWorkspaceState((prev) => ({ ...prev, preset: 'F5_STANDART' }));
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        setMaximizedPanelId(null);
+        setWorkspaceState((prev) => ({ ...prev, preset: 'F6_YAN_YANA' }));
+      } else if (e.key === 'F7') {
+        e.preventDefault();
+        setMaximizedPanelId(null);
+        setWorkspaceState((prev) => ({ ...prev, preset: 'F7_CIZIM' }));
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        setMaximizedPanelId(null);
+        setWorkspaceState((prev) => ({ ...prev, preset: 'F8_DENETIM' }));
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // D-23.4 / K89: Kanonik Model Özeti — kalıp, panel boyutu, seçim veya kamera değiştiğinde ASLA değişmez
+  const liveCanonicalHash = useMemo(() => {
+    const mbObj = model.objects.find((o) => o.prefix === 'MB_');
+    const coordsMm: number[] = [];
+    const sortedPolys = [...model.polygons].sort((a, b) =>
+      compareCodeUnits(a.gmlId, b.gmlId)
     );
-  }, [attrQuery, ornek6]);
-
-  const currentCodelistObj = useMemo(() => {
-    return (
-      M0_AUDIT_DATA.codelistsDetailed.find(
-        (c) => c.listName === selectedCodelist
-      ) ?? M0_AUDIT_DATA.codelistsDetailed[0]
-    );
-  }, [selectedCodelist]);
-
-  const filteredCodelistEntries = useMemo(() => {
-    const q = codelistQuery.trim().toLowerCase();
-    if (!currentCodelistObj) return [];
-    return currentCodelistObj.entries.filter(
-      (e) =>
-        !q ||
-        e.codeText.toLowerCase().includes(q) ||
-        e.description.toLowerCase().includes(q) ||
-        e.definitionGmlId.toLowerCase().includes(q)
-    );
-  }, [currentCodelistObj, codelistQuery]);
-
-  // Canlı Arsa Payı Analizi
-  const liveLandShareResult = useMemo(() => {
-    let inputs: IndependentSectionShareInput[] = [];
-    if (landSharePreset === 'ornek1_41') {
-      inputs = [
-        {
-          gmlId: 'BB_41_mesken',
-          blockName: 'A',
-          entrance: '1',
-          independentSectionNumber: '41',
-          propertyLot: '98/6534',
-          registeredQuality: 'MESKEN',
-        },
-        {
-          gmlId: 'BB_41_depo',
-          blockName: 'A',
-          entrance: '1',
-          independentSectionNumber: '41',
-          propertyLot: '79/6534',
-          registeredQuality: 'DEPO',
-        },
-      ];
-    } else if (landSharePreset === 'fua5p9') {
-      inputs = [
-        {
-          gmlId: 'BB_1',
-          blockName: 'A',
-          entrance: '1',
-          independentSectionNumber: '1',
-          propertyLot: '50000/104683',
-          registeredQuality: 'MESKEN',
-        },
-        {
-          gmlId: 'BB_2',
-          blockName: 'A',
-          entrance: '1',
-          independentSectionNumber: '2',
-          propertyLot: '53500/104683',
-          registeredQuality: 'MESKEN',
-        },
-      ];
-    } else {
-      inputs = [
-        {
-          gmlId: 'BB_dubleks_zemin',
-          blockName: '-1',
-          entrance: '',
-          independentSectionNumber: '2',
-          propertyLot: ' 1 / 2 ',
-          registeredQuality: 'mesken',
-        },
-        {
-          gmlId: 'BB_dubleks_1kat',
-          blockName: '-1',
-          entrance: '',
-          independentSectionNumber: '2',
-          propertyLot: '1/2',
-          registeredQuality: 'MESKEN',
-        },
-        {
-          gmlId: 'BB_1_zemin',
-          blockName: '-1',
-          entrance: '',
-          independentSectionNumber: '1',
-          propertyLot: '1/2',
-          registeredQuality: 'MESKEN',
-        },
-      ];
-    }
-    return analyzeBuildingLandShares(inputs);
-  }, [landSharePreset]);
-
-  // Canlı Malik Analizi
-  const liveMalikResult = useMemo(() => {
-    const parsedMaliks: Malik[] = [];
-    for (const r of malikRows) {
-      try {
-        const pay = BigInt(r.pay.trim() || '0');
-        const payda = BigInt(r.payda.trim() || '1');
-        parsedMaliks.push({
-          bbAnahtari: 'A|1|1',
-          adSoyadVeyaUnvan: r.ad,
-          tcKimlikVeyaVergiNo: r.kimlik,
-          hissePay: pay,
-          hissePayda: payda,
-        });
-      } catch {
-        // Geçersiz BigInt girişi
+    for (const p of sortedPolys) {
+      for (const v of p.exteriorRing.vertices) {
+        coordsMm.push(metersToMm(v.e), metersToMm(v.n), metersToMm(v.z));
       }
     }
-    return validateBbMalikShares('A|1|1', parsedMaliks);
-  }, [malikRows]);
 
-  // Canlı Helmert ve Leave-One-Out Analizi
-  const liveHelmertAnalysis = useMemo(() => {
-    const errMeters = helmertOutlierMm / 1000;
-    const pairs: HelmertControlPair[] = [
-      { id: 'P1 (KB Köşe)', localX: 0, localY: 0, targetE: 532568.58, targetN: 4288398.7 },
-      { id: 'P2 (KD Köşe)', localX: 10, localY: 0, targetE: 532578.58, targetN: 4288398.7 },
-      {
-        id: 'P3 (GD Köşe - Test)',
-        localX: 10,
-        localY: 10,
-        targetE: 532578.58 + errMeters,
-        targetN: 4288408.7,
-      },
-      { id: 'P4 (GB Köşe)', localX: 0, localY: 10, targetE: 532568.58, targetN: 4288408.7 },
-    ];
-    const helmert = solveHelmert2D(pairs);
-    const outlier = detectOutlierLeaveOneOut(pairs);
-    return { helmert, outlier };
-  }, [helmertOutlierMm]);
-
-  // Canlı Halka & Delik Mesafesi ve CanonicalHash Analizi
-  const liveGeometryAndHash = useMemo(() => {
-    const ccwSquare = [
-      { e: 0, n: 0 },
-      { e: 10, n: 0 },
-      { e: 10, n: 10 },
-      { e: 0, n: 10 },
-      { e: 0, n: 0 },
-    ];
-    const wall2D = [
-      { e: 0, n: 0 },
-      { e: 4, n: 0 },
-      { e: 4, n: 2.6 },
-      { e: 0, n: 2.6 },
-    ];
-    const offsetMeters = doorOffsetMmInput / 1000;
-    const doorRing = [
-      { e: 1.0, n: offsetMeters },
-      { e: 1.9, n: offsetMeters },
-      { e: 1.9, n: offsetMeters + 2.1 },
-      { e: 1.0, n: offsetMeters + 2.1 },
-    ];
-    const clearance = checkHoleToOuterRingClearance2D(
-      wall2D,
-      doorRing,
-      'DoorLinearRing_CanliTest'
-    );
-    const readCoordIssue = checkCoordinateDecimalPlaces(coordTokenInput, 'read');
-    const writeCoordIssue = checkCoordinateDecimalPlaces(coordTokenInput, 'write');
-
-    const sampleGmlId = deterministicGmlId('MB_', '70125626-A', 'Building/0');
-    const canonicalHash = computeCanonicalModelHash(
+    return computeCanonicalModelHash(
       {
         schemaVersion: '3.5.5',
-        producerProfile: hashProfile,
-        codelistsCombinedSha256:
-          M0_AUDIT_DATA.sampleReport.referenceFiles[0]?.sha256 ?? '',
-        buildingAttributes: {
-          constructionID: '70125626-A',
-          maksIdentityNumber: 431289685n,
-        },
-        coordinatesMm: [532568580, 4288398700, 1095900],
-        objectAttributes: [
-          { gmlId: 'BB_1', attributes: { independentSectionNumber: '1', propertyLot: '1/2' } },
-        ],
+        producerProfile: model.detectedProducerProfile,
+        codelistsCombinedSha256: 'tkgm-14-codelists-v3.5.5',
+        buildingAttributes: mbObj?.attributesMap ?? {},
+        coordinatesMm: coordsMm,
+        objectAttributes: model.objects.map((o) => ({
+          gmlId: o.gmlId,
+          attributes: o.attributesMap,
+        })),
       },
       {
-        cameraPosition: [cameraAngleDeg, 30, 50],
-        activeTab: activeSection,
+        preset: workspaceState.preset,
+        groupLayouts: workspaceState.groupLayouts,
+        selectedGmlId,
+        activeStoreyId,
+        narrowCenterTab,
       }
     );
+  }, [
+    model,
+    workspaceState.preset,
+    workspaceState.groupLayouts,
+    selectedGmlId,
+    activeStoreyId,
+    narrowCenterTab,
+  ]);
 
-    return {
-      ccwArea: signedArea2D(ccwSquare),
-      ccwOrientation: ringOrientation2D(ccwSquare),
-      clearance,
-      readCoordIssue,
-      writeCoordIssue,
-      sampleGmlId,
-      canonicalHash,
-    };
-  }, [doorOffsetMmInput, coordTokenInput, hashProfile, cameraAngleDeg, activeSection]);
+  const isHashInvariantVerified = liveCanonicalHash === model.canonicalHash;
 
-  const downloadTextFile = (filename: string, content: string, mime = 'text/markdown;charset=utf-8') => {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const selectedObject: ImportedCityObject | null = useMemo(() => {
+    if (!selectedGmlId) return null;
+    if (model.objectsById[selectedGmlId]) return model.objectsById[selectedGmlId];
+    const poly = model.polygonsById[selectedGmlId];
+    if (poly && model.objectsById[poly.ownerObjectGmlId]) {
+      return model.objectsById[poly.ownerObjectGmlId];
+    }
+    return null;
+  }, [model, selectedGmlId]);
+
+  // Seçili nesne değiştiğinde ağaçta üst kat ve bağımsız bölüm düğümlerini otomatik aç
+  useEffect(() => {
+    if (!selectedObject) return;
+    setExpandedNodes((prev) => {
+      const next = { ...prev };
+      if (model.buildingGmlId) next[model.buildingGmlId] = true;
+      if (selectedObject.storeyGmlId) next[selectedObject.storeyGmlId] = true;
+      if (selectedObject.referencedBbGmlId) next[selectedObject.referencedBbGmlId] = true;
+      if (selectedObject.parentGmlId) next[selectedObject.parentGmlId] = true;
+      return next;
+    });
+  }, [selectedObject, model.buildingGmlId]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const parsed = parseCityGmlModel(text, file.name, getOfflineCodelistRegistry());
+    setModel(parsed);
+    setActiveStoreyId(null);
+    setHighlightedRulePolygonId(null);
+    setSelectedGmlId(
+      parsed.objects.find((o) => o.prefix === 'BBK_')?.gmlId ?? parsed.buildingGmlId
+    );
+    e.target.value = '';
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
-      {/* Top Bar Contract: 3 Zones separated by gap-8 */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between gap-8">
-        <a
-          href="#overview"
-          onClick={(e) => {
-            e.preventDefault();
-            setActiveSection('overview');
-          }}
-          className="text-base font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0"
-        >
-          TKGM 3B Sayısal Yapı Modeli
-        </a>
+  const handleResetToOrnek6 = () => {
+    const def = getDefaultOrnek6Model();
+    setModel(def);
+    setActiveStoreyId(null);
+    setHighlightedRulePolygonId(null);
+    setSelectedGmlId(
+      def.objects.find((o) => o.prefix === 'BBK_')?.gmlId ?? def.buildingGmlId
+    );
+  };
 
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-          <button
-            type="button"
-            onClick={() => setActiveSection('overview')}
-            className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-              activeSection === 'overview'
-                ? 'border-slate-900 text-slate-900 font-semibold'
-                : 'border-transparent hover:text-slate-900'
-            }`}
-          >
-            15 Resmi Dosya ve Ornek6
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('codelists')}
-            className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-              activeSection === 'codelists'
-                ? 'border-slate-900 text-slate-900 font-semibold'
-                : 'border-transparent hover:text-slate-900'
-            }`}
-          >
-            14 Kod Listesi
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('sandbox')}
-            className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-              activeSection === 'sandbox'
-                ? 'border-slate-900 text-slate-900 font-semibold'
-                : 'border-transparent hover:text-slate-900'
-            }`}
-          >
-            Çekirdek Laboratuvarı
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('trace')}
-            className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-              activeSection === 'trace'
-                ? 'border-slate-900 text-slate-900 font-semibold'
-                : 'border-transparent hover:text-slate-900'
-            }`}
-          >
-            İzlenebilirlik Matrisi
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('docs')}
-            className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-              activeSection === 'docs'
-                ? 'border-slate-900 text-slate-900 font-semibold'
-                : 'border-transparent hover:text-slate-900'
-            }`}
-          >
-            ADIM_NOTU ve Belgeler
-          </button>
-        </nav>
+  // Tüm doğrulama bulguları (GML Okuyucu + Arsa Payı Motoru)
+  const allIssues = useMemo(() => {
+    return [...model.readerIssues, ...model.landShareAnalysis.issues];
+  }, [model]);
 
-        <div className="flex items-center shrink-0">
+  const issueCounts = useMemo(() => {
+    let H = 0;
+    let U = 0;
+    let B = 0;
+    for (const i of allIssues) {
+      if (i.severity === 'H') H++;
+      else if (i.severity === 'U') U++;
+      else B++;
+    }
+    return { H, U, B };
+  }, [allIssues]);
+
+  const objectCounts = useMemo(() => {
+    const counts = {
+      MB: 0,
+      K: 0,
+      BB: 0,
+      BBK: 0,
+      BLKN: 0,
+      KAPI: 0,
+      PEN: 0,
+      MBG: 0,
+    };
+    for (const o of model.objects) {
+      if (o.prefix === 'MB_') counts.MB++;
+      else if (o.prefix === 'K_') counts.K++;
+      else if (o.prefix === 'BB_') counts.BB++;
+      else if (o.prefix === 'BBK_') counts.BBK++;
+      else if (o.prefix === 'BLKN_') counts.BLKN++;
+      else if (o.prefix === 'KAPI_') counts.KAPI++;
+      else if (o.prefix === 'PEN_') counts.PEN++;
+      else if (o.prefix === 'MBG_') counts.MBG++;
+    }
+    return counts;
+  }, [model.objects]);
+
+  // D-23.3: Doğrulama satırına tıklandığında ilgili nesneyi seç ve sahnede odakla
+  const handleIssueClick = (issue: ValidationIssue) => {
+    if (issue.targetGmlId) {
+      if (model.objectsById[issue.targetGmlId]) {
+        setSelectedGmlId(issue.targetGmlId);
+        setHighlightedRulePolygonId(null);
+        return;
+      }
+      if (model.polygonsById[issue.targetGmlId]) {
+        const poly = model.polygonsById[issue.targetGmlId];
+        setSelectedGmlId(poly.ownerObjectGmlId);
+        setHighlightedRulePolygonId(poly.gmlId);
+        return;
+      }
+      // Hedef bir halka (LinearRing_) ise sahibini bul
+      const ownerPoly = model.polygons.find(
+        (p) =>
+          p.exteriorRing.gmlId === issue.targetGmlId ||
+          p.interiorRings.some((r) => r.gmlId === issue.targetGmlId)
+      );
+      if (ownerPoly) {
+        setSelectedGmlId(ownerPoly.ownerObjectGmlId);
+        setHighlightedRulePolygonId(ownerPoly.gmlId);
+      }
+    }
+  };
+
+  const handleGroupLayoutChanged = (groupId: string, layout: Layout) => {
+    setWorkspaceState((prev) => ({
+      ...prev,
+      groupLayouts: {
+        ...prev.groupLayouts,
+        [groupId]: layout,
+      },
+    }));
+  };
+
+  const toggleCollapsePanel = (panelKey: string) => {
+    setWorkspaceState((prev) => ({
+      ...prev,
+      collapsedPanels: {
+        ...prev.collapsedPanels,
+        [panelKey]: !prev.collapsedPanels[panelKey],
+      },
+    }));
+  };
+
+  const isNarrowMode = windowWidth < 1366 || simulateNarrowScreen;
+
+  const filteredIssues = useMemo(() => {
+    return allIssues.filter((i) => {
+      if (validationSeverityFilter !== 'ALL' && i.severity !== validationSeverityFilter) {
+        return false;
+      }
+      if (validationSearch.trim()) {
+        const q = validationSearch.trim().toLowerCase();
+        return (
+          i.ruleId.toLowerCase().includes(q) ||
+          i.message.toLowerCase().includes(q) ||
+          (i.targetGmlId ?? '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [allIssues, validationSeverityFilter, validationSearch]);
+
+  // ============================================================================
+  // PANEL 1: PROJE AĞACI (MB_ -> K_ -> BB_ -> BBK_ / BLKN_ / KAPI_ / PEN_)
+  // ============================================================================
+  const renderProjectTreePanel = () => {
+    const isCollapsed = !!workspaceState.collapsedPanels['tree'];
+    const q = treeSearch.trim().toLowerCase();
+
+    const matchesTreeNode = (node: ImportedTreeNode): boolean => {
+      if (!q) return true;
+      if (
+        node.gmlId.toLowerCase().includes(q) ||
+        node.label.toLowerCase().includes(q) ||
+        node.subLabel.toLowerCase().includes(q)
+      ) {
+        return true;
+      }
+      return node.children.some((c) => matchesTreeNode(c));
+    };
+
+    const renderTreeNode = (node: ImportedTreeNode, depth: number): React.ReactNode => {
+      if (!matchesTreeNode(node)) return null;
+
+      const hasChildren = node.children.length > 0;
+      const isExpanded = q.length > 0 || (expandedNodes[node.gmlId] ?? depth < 2);
+      const isSelected = selectedGmlId === node.gmlId;
+      const isStorey = node.category === 'STOREY';
+      const isActiveStorey = isStorey && activeStoreyId === node.gmlId;
+
+      const categoryBadgeColor: Record<string, string> = {
+        MB: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+        STOREY: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+        BB: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+        BBK: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+        BLKN: 'bg-teal-500/20 text-teal-300 border-teal-500/40',
+        KAPI: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
+        PEN: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+        MBG: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+      };
+
+      const shortBadge = node.category === 'STOREY' ? 'K' : node.category;
+
+      return (
+        <div key={node.id} className="select-none">
+          <div
+            onClick={() => {
+              setSelectedGmlId(node.gmlId);
+              setHighlightedRulePolygonId(null);
+            }}
+            onDoubleClick={() => {
+              // D-23.3: Ağaçta kat (K_) çift tıklanırsa o kat 2B ve 3B'de aktif kat olur
+              if (isStorey) {
+                setActiveStoreyId((prev) => (prev === node.gmlId ? null : node.gmlId));
+              }
+            }}
+            style={{ paddingLeft: `${depth * 12 + 8}px` }}
+            className={`group flex items-center justify-between gap-1.5 py-1 pr-2 text-xs cursor-pointer border-l-2 transition-colors ${
+              isSelected
+                ? 'bg-amber-500/20 border-amber-400 text-amber-200 font-medium'
+                : isActiveStorey
+                ? 'bg-emerald-500/15 border-emerald-400 text-emerald-200'
+                : 'border-transparent text-slate-300 hover:bg-slate-800/70 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 min-w-0">
+              {hasChildren ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedNodes((prev) => ({
+                      ...prev,
+                      [node.gmlId]: !isExpanded,
+                    }));
+                  }}
+                  className="w-4 h-4 flex items-center justify-center rounded hover:bg-slate-700 text-slate-400"
+                >
+                  {isExpanded ? '▾' : '▸'}
+                </button>
+              ) : (
+                <span className="w-4 text-center text-slate-600">•</span>
+              )}
+              <span
+                className={`px-1 py-0.2 text-[10px] font-mono rounded border shrink-0 ${
+                  categoryBadgeColor[node.category] ??
+                  'bg-slate-700 text-slate-300 border-slate-600'
+                }`}
+              >
+                {shortBadge}
+              </span>
+              <div className="truncate" title={`${node.label} — ${node.subLabel} (${node.gmlId})`}>
+                <span>{node.label}</span>
+                {node.subLabel && (
+                  <span className="ml-1.5 text-[10px] text-slate-400">
+                    ({node.subLabel})
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              {isStorey && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveStoreyId((prev) => (prev === node.gmlId ? null : node.gmlId));
+                  }}
+                  title="Katı 2B ve 3B Sahnede Yalıt (Çift Tıkla)"
+                  className={`px-1.5 py-0.5 rounded text-[10px] border ${
+                    isActiveStorey
+                      ? 'bg-emerald-500/30 border-emerald-400 text-emerald-200'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 opacity-0 group-hover:opacity-100'
+                  }`}
+                >
+                  {isActiveStorey ? 'Aktif' : 'Kat'}
+                </button>
+              )}
+              <span className="text-[10px] font-mono text-slate-500">
+                {node.polygonCount}p
+              </span>
+            </div>
+          </div>
+
+          {hasChildren && isExpanded && (
+            <div>
+              {node.children.map((childNode) => renderTreeNode(childNode, depth + 1))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="flex flex-col h-full w-full bg-slate-900 border border-slate-800 overflow-hidden">
+        {/* Panel Başlığı */}
+        <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-950 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0" />
+            <span className="text-xs font-semibold tracking-wide text-slate-200 truncate">
+              PROJE AĞACI ({model.objects.length})
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => toggleCollapsePanel('tree')}
+              title="Daralt / Genişlet"
+              className="px-1.5 py-0.5 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setMaximizedPanelId((prev) => (prev === 'tree' ? null : 'tree'))
+              }
+              title="Tam Ekran / Geri Al"
+              className="px-1.5 py-0.5 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+            >
+              {maximizedPanelId === 'tree' ? '❐' : '□'}
+            </button>
+          </div>
+        </div>
+
+        {!isCollapsed && (
+          <>
+            {/* Arama ve Kat Filtresi */}
+            <div className="p-2 border-b border-slate-800 bg-slate-900/80 space-y-1.5 shrink-0">
+              <input
+                type="text"
+                value={treeSearch}
+                onChange={(e) => setTreeSearch(e.target.value)}
+                placeholder="Nesne, BBK, Salon, gml:id ara..."
+                className="w-full px-2 py-1 text-xs bg-slate-950 border border-slate-700 rounded text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              />
+              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <span>İpucu: Kat (K_) çift tıkla → Yalıt</span>
+                {activeStoreyId && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveStoreyId(null)}
+                    className="text-emerald-400 hover:underline font-medium"
+                  >
+                    Tüm Katlar
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Nesne Ağacı Listesi */}
+            <div className="flex-1 overflow-y-auto py-1">
+              {model.hierarchyTree.map((rootNode) => renderTreeNode(rootNode, 0))}
+            </div>
+
+            {/* Özet Sayaç Şeridi */}
+            <div className="px-2.5 py-1.5 bg-slate-950 border-t border-slate-800 grid grid-cols-4 gap-1 text-[10px] font-mono text-slate-400 shrink-0">
+              <span>K:{objectCounts.K}</span>
+              <span>BB:{objectCounts.BB}</span>
+              <span>BBK:{objectCounts.BBK}</span>
+              <span>BLKN:{objectCounts.BLKN}</span>
+              <span>KAPI:{objectCounts.KAPI}</span>
+              <span>PEN:{objectCounts.PEN}</span>
+              <span>MB:{objectCounts.MB}</span>
+              <span>MBG:{objectCounts.MBG}</span>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // ============================================================================
+  // PANEL 2: 2B ÇİZİM (M4 YER TUTUCU + KAT İZDÜŞÜMÜ)
+  // ============================================================================
+  const render2DFloorPlanPanel = () => (
+    <div className="flex flex-col h-full w-full bg-slate-900 border border-slate-800 overflow-hidden">
+      <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-950 border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+          <span className="text-xs font-semibold tracking-wide text-slate-200 truncate">
+            2B ÇİZİM & KAT İZDÜŞÜMÜ (M4 Yer Tutucu)
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() =>
-              downloadTextFile('ADIM_NOTU_M0.md', M0_AUDIT_DATA.docs.adimNotuMd)
+              setMaximizedPanelId((prev) => (prev === 'cad2d' ? null : 'cad2d'))
             }
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            title="Tam Ekran / Geri Al"
+            className="px-1.5 py-0.5 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>ADIM_NOTU.md İndir</span>
+            {maximizedPanelId === 'cad2d' ? '❐' : '□'}
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0">
+        <FloorPlanPreview2D
+          model={model}
+          selectedGmlId={selectedGmlId}
+          activeStoreyGmlId={activeStoreyId}
+          onSelectGmlId={(id) => {
+            setSelectedGmlId(id);
+            setHighlightedRulePolygonId(null);
+          }}
+          onSelectStoreyGmlId={setActiveStoreyId}
+        />
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // PANEL 3: 3B SAHNE (THREE.JS CITYGML GÖRÜNTÜLEYİCİ)
+  // ============================================================================
+  const render3DScenePanel = () => (
+    <div className="flex flex-col h-full w-full bg-slate-900 border border-slate-800 overflow-hidden">
+      <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-950 border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+          <span className="text-xs font-semibold tracking-wide text-slate-200 truncate">
+            3B SAHNE (Three.js Yerel Merkezli TUREF — P_local = P_TUREF − P_origin)
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() =>
+              setMaximizedPanelId((prev) => (prev === 'scene3d' ? null : 'scene3d'))
+            }
+            title="Tam Ekran / Geri Al"
+            className="px-1.5 py-0.5 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+          >
+            {maximizedPanelId === 'scene3d' ? '❐' : '□'}
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0">
+        <CityGmlViewport3D
+          model={model}
+          selectedGmlId={selectedGmlId}
+          activeStoreyGmlId={activeStoreyId}
+          highlightedRulePolygonId={highlightedRulePolygonId}
+          onSelectGmlId={(id) => {
+            setSelectedGmlId(id);
+            setHighlightedRulePolygonId(null);
+          }}
+          onClearStoreyFilter={() => setActiveStoreyId(null)}
+        />
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // PANEL 4: DOĞRULAMA & DENETİM PANELİ (H / U / B — TIKLA -> NESNEYE GİT)
+  // ============================================================================
+  const renderValidationPanel = () => (
+    <div className="flex flex-col h-full w-full bg-slate-900 border border-slate-800 overflow-hidden">
+      <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-950 border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" />
+          <span className="text-xs font-semibold tracking-wide text-slate-200 truncate">
+            DOĞRULAMA & DENETİM PANELİ (Tıkla → Nesneye Git)
+          </span>
+          <div className="flex items-center gap-1 ml-2">
+            <button
+              type="button"
+              onClick={() => setValidationSeverityFilter('ALL')}
+              className={`px-1.5 py-0.5 text-[10px] font-mono rounded border ${
+                validationSeverityFilter === 'ALL'
+                  ? 'bg-slate-700 text-white border-slate-500'
+                  : 'bg-slate-900 text-slate-400 border-slate-800'
+              }`}
+            >
+              Tümü ({allIssues.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setValidationSeverityFilter('H')}
+              className={`px-1.5 py-0.5 text-[10px] font-mono rounded border ${
+                validationSeverityFilter === 'H'
+                  ? 'bg-rose-500/30 text-rose-200 border-rose-500'
+                  : 'bg-rose-950/40 text-rose-400 border-rose-900/50'
+              }`}
+            >
+              HATA ({issueCounts.H})
+            </button>
+            <button
+              type="button"
+              onClick={() => setValidationSeverityFilter('U')}
+              className={`px-1.5 py-0.5 text-[10px] font-mono rounded border ${
+                validationSeverityFilter === 'U'
+                  ? 'bg-amber-500/30 text-amber-200 border-amber-500'
+                  : 'bg-amber-950/40 text-amber-400 border-amber-900/50'
+              }`}
+            >
+              UYARI ({issueCounts.U})
+            </button>
+            <button
+              type="button"
+              onClick={() => setValidationSeverityFilter('B')}
+              className={`px-1.5 py-0.5 text-[10px] font-mono rounded border ${
+                validationSeverityFilter === 'B'
+                  ? 'bg-sky-500/30 text-sky-200 border-sky-500'
+                  : 'bg-sky-950/40 text-sky-400 border-sky-900/50'
+              }`}
+            >
+              BİLGİ ({issueCounts.B})
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={validationSearch}
+            onChange={(e) => setValidationSearch(e.target.value)}
+            placeholder="V-030, V-211, gml:id..."
+            className="w-36 px-2 py-0.5 text-[11px] bg-slate-900 border border-slate-700 rounded text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500"
+          />
+          <button
+            type="button"
+            onClick={() =>
+              setMaximizedPanelId((prev) =>
+                prev === 'validation' ? null : 'validation'
+              )
+            }
+            title="Tam Ekran / Geri Al"
+            className="px-1.5 py-0.5 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+          >
+            {maximizedPanelId === 'validation' ? '❐' : '□'}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-800/70">
+        {filteredIssues.length === 0 ? (
+          <div className="p-4 text-xs text-slate-400 flex items-center justify-between">
+            <span>
+              Seçili filtrede bulgu yok. ({model.fileName} içinde HATA: {issueCounts.H}, UYARI:{' '}
+              {issueCounts.U}, BİLGİ: {issueCounts.B})
+            </span>
+          </div>
+        ) : (
+          filteredIssues.map((issue, idx) => {
+            const sevBadge =
+              issue.severity === 'H'
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                : issue.severity === 'U'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                : 'bg-sky-500/20 text-sky-300 border-sky-500/40';
+            return (
+              <div
+                key={`${issue.ruleId}-${issue.targetGmlId ?? idx}-${idx}`}
+                onClick={() => handleIssueClick(issue)}
+                className="px-3 py-1.5 text-xs hover:bg-slate-800/70 cursor-pointer flex items-center justify-between gap-2 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`px-1.5 py-0.5 text-[10px] font-mono rounded border shrink-0 ${sevBadge}`}
+                  >
+                    {issue.severity} · {issue.ruleId}
+                  </span>
+                  <span className="text-slate-200 truncate" title={issue.message}>
+                    {issue.message}
+                  </span>
+                </div>
+                {issue.targetGmlId && (
+                  <span className="text-[10px] font-mono text-amber-300/90 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
+                    → {issue.targetGmlId.slice(0, 18)}
+                  </span>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // PANEL 5: ÖZNİTELİK & MALİK PANELİ (SEÇİLİ NESNE + KOD LİSTESİ + ARSA PAYI + MALİK)
+  // ============================================================================
+  const renderAttributesPanel = () => {
+    const bbObject =
+      selectedObject?.prefix === 'BB_'
+        ? selectedObject
+        : selectedObject?.referencedBbGmlId
+        ? model.objectsById[selectedObject.referencedBbGmlId] ?? null
+        : null;
+
+    const bbBlock = bbObject?.attributesMap.blockName ?? '-1';
+    const bbEntrance = bbObject?.attributesMap.entrance ?? '';
+    const bbNo = bbObject?.attributesMap.independentSectionNumber ?? '1';
+    const activeBbKey = `${bbBlock}|${bbEntrance}|${bbNo}`;
+    const malikCheck = validateBbMalikShares(activeBbKey, malikler);
+
+    return (
+      <div className="flex flex-col h-full w-full bg-slate-900 border border-slate-800 overflow-hidden">
+        <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-950 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
+            <span className="text-xs font-semibold tracking-wide text-slate-200 truncate">
+              ÖZNİTELİK & MALİK PANELİ
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setAttrTab('attributes')}
+              className={`px-2 py-0.5 text-[11px] rounded ${
+                attrTab === 'attributes'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-medium'
+                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Öznitelikler ({selectedObject?.attributes.length ?? 0})
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttrTab('landshare')}
+              className={`px-2 py-0.5 text-[11px] rounded ${
+                attrTab === 'landshare'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-medium'
+                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Arsa Payı (K84)
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttrTab('malik')}
+              className={`px-2 py-0.5 text-[11px] rounded ${
+                attrTab === 'malik'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-medium'
+                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Malik / Beyan (K88)
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setMaximizedPanelId((prev) =>
+                  prev === 'attributes' ? null : 'attributes'
+                )
+              }
+              title="Tam Ekran / Geri Al"
+              className="px-1.5 py-0.5 text-[11px] rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+            >
+              {maximizedPanelId === 'attributes' ? '❐' : '□'}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2.5 text-xs">
+          {attrTab === 'attributes' && (
+            <>
+              {!selectedObject ? (
+                <div className="text-slate-400 py-4 text-center">
+                  Proje ağacından, 2B izdüşümden veya 3B sahneden bir nesne seçiniz.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {/* Seçili Nesne Kimlik Kartı */}
+                  <div className="p-2 rounded bg-slate-950 border border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          {selectedObject.prefix}
+                        </span>
+                        <span className="font-semibold text-slate-100">
+                          {selectedObject.gmlName || selectedObject.gmlId}
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-400 mt-0.5">
+                        gml:id = {selectedObject.gmlId}
+                      </div>
+                    </div>
+                    <div className="text-right text-[11px] font-mono text-slate-400">
+                      <div>Etiket: {selectedObject.tagName}</div>
+                      <div>
+                        Poligon: {selectedObject.allPolygonIds.length} (Inline:{' '}
+                        {selectedObject.inlinePolygons.length}, xlink:{' '}
+                        {selectedObject.xlinkPolygonHrefs.length})
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Öznitelik Tablosu + 14 Resmi Kod Listesi Açıklaması */}
+                  <div className="border border-slate-800 rounded overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-950 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                          <th className="py-1.5 px-2">gen:*Attribute</th>
+                          <th className="py-1.5 px-2">Tür</th>
+                          <th className="py-1.5 px-2">Değer</th>
+                          <th className="py-1.5 px-2">Resmi Kod Listesi Karşılığı (K60)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                        {selectedObject.attributes.map((attr) => (
+                          <tr
+                            key={`${attr.name}-${attr.type}`}
+                            className={
+                              attr.name === 'partUsage' ||
+                              attr.name === 'independentSectionUsage' ||
+                              attr.name === 'storeyUsage'
+                                ? 'bg-amber-500/10'
+                                : 'hover:bg-slate-800/40'
+                            }
+                          >
+                            <td className="py-1 px-2 text-sky-300 font-medium">
+                              {attr.name}
+                            </td>
+                            <td className="py-1 px-2 text-slate-400">{attr.type}</td>
+                            <td className="py-1 px-2 text-slate-100">{attr.rawValue}</td>
+                            <td className="py-1 px-2 font-sans">
+                              {attr.codelistDescription ? (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px]">
+                                  {attr.codelistDescription} ({attr.codelistKey}.xml)
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {attrTab === 'landshare' && (
+            <div className="space-y-2">
+              <div className="p-2.5 rounded bg-slate-950 border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div>
+                  <div className="text-[10px] text-slate-400">Tekil BB Sayısı (K84)</div>
+                  <div className="text-sm font-mono font-bold text-slate-100">
+                    {model.landShareAnalysis.uniqueBbCount}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400">Toplam Arsa Payı (Ham)</div>
+                  <div className="text-sm font-mono font-bold text-emerald-300">
+                    {formatBigIntFraction(model.landShareAnalysis.totalShareUnreduced)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400">Sadeleşmiş Toplam</div>
+                  <div className="text-sm font-mono font-bold text-sky-300">
+                    {formatBigIntFraction(model.landShareAnalysis.totalShareReduced)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-400">1 Tam Paydan Fark (V-199)</div>
+                  <div className="text-sm font-mono font-bold text-amber-300">
+                    {formatBigIntFraction(model.landShareAnalysis.diffFromOneUnreduced)}
+                  </div>
+                </div>
+              </div>
+              <div className="text-[11px] text-slate-400">
+                BigInt rasyonel aritmetik (EKOK payda eşitlemesi) ile hesaplanmıştır; kayan nokta
+                yuvarlama hatası içermez.
+              </div>
+            </div>
+          )}
+
+          {attrTab === 'malik' && (
+            <div className="space-y-2.5">
+              <div className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-slate-200">
+                    Aktif Bağımsız Bölüm Anahtarı:{' '}
+                    <span className="font-mono text-amber-300">{activeBbKey}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    CLAUDE13 §1 (K88-yeni): Malik bilgileri yalnız Kat İrtifakı Beyan/Tablo çıktısında
+                    kullanılır; GML çıktısına asla yazılmaz. (Otomatik Öneri:{' '}
+                    {DEFAULT_BEYAN_DUZENLEME_AYAR.otomatikOneri})
+                  </div>
+                </div>
+                <div className="text-right font-mono">
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs border ${
+                      malikCheck.tamHisseMi
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                    }`}
+                  >
+                    Toplam Hisse: {formatBigIntFraction(malikCheck.toplamHisse)}{' '}
+                    {malikCheck.tamHisseMi ? '(= 1/1 ✓)' : '(V-208 BİLGİ)'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={newMalikName}
+                  onChange={(e) => setNewMalikName(e.target.value)}
+                  placeholder="Malik Ad Soyad / Ünvan..."
+                  className="flex-1 px-2 py-1 text-xs bg-slate-950 border border-slate-700 rounded text-slate-200"
+                />
+                <input
+                  type="text"
+                  value={newMalikShare}
+                  onChange={(e) => setNewMalikShare(e.target.value)}
+                  placeholder="Pay/Payda (1/2)"
+                  className="w-24 px-2 py-1 text-xs font-mono bg-slate-950 border border-slate-700 rounded text-slate-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const m = /^(\d+)\/(\d+)$/.exec(newMalikShare.trim());
+                    if (!newMalikName.trim() || !m) return;
+                    const pay = BigInt(m[1]);
+                    const payda = BigInt(m[2]);
+                    if (payda === 0n) return;
+                    setMalikler((prev) => [
+                      ...prev,
+                      {
+                        bbAnahtari: activeBbKey,
+                        adSoyadVeyaUnvan: newMalikName.trim(),
+                        hissePay: pay,
+                        hissePayda: payda,
+                      },
+                    ]);
+                    setNewMalikName('');
+                  }}
+                  className="px-2.5 py-1 text-xs rounded bg-purple-600 hover:bg-purple-500 text-white font-medium"
+                >
+                  + Malik Ekle
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-800 border border-slate-800 rounded">
+                {malikler
+                  .filter((m) => m.bbAnahtari === activeBbKey)
+                  .map((m, idx) => (
+                    <div
+                      key={`${m.adSoyadVeyaUnvan}-${idx}`}
+                      className="px-2.5 py-1.5 flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <span className="text-slate-200 font-medium">
+                          {m.adSoyadVeyaUnvan}
+                        </span>
+                        {m.not && (
+                          <span className="ml-2 text-[11px] text-slate-400">
+                            ({m.not})
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono text-emerald-300">
+                        {m.hissePay.toString()}/{m.hissePayda.toString()}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================================
+  // D-23.1 & D-23.2: 4 KALIP (F5 STANDART, F6 YAN YANA, F7 ÇİZİM, F8 DENETİM)
+  // ============================================================================
+  const renderMainWorkspace = () => {
+    if (maximizedPanelId === 'tree') return renderProjectTreePanel();
+    if (maximizedPanelId === 'cad2d') return render2DFloorPlanPanel();
+    if (maximizedPanelId === 'scene3d') return render3DScenePanel();
+    if (maximizedPanelId === 'validation') return renderValidationPanel();
+    if (maximizedPanelId === 'attributes') return renderAttributesPanel();
+
+    // D-23.2 #5: Küçük ekran (< 1366 px) davranışında 2B ve 3B tek orta alanda sekme olarak gösterilir, Ağaç açılır çekmece olur
+    if (isNarrowMode) {
+      return (
+        <div className="relative flex flex-col h-full w-full overflow-hidden">
+          {narrowTreeDrawerOpen && (
+            <div className="absolute inset-y-0 left-0 z-30 w-72 shadow-2xl">
+              {renderProjectTreePanel()}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between px-3 py-1 bg-slate-900 border-b border-slate-800 shrink-0">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setNarrowTreeDrawerOpen((v) => !v)}
+                className="px-2.5 py-1 text-xs rounded bg-sky-600/30 border border-sky-500/50 text-sky-200 font-medium"
+              >
+                {narrowTreeDrawerOpen ? '✕ Proje Ağacını Kapat' : '☰ Proje Ağacı Çekmecesi'}
+              </button>
+              <div className="flex items-center bg-slate-950 p-0.5 rounded border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setNarrowCenterTab('2d')}
+                  className={`px-3 py-1 text-xs rounded ${
+                    narrowCenterTab === '2d'
+                      ? 'bg-emerald-600 text-white font-semibold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  2B Çizim & Kat İzdüşümü
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNarrowCenterTab('3d')}
+                  className={`px-3 py-1 text-xs rounded ${
+                    narrowCenterTab === '3d'
+                      ? 'bg-amber-600 text-white font-semibold'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  3B Sahne
+                </button>
+              </div>
+            </div>
+            <span className="text-[11px] font-mono text-amber-300">
+              Dar Ekran Modu (&lt;1366px — D-23.2 #5)
+            </span>
+          </div>
+
+          <div className="flex-1 min-h-0">
+            <Group
+              id="d23-narrow-v"
+              orientation="vertical"
+              defaultLayout={workspaceState.groupLayouts['d23-narrow-v']}
+              onLayoutChanged={(layout) =>
+                handleGroupLayoutChanged('d23-narrow-v', layout)
+              }
+            >
+              <Panel id="narrow-top" defaultSize="65%" minSize="30%">
+                {narrowCenterTab === '2d'
+                  ? render2DFloorPlanPanel()
+                  : render3DScenePanel()}
+              </Panel>
+              <Separator className="h-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-row-resize" />
+              <Panel id="narrow-bottom" defaultSize="35%" minSize="18%">
+                <Group id="d23-narrow-bot-h" orientation="horizontal">
+                  <Panel id="narrow-val" defaultSize="50%" minSize="20%">
+                    {renderValidationPanel()}
+                  </Panel>
+                  <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+                  <Panel id="narrow-attr" defaultSize="50%" minSize="20%">
+                    {renderAttributesPanel()}
+                  </Panel>
+                </Group>
+              </Panel>
+            </Group>
+          </div>
+        </div>
+      );
+    }
+
+    // KALIP 2: F6 — YAN YANA
+    if (workspaceState.preset === 'F6_YAN_YANA') {
+      return (
+        <Group
+          id="d23-f6-root"
+          orientation="horizontal"
+          defaultLayout={workspaceState.groupLayouts['d23-f6-root']}
+          onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f6-root', l)}
+        >
+          <Panel id="f6-left-2d" defaultSize="48%" minSize="20%" collapsible>
+            {render2DFloorPlanPanel()}
+          </Panel>
+          <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+          <Panel id="f6-right" defaultSize="52%" minSize="25%">
+            <Group
+              id="d23-f6-right-v"
+              orientation="vertical"
+              defaultLayout={workspaceState.groupLayouts['d23-f6-right-v']}
+              onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f6-right-v', l)}
+            >
+              <Panel id="f6-right-3d" defaultSize="55%" minSize="25%" collapsible>
+                {render3DScenePanel()}
+              </Panel>
+              <Separator className="h-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-row-resize" />
+              <Panel id="f6-right-bottom" defaultSize="45%" minSize="20%">
+                <Group id="d23-f6-right-bot-h" orientation="horizontal">
+                  <Panel id="f6-tree" defaultSize="30%" minSize="15%" collapsible>
+                    {renderProjectTreePanel()}
+                  </Panel>
+                  <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+                  <Panel id="f6-attr" defaultSize="40%" minSize="20%" collapsible>
+                    {renderAttributesPanel()}
+                  </Panel>
+                  <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+                  <Panel id="f6-val" defaultSize="30%" minSize="15%" collapsible>
+                    {renderValidationPanel()}
+                  </Panel>
+                </Group>
+              </Panel>
+            </Group>
+          </Panel>
+        </Group>
+      );
+    }
+
+    // KALIP 3: F7 — ÇİZİM ODAKLI
+    if (workspaceState.preset === 'F7_CIZIM') {
+      return (
+        <Group
+          id="d23-f7-root"
+          orientation="vertical"
+          defaultLayout={workspaceState.groupLayouts['d23-f7-root']}
+          onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f7-root', l)}
+        >
+          <Panel id="f7-top" defaultSize="76%" minSize="40%">
+            <Group
+              id="d23-f7-top-h"
+              orientation="horizontal"
+              defaultLayout={workspaceState.groupLayouts['d23-f7-top-h']}
+              onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f7-top-h', l)}
+            >
+              <Panel id="f7-2d" defaultSize="72%" minSize="40%">
+                {render2DFloorPlanPanel()}
+              </Panel>
+              <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+              <Panel id="f7-3d-mini" defaultSize="28%" minSize="15%" collapsible>
+                {render3DScenePanel()}
+              </Panel>
+            </Group>
+          </Panel>
+          <Separator className="h-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-row-resize" />
+          <Panel id="f7-bottom" defaultSize="24%" minSize="12%" collapsible>
+            <Group id="d23-f7-bot-h" orientation="horizontal">
+              <Panel id="f7-val" defaultSize="50%" minSize="20%">
+                {renderValidationPanel()}
+              </Panel>
+              <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+              <Panel id="f7-attr" defaultSize="50%" minSize="20%">
+                {renderAttributesPanel()}
+              </Panel>
+            </Group>
+          </Panel>
+        </Group>
+      );
+    }
+
+    // KALIP 4: F8 — DENETİM ODAKLI
+    if (workspaceState.preset === 'F8_DENETIM') {
+      return (
+        <Group
+          id="d23-f8-root"
+          orientation="vertical"
+          defaultLayout={workspaceState.groupLayouts['d23-f8-root']}
+          onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f8-root', l)}
+        >
+          <Panel id="f8-top" defaultSize="62%" minSize="30%">
+            <Group
+              id="d23-f8-top-h"
+              orientation="horizontal"
+              defaultLayout={workspaceState.groupLayouts['d23-f8-top-h']}
+              onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f8-top-h', l)}
+            >
+              <Panel id="f8-tree" defaultSize="18%" minSize="12%" collapsible>
+                {renderProjectTreePanel()}
+              </Panel>
+              <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+              <Panel id="f8-3d" defaultSize="82%" minSize="40%">
+                {render3DScenePanel()}
+              </Panel>
+            </Group>
+          </Panel>
+          <Separator className="h-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-row-resize" />
+          <Panel id="f8-bottom" defaultSize="38%" minSize="20%">
+            <Group id="d23-f8-bot-h" orientation="horizontal">
+              <Panel id="f8-val" defaultSize="55%" minSize="25%">
+                {renderValidationPanel()}
+              </Panel>
+              <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+              <Panel id="f8-attr" defaultSize="45%" minSize="25%">
+                {renderAttributesPanel()}
+              </Panel>
+            </Group>
+          </Panel>
+        </Group>
+      );
+    }
+
+    // KALIP 1 (VARSAYILAN): F5 — STANDART (D-23.1: Üstte Ağaç ~15% | 2B ~45% | 3B ~40%, Altta Doğrulama | Öznitelik)
+    return (
+      <Group
+        id="d23-f5-root"
+        orientation="vertical"
+        defaultLayout={workspaceState.groupLayouts['d23-f5-root']}
+        onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f5-root', l)}
+      >
+        <Panel id="f5-top" defaultSize="72%" minSize="35%">
+          <Group
+            id="d23-f5-top-h"
+            orientation="horizontal"
+            defaultLayout={workspaceState.groupLayouts['d23-f5-top-h']}
+            onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f5-top-h', l)}
+          >
+            <Panel id="f5-tree" defaultSize="15%" minSize="10%" collapsible>
+              {renderProjectTreePanel()}
+            </Panel>
+            <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+            <Panel id="f5-cad2d" defaultSize="45%" minSize="18%" collapsible>
+              {render2DFloorPlanPanel()}
+            </Panel>
+            <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+            <Panel id="f5-scene3d" defaultSize="40%" minSize="18%" collapsible>
+              {render3DScenePanel()}
+            </Panel>
+          </Group>
+        </Panel>
+        <Separator className="h-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-row-resize" />
+        <Panel id="f5-bottom" defaultSize="28%" minSize="14%" collapsible>
+          <Group
+            id="d23-f5-bot-h"
+            orientation="horizontal"
+            defaultLayout={workspaceState.groupLayouts['d23-f5-bot-h']}
+            onLayoutChanged={(l) => handleGroupLayoutChanged('d23-f5-bot-h', l)}
+          >
+            <Panel id="f5-validation" defaultSize="52%" minSize="20%" collapsible>
+              {renderValidationPanel()}
+            </Panel>
+            <Separator className="w-1.5 bg-slate-800 hover:bg-amber-500 transition-colors cursor-col-resize" />
+            <Panel id="f5-attributes" defaultSize="48%" minSize="20%" collapsible>
+              {renderAttributesPanel()}
+            </Panel>
+          </Group>
+        </Panel>
+      </Group>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
+      {/* ÜST ARAÇ ÇUBUĞU (D-23.1 & D-23.2 Kalıplar F5-F8) */}
+      <header className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-slate-950 border-b border-slate-800 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 text-xs font-mono font-bold rounded bg-amber-500 text-slate-950">
+              TKGM 3B
+            </span>
+            <h1 className="text-sm font-bold tracking-tight text-slate-100">
+              Sayısallaştırma & Denetim Stüdyosu
+            </h1>
+            <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+              M1 · CityGML 2.0
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-slate-800" />
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".gml,.xml"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="px-2.5 py-1 text-xs font-medium rounded bg-sky-600 hover:bg-sky-500 text-white transition-colors"
+          >
+            📂 GML Dosyası Aç (.gml)
+          </button>
+          <button
+            type="button"
+            onClick={handleResetToOrnek6}
+            className="px-2 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+            title="Varsayılan Ornek6-M-70125626-A.gml Referans Modelini Yükle"
+          >
+            Ornek6 (70125626-A)
+          </button>
+        </div>
+
+        {/* Orta: KARAR D-23.2 Yerleşim Kalıpları (F5, F6, F7, F8) */}
+        <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded border border-slate-800">
+          {(
+            [
+              { id: 'F5_STANDART', label: 'F5 Standart' },
+              { id: 'F6_YAN_YANA', label: 'F6 Yan Yana' },
+              { id: 'F7_CIZIM', label: 'F7 Çizim' },
+              { id: 'F8_DENETIM', label: 'F8 Denetim' },
+            ] as const
+          ).map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => {
+                setMaximizedPanelId(null);
+                setWorkspaceState((prev) => ({ ...prev, preset: preset.id }));
+              }}
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                workspaceState.preset === preset.id && !isNarrowMode
+                  ? 'bg-amber-500 text-slate-950 font-semibold'
+                  : 'text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setSimulateNarrowScreen((v) => !v)}
+            title="D-23.2 #5: <1366px Dar Ekran Sekme Modunu Test Et"
+            className={`px-2 py-1 text-[11px] font-mono rounded border ml-1 ${
+              simulateNarrowScreen
+                ? 'bg-emerald-500/30 border-emerald-400 text-emerald-200'
+                : 'bg-slate-950 border-slate-700 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            &lt;1366px Modu
+          </button>
+        </div>
+
+        {/* Sağ: K89 CanonicalHash Rozeti ve M0/M1 Denetim Raporu */}
+        <div className="flex items-center gap-2">
+          <div
+            className="hidden xl:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono"
+            title={`D-23.4 / K89 Kanonik Model Özeti: ${liveCanonicalHash}`}
+          >
+            <span className="text-slate-400">K89 Hash:</span>
+            <span className="text-emerald-300">{liveCanonicalHash.slice(0, 12)}…</span>
+            {isHashInvariantVerified && (
+              <span className="text-[10px] text-emerald-400">✓ Sabit</span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAuditModal(true)}
+            className="px-2.5 py-1 text-xs font-medium rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40"
+          >
+            📋 M0/M1 Raporu & F1–F12 ({M0_AUDIT_DATA.generatedAtIso.slice(0, 10)})
           </button>
         </div>
       </header>
 
-      {/* Main Content Container (1440px desktop baseline) */}
-      <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-8 space-y-8">
-        {/* Context Header & Summary Strip */}
-        <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-100 pb-5">
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                <span>Şartname {M0_AUDIT_DATA.specVersion}</span>
-                <span aria-hidden="true">·</span>
-                <span className="font-mono text-slate-700 font-medium">
-                  Kaydedilmiş Denetim Çıktısı: {M0_AUDIT_DATA.generatedAtIso}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>Sıfır Ağ İsteği (K91 Çevrimdışı Çekirdek)</span>
-              </div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-                M0 Saf TypeScript Çekirdek ve Doğrulama Denetim Konsolu
-              </h1>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() =>
-                  downloadTextFile('KARARLAR.md', M0_AUDIT_DATA.docs.kararlarMd)
-                }
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <FileCode2 className="w-3.5 h-3.5" />
-                <span>KARARLAR.md İndir</span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  downloadTextFile(
-                    'verify-samples-m0.json',
-                    JSON.stringify(M0_AUDIT_DATA.sampleReport, null, 2),
-                    'application/json;charset=utf-8'
-                  )
-                }
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <FileCheck2 className="w-3.5 h-3.5" />
-                <span>verify:samples JSON İndir</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 5 Quantitative Proof Metrics (Tabular Numerals) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <div className="text-xs text-slate-500">Resmi Dosya SHA-256 Kilidi</div>
-              <div className="text-xl font-bold font-mono tabular-nums text-emerald-700 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>15 / 15 Dosya</span>
-              </div>
-              <div className="text-xs text-slate-600">
-                ornek6.gml (717.200 B) + 14 XML
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <div className="text-xs text-slate-500">Birim Testler (vitest run)</div>
-              <div className="text-xl font-bold font-mono tabular-nums text-emerald-700 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>23 / 23 Geçti</span>
-              </div>
-              <div className="text-xs text-slate-600">
-                tsconfig.core.json (0 hata) · KONTROL-M0-2 (win32)
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <div className="text-xs text-slate-500">Öznitelik Beyaz Listesi (K99)</div>
-              <div className="text-xl font-bold font-mono tabular-nums text-slate-900">
-                45 gen:*Attribute
-              </div>
-              <div className="text-xs text-slate-600">
-                42 Ornek6 + 3 OA / İçYapı
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <div className="text-xs text-slate-500">Ornek6 Altın Dosya Analizi</div>
-              <div className="text-xl font-bold font-mono tabular-nums text-slate-900">
-                Profil {ornek6.detectedProducerProfile}
-              </div>
-              <div className="text-xs text-slate-600 font-mono tabular-nums">
-                Kat Biçim {ornek6.detectedStoreyForm} · Kapı +{ornek6.detectedDoorBottomOffsetMm ?? 0} mm
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
-              <div className="text-xs text-slate-500">İzlenen Kural Kodu (K98)</div>
-              <div className="text-xl font-bold font-mono tabular-nums text-slate-900">
-                {M0_AUDIT_DATA.traceReport.rows.length} Kural Kodu
-              </div>
-              <div className="text-xs text-slate-600">
-                Kod ve test eşleşmesi doğrulandı
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* SECTION 1: 15 RESMİ DOSYA SHA-256 KİLİDİ VE ORNEK6 ANALİZİ */}
-        {activeSection === 'overview' && (
-          <div className="space-y-8">
-            {/* KONTROL-M0 F1-F12 Status Table */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-700" />
-                    <span>00. KONTROL-M0 Denetim Bulguları Durum Tablosu (F1–F12)</span>
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    KONTROL-M0.md raporundaki F1–F4 zorunlu maddeleri ve F5–F12 iyileştirme maddelerinin tamamı uygulanmış ve test edilmiştir.
-                  </p>
-                </div>
-                <span className="text-xs font-mono text-emerald-700 font-semibold">
-                  Durum: 12 / 12 YAPILDI
-                </span>
-              </div>
-
-              <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                      <th className="py-2.5 px-3">Kod</th>
-                      <th className="py-2.5 px-3">Önem</th>
-                      <th className="py-2.5 px-3">Durum</th>
-                      <th className="py-2.5 px-3">Bulgu Özeti</th>
-                      <th className="py-2.5 px-3">Uygulanan Çözüm</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {M0_AUDIT_DATA.kontrolM0Findings.map((item) => (
-                      <tr key={item.code} className="hover:bg-slate-50/80">
-                        <td className="py-2 px-3 font-mono font-bold text-slate-900">
-                          {item.code}
-                        </td>
-                        <td className="py-2 px-3 text-slate-600 whitespace-nowrap">
-                          {item.severity}
-                        </td>
-                        <td className="py-2 px-3 font-mono font-semibold text-emerald-700 whitespace-nowrap">
-                          {item.status}
-                        </td>
-                        <td className="py-2 px-3 font-medium text-slate-900">
-                          {item.summary}
-                        </td>
-                        <td className="py-2 px-3 text-slate-600">
-                          {item.resolutionNote}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-            {/* 15 Official Reference Files Table */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <FolderCheck className="w-5 h-5 text-slate-700" />
-                    <span>01. 15 Resmi Referans Dosyası SHA-256 Doğrulama Tablosu (CLAUDE13 §2.1)</span>
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Çalışma alanına yüklenen resmi dosyalar bayt-bayt kopyalanmış ve DOSYA_LISTESI.txt ile kilitlenmiştir.
-                  </p>
-                </div>
-                <span className="text-xs font-mono text-emerald-700 font-semibold">
-                  Durum: 15/15 Birebir Eşleşti
-                </span>
-              </div>
-
-              <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                      <th className="py-2.5 px-3">#</th>
-                      <th className="py-2.5 px-3">Resmi Dosya Yolu</th>
-                      <th className="py-2.5 px-3 text-right">Boyut (Bayt)</th>
-                      <th className="py-2.5 px-3">SHA-256 Özeti</th>
-                      <th className="py-2.5 px-3">Doğrulama</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 font-mono tabular-nums">
-                    {M0_AUDIT_DATA.sampleReport.referenceFiles.map((file, idx) => (
-                      <tr key={file.file} className="hover:bg-slate-50/80">
-                        <td className="py-2 px-3 text-slate-500">{idx + 1}</td>
-                        <td className="py-2 px-3 font-medium text-slate-900">
-                          {file.file}
-                        </td>
-                        <td className="py-2 px-3 text-right text-slate-700">
-                          {file.sizeBytes.toLocaleString('tr-TR')}
-                        </td>
-                        <td className="py-2 px-3 text-slate-600 break-all">
-                          {file.sha256}
-                        </td>
-                        <td className="py-2 px-3 text-emerald-700 font-sans font-semibold">
-                          Doğrulandı
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {/* Ornek6-M-70125626-A.gml Golden File Inspection */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-slate-700" />
-                  <span>02. Altın Dosya Analizi: fixtures/ornek6.gml (M-70125626-A.gml)</span>
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  src/core/gml/readAttributes.ts tarafından çevrimdışı ayrıştırılan gerçek yapısal özet ve nesne sayıları.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="font-semibold text-slate-800">Kimlik ve CRS Bilgileri</div>
-                  <div className="space-y-1 font-mono tabular-nums text-slate-700">
-                    <div>constructionID: <span className="font-semibold text-slate-900">{ornek6.constructionID}</span></div>
-                    <div>Bina gml:id: <span className="text-slate-600">{ornek6.buildingGmlId}</span></div>
-                    <div>CRS (srsName): <span className="font-semibold text-slate-900">{ornek6.srsName}</span></div>
-                    <div>Onay Tarihi: <span className="font-semibold text-slate-900">{ornek6.confirmationDate}</span></div>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="font-semibold text-slate-800">Envelope ve Boyutlar</div>
-                  <div className="space-y-1 font-mono tabular-nums text-slate-700">
-                    <div>lowerCorner: <span className="text-slate-900">{ornek6.envelopeLowerCorner}</span></div>
-                    <div>upperCorner: <span className="text-slate-900">{ornek6.envelopeUpperCorner}</span></div>
-                    <div>roofProjectionArea: <span className="font-semibold text-slate-900">{ornek6.roofProjectionArea.toFixed(2)} m²</span></div>
-                    <div>buildingHeight: <span className="font-semibold text-slate-900">{ornek6.buildingHeight.toFixed(2)} m</span></div>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="font-semibold text-slate-800">Nesne Sayıları (gml:id Önekleri)</div>
-                  <div className="grid grid-cols-3 gap-1.5 font-mono tabular-nums text-slate-700">
-                    <div>MB_: <span className="font-bold text-slate-900">{ornek6.counts.MB}</span></div>
-                    <div>K_: <span className="font-bold text-slate-900">{ornek6.counts.K}</span></div>
-                    <div>BB_: <span className="font-bold text-slate-900">{ornek6.counts.BB}</span></div>
-                    <div>BBK_: <span className="font-bold text-slate-900">{ornek6.counts.BBK}</span></div>
-                    <div>BLKN_: <span className="font-bold text-slate-900">{ornek6.counts.BLKN}</span></div>
-                    <div>KAPI_: <span className="font-bold text-slate-900">{ornek6.counts.KAPI}</span></div>
-                    <div>PEN_: <span className="font-bold text-slate-900">{ornek6.counts.PEN}</span></div>
-                    <div>OA_: <span className="font-bold text-slate-900">{ornek6.counts.OA}</span></div>
-                    <div>MBG_: <span className="font-bold text-slate-900">{ornek6.counts.MBG}</span></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 45 Whitelisted Generic Attributes Table */}
-              <div className="space-y-3 pt-2">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      ALLOWED_GENERIC_ATTRIBUTES Beyaz Listesi (45 Öznitelik — K99, V-060)
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Ornek6 içinden doğrulanan 42 öznitelik + Ortak Alan / İç Yapı için 3 ek öznitelik.
-                    </p>
-                  </div>
-                  <div className="relative w-full sm:w-72">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={attrQuery}
-                      onChange={(e) => setAttrQuery(e.target.value)}
-                      placeholder="Öznitelik adı veya tip ara..."
-                      className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
-                    />
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-96">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                      <tr>
-                        <th className="py-2 px-3">#</th>
-                        <th className="py-2 px-3">Öznitelik Adı (name)</th>
-                        <th className="py-2 px-3">Veri Tipi</th>
-                        <th className="py-2 px-3 text-right">Ornek6 Kullanım Sayısı</th>
-                        <th className="py-2 px-3">Doğrulama Kaynağı</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {filteredAttributes.map((attr, i) => (
-                        <tr key={attr.spec} className="hover:bg-slate-50/80">
-                          <td className="py-2 px-3 font-mono tabular-nums text-slate-500">
-                            {i + 1}
-                          </td>
-                          <td className="py-2 px-3 font-mono font-semibold text-slate-900">
-                            {attr.name}
-                          </td>
-                          <td className="py-2 px-3 font-mono text-slate-700">
-                            gen:{attr.type}Attribute
-                          </td>
-                          <td className="py-2 px-3 font-mono tabular-nums text-right text-slate-700">
-                            {attr.countInOrnek6}
-                          </td>
-                          <td className="py-2 px-3 text-slate-600">
-                            {attr.sourceGroup}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* SECTION 2: 14 RESMİ TKGM XML KOD LİSTESİ GEZGİNİ */}
-        {activeSection === 'codelists' && (
-          <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-slate-700" />
-                  <span>14 Resmi TKGM XML Kod Listesi Gezgini (K60, K91, V-063)</span>
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  resources/codelists/*.xml altındaki 14 resmi sözlükten çevrimdışı ayrıştırılmıştır. commonAreaUsage sorguları partUsage.xml üzerinden yanıtlanır.
-                </p>
-              </div>
-              <div className="relative w-full sm:w-72">
-                <Filter className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={codelistQuery}
-                  onChange={(e) => setCodelistQuery(e.target.value)}
-                  placeholder="Kod veya Türkçe açıklama filtrele..."
-                  className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-slate-900"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Left Sidebar: 14 Codelists */}
-              <div className="lg:col-span-4 border border-slate-200 rounded-lg divide-y divide-slate-200 overflow-hidden">
-                {M0_AUDIT_DATA.codelistsDetailed.map((cl) => {
-                  const active = cl.listName === selectedCodelist;
-                  return (
-                    <button
-                      key={cl.listName}
-                      type="button"
-                      onClick={() => setSelectedCodelist(cl.listName)}
-                      className={`w-full text-left px-3.5 py-2.5 text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                        active
-                          ? 'bg-slate-900 text-white font-semibold'
-                          : 'bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="font-mono truncate">{cl.listName}.xml</span>
-                      <span
-                        className={`font-mono tabular-nums text-[11px] shrink-0 ml-2 ${
-                          active ? 'text-slate-300' : 'text-slate-500'
-                        }`}
-                      >
-                        {cl.entries.length} kayıt
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Right Table: Selected Codelist Entries */}
-              <div className="lg:col-span-8 space-y-3">
-                {currentCodelistObj && (
-                  <>
-                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <div className="space-x-2">
-                        <span className="font-mono font-bold text-slate-900">
-                          {currentCodelistObj.listName}.xml
-                        </span>
-                        <span aria-hidden="true">·</span>
-                        <span className="text-slate-600">
-                          Dictionary gml:id: <code className="font-mono">{currentCodelistObj.dictionaryGmlId}</code>
-                        </span>
-                      </div>
-                      {currentCodelistObj.duplicateDefinitionIds.length > 0 && (
-                        <span className="text-amber-800 font-medium">
-                          Resmi XML içinde çift Definition gml:id ({currentCodelistObj.duplicateDefinitionIds.join(', ')}) korunarak okundu
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                            <th className="py-2.5 px-3">Definition gml:id</th>
-                            <th className="py-2.5 px-3">Kod (gml:name)</th>
-                            <th className="py-2.5 px-3">Türkçe Açıklama (gml:description)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200">
-                          {filteredCodelistEntries.map((entry, idx) => (
-                            <tr
-                              key={`${entry.definitionGmlId}-${entry.code}-${idx}`}
-                              className="hover:bg-slate-50/80"
-                            >
-                              <td className="py-2 px-3 font-mono text-slate-500">
-                                {entry.definitionGmlId}
-                              </td>
-                              <td className="py-2 px-3 font-mono tabular-nums font-bold text-slate-900">
-                                {entry.codeText}
-                              </td>
-                              <td className="py-2 px-3 text-slate-800 font-medium">
-                                {entry.description}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* SECTION 3: CANLI ÇEKİRDEK MOTORU LABORATUVARI (src/core/) */}
-        {activeSection === 'sandbox' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 1. BigInt LandShare Engine */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Scale className="w-4 h-4 text-slate-700" />
-                    <span>BigInt Arsa Payı Motoru (src/core/math/landShare.ts)</span>
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    K84 5&apos;li birleşik BB anahtarı, V-198, V-199 ve V-212 kontrolleri.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setLandSharePreset('ornek1_41')}
-                  className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                    landSharePreset === 'ornek1_41'
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Ornek1 #41 (V-212)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLandSharePreset('fua5p9')}
-                  className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                    landSharePreset === 'fua5p9'
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  FUA5P9 (V-199)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLandSharePreset('dubleks')}
-                  className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                    landSharePreset === 'dubleks'
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Dubleks + Boşluk (V-198)
-                </button>
-              </div>
-
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs font-mono tabular-nums">
-                <div>
-                  Toplam BB Parça Nesnesi: <span className="font-bold">{liveLandShareResult.totalPartObjects}</span>
-                </div>
-                <div>
-                  Benzersiz BB Sayısı (K31 / K84): <span className="font-bold text-slate-900">{liveLandShareResult.uniqueBbCount}</span>
-                </div>
-                <div>
-                  Toplam Pay (Ortak Payda): <span className="font-bold text-slate-900">{formatBigIntFraction(liveLandShareResult.totalShareUnreduced)}</span>
-                </div>
-                <div>
-                  Toplam Pay (GCD Sadeleşmiş): <span className="font-bold text-slate-900">{formatBigIntFraction(liveLandShareResult.totalShareReduced)}</span>
-                </div>
-                <div>
-                  1 Tam Paydan Fark: <span className="font-bold text-slate-900">{formatBigIntFraction(liveLandShareResult.diffFromOneUnreduced)}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="text-xs font-semibold text-slate-700">Üretilen Doğrulama Bulguları:</div>
-                {liveLandShareResult.issues.map((iss, idx) => (
-                  <div
-                    key={`${iss.ruleId}-${idx}`}
-                    className="p-2.5 rounded-lg border border-slate-200 bg-white text-xs space-y-0.5"
-                  >
-                    <div className="font-mono font-bold text-slate-900">
-                      {iss.ruleId} · Düzey: {iss.severity === 'H' ? 'HATA' : iss.severity === 'U' ? 'UYARI' : 'BİLGİ'}
-                    </div>
-                    <div className="text-slate-600">{iss.message}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* 2. Malik (Kat İrtifakı Listesi — CLAUDE13 §1 K88-yeni) */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-              <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Users className="w-4 h-4 text-slate-700" />
-                    <span>Malik / Kat İrtifakı Modeli (src/core/model/malik.ts)</span>
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    CLAUDE13 §1 (K88-yeni): Serbest düzenlenir, yalnız proje dosyasında (.tkgm3b) tutulur, GML&apos;e asla yazılmaz.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setOtomatikOneriAyar((prev) =>
-                      prev === 'kapali' ? 'acik' : 'kapali'
-                    )
-                  }
-                  className="px-2.5 py-1 text-xs font-mono border border-slate-300 rounded-md bg-slate-50 hover:bg-slate-100 cursor-pointer shrink-0"
-                >
-                  otomatikOneri: {otomatikOneriAyar}
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {malikRows.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center text-xs">
-                    <input
-                      type="text"
-                      value={row.ad}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setMalikRows((prev) =>
-                          prev.map((r, i) => (i === idx ? { ...r, ad: val } : r))
-                        );
-                      }}
-                      className="col-span-5 px-2.5 py-1.5 border border-slate-200 rounded-md font-mono"
-                      placeholder="Ad Soyad / Ünvan"
-                    />
-                    <input
-                      type="text"
-                      value={row.kimlik}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setMalikRows((prev) =>
-                          prev.map((r, i) => (i === idx ? { ...r, kimlik: val } : r))
-                        );
-                      }}
-                      className="col-span-3 px-2.5 py-1.5 border border-slate-200 rounded-md font-mono tabular-nums"
-                      placeholder="TC / Vergi No"
-                    />
-                    <input
-                      type="text"
-                      value={row.pay}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setMalikRows((prev) =>
-                          prev.map((r, i) => (i === idx ? { ...r, pay: val } : r))
-                        );
-                      }}
-                      className="col-span-2 px-2.5 py-1.5 border border-slate-200 rounded-md font-mono tabular-nums text-right"
-                      placeholder="Pay"
-                    />
-                    <input
-                      type="text"
-                      value={row.payda}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setMalikRows((prev) =>
-                          prev.map((r, i) => (i === idx ? { ...r, payda: val } : r))
-                        );
-                      }}
-                      className="col-span-2 px-2.5 py-1.5 border border-slate-200 rounded-md font-mono tabular-nums text-right"
-                      placeholder="Payda"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5 text-xs font-mono tabular-nums">
-                <div>
-                  BB Anahtarı: <span className="font-bold">{liveMalikResult.bbAnahtari}</span> · Hissedar Sayısı: <span className="font-bold">{liveMalikResult.malikSayisi}</span>
-                </div>
-                <div>
-                  BigInt Hisse Toplamı: <span className="font-bold text-slate-900">{formatBigIntFraction(liveMalikResult.toplamHisse)}</span> ({liveMalikResult.tamHisseMi ? 'Tam Hisse 1/1' : 'V-208 BİLGİ: Toplam != 1/1'})
-                </div>
-                {liveMalikResult.issue && (
-                  <div className="text-amber-800 font-sans pt-1">
-                    {liveMalikResult.issue.ruleId} ({liveMalikResult.issue.severity}): {liveMalikResult.issue.message}
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* 3. 2D Helmert & Leave-One-Out Outlier Detection */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-              <div className="border-b border-slate-100 pb-3">
-                <h2 className="text-base font-bold text-slate-900">
-                  2B Helmert Dönüşümü ve Uyuşumsuz Nokta Tespiti (src/core/math/helmert2d.ts)
-                </h2>
-                <p className="text-xs text-slate-500">
-                  P3 kontrol noktasındaki aplikasyon sapmasını değiştirerek leave-one-out analizini test edin.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-slate-700">P3 Noktası Yapay Sapması (mm):</span>
-                  <span className="font-mono tabular-nums font-bold text-slate-900">{helmertOutlierMm} mm</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={1000}
-                  step={10}
-                  value={helmertOutlierMm}
-                  onChange={(e) => setHelmertOutlierMm(Number(e.target.value))}
-                  className="w-full accent-slate-900 cursor-pointer"
-                />
-              </div>
-
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5 text-xs font-mono tabular-nums">
-                <div>
-                  Ölçek (Scale): <span className="font-bold">{liveHelmertAnalysis.helmert.scale.toFixed(6)}</span> ({liveHelmertAnalysis.helmert.scalePpm.toFixed(1)} ppm)
-                </div>
-                <div>
-                  Tüm Noktalar RMSE: <span className="font-bold">{liveHelmertAnalysis.outlier.fullRmseMm.toFixed(2)} mm</span>
-                </div>
-                <div>
-                  En İyi Leave-One-Out RMSE: <span className="font-bold text-emerald-700">{liveHelmertAnalysis.outlier.bestReducedRmseMm.toFixed(2)} mm</span>
-                </div>
-                <div>
-                  Tespit Edilen Uyuşumsuz Nokta: <span className="font-bold text-slate-900">{liveHelmertAnalysis.outlier.suspectPointId ?? 'Yok (Tüm noktalar uyumlu)'}</span>
-                </div>
-              </div>
-            </section>
-
-            {/* 4. Coordinate Decimals (CLAUDE13 §2.2), K45a Clearance & CanonicalHash */}
-            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-              <div className="border-b border-slate-100 pb-3">
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Hash className="w-4 h-4 text-slate-700" />
-                  <span>K09/V-030 Ondalık Kuralı, K45a Delik Mesafesi ve CanonicalHash</span>
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Okumada != 3 hane BİLGİ (CLAUDE13 §2.2), delik-kenar mesafesi ve SHA-256 kanonik model özeti.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="space-y-1">
-                  <label className="font-medium text-slate-700 block">
-                    Koordinat Metni (V-030 Okuma vs Yazma):
-                  </label>
-                  <input
-                    type="text"
-                    value={coordTokenInput}
-                    onChange={(e) => setCoordTokenInput(e.target.value)}
-                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-md font-mono tabular-nums"
-                  />
-                  <div className="text-[11px] font-mono text-slate-600">
-                    Okuma Modu: <span className="font-bold text-slate-900">{liveGeometryAndHash.readCoordIssue ? `${liveGeometryAndHash.readCoordIssue.severity} (BİLGİ)` : 'Tam 3 Hane (OK)'}</span>
-                    {' · '}
-                    Yazma Modu: <span className="font-bold text-slate-900">{liveGeometryAndHash.writeCoordIssue ? `${liveGeometryAndHash.writeCoordIssue.severity} (HATA)` : 'Tam 3 Hane (OK)'}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-medium text-slate-700 block">
-                    Kapı Deliği Alt Ofseti (K45a): {doorOffsetMmInput} mm
-                  </label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={50}
-                    step={1}
-                    value={doorOffsetMmInput}
-                    onChange={(e) => setDoorOffsetMmInput(Number(e.target.value))}
-                    className="w-full accent-slate-900 cursor-pointer"
-                  />
-                  <div className="text-[11px] font-mono text-slate-600">
-                    Sonuç: <span className="font-bold text-slate-900">{liveGeometryAndHash.clearance.issue ? `${liveGeometryAndHash.clearance.issue.ruleId} (${liveGeometryAndHash.clearance.issue.severity})` : 'K45a Tam Uyumlu (>=10mm)'}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 text-xs pt-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-600">Üretici Profili:</span>
-                  {(['A10', 'B50', 'C50'] as const).map((prof) => (
-                    <button
-                      key={prof}
-                      type="button"
-                      onClick={() => setHashProfile(prof)}
-                      className={`px-2.5 py-1 rounded-md font-mono text-xs cursor-pointer ${
-                        hashProfile === prof
-                          ? 'bg-slate-900 text-white font-semibold'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      {prof}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-600">Kamera Açısı (Özeti Değiştirmez):</span>
-                  <button
-                    type="button"
-                    onClick={() => setCameraAngleDeg((d) => (d + 45) % 360)}
-                    className="px-2.5 py-1 rounded-md font-mono text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
-                  >
-                    {cameraAngleDeg}°
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1 text-xs font-mono tabular-nums">
-                <div className="truncate">
-                  Deterministik gml:id (K92): <span className="font-bold text-slate-900">{liveGeometryAndHash.sampleGmlId}</span>
-                </div>
-                <div className="break-all">
-                  CanonicalHash (K89): <span className="font-bold text-slate-900">{liveGeometryAndHash.canonicalHash}</span>
-                </div>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* SECTION 4: KURAL-KOD-TEST İZLENEBİLİRLİK MATRİSİ (npm run trace) */}
-        {activeSection === 'trace' && (
-          <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Terminal className="w-5 h-5 text-slate-700" />
-                  <span>Kural–Kod–Test İzlenebilirlik Matrisi (npm run trace — K98)</span>
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  scripts/trace.ts tarafından src/core/ ve src/platform/ kaynak ve test dosyalarından otomatik üretilmiştir.
-                </p>
-              </div>
-              <span className="text-xs font-mono font-semibold text-slate-700">
-                Toplam İzlenen Kural: {M0_AUDIT_DATA.traceReport.rows.length}
-              </span>
-            </div>
-
-            <div className="overflow-x-auto border border-slate-200 rounded-lg">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                    <th className="py-2.5 px-3">Kural Kodu</th>
-                    <th className="py-2.5 px-3">Kaynak Modüller (src/core & src/platform)</th>
-                    <th className="py-2.5 px-3">Birim Test Dosyaları</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 font-mono">
-                  {M0_AUDIT_DATA.traceReport.rows.map((row) => (
-                    <tr key={row.ruleId} className="hover:bg-slate-50/80">
-                      <td className="py-2 px-3 font-bold text-slate-900">
-                        {row.ruleId}
-                      </td>
-                      <td className="py-2 px-3 text-slate-700">
-                        {row.sourceFiles.join(', ')}
-                      </td>
-                      <td className="py-2 px-3 text-emerald-700">
-                        {row.testFiles.join(', ') || '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {/* SECTION 5: ADIM_NOTU.MD, KARARLAR.MD VE KONSOL ÇIKTILARI */}
-        {activeSection === 'docs' && (
-          <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setActiveDocTab('adimNotu')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                    activeDocTab === 'adimNotu'
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  docs/ADIM_NOTU.md
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveDocTab('kararlar')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                    activeDocTab === 'kararlar'
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  docs/KARARLAR.md
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveDocTab('acikSorular')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                    activeDocTab === 'acikSorular'
-                      ? 'bg-white text-slate-900 shadow-xs font-semibold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  docs/ACIK_SORULAR.md
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeDocTab === 'adimNotu') {
-                    downloadTextFile('ADIM_NOTU.md', M0_AUDIT_DATA.docs.adimNotuMd);
-                  } else if (activeDocTab === 'kararlar') {
-                    downloadTextFile('KARARLAR.md', M0_AUDIT_DATA.docs.kararlarMd);
-                  } else {
-                    downloadTextFile('ACIK_SORULAR.md', M0_AUDIT_DATA.docs.acikSorularMd);
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer self-start sm:self-auto"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Seçili Belgeyi İndir (.md)</span>
-              </button>
-            </div>
-
-            <pre className="p-4 rounded-lg bg-slate-950 text-slate-100 text-xs font-mono overflow-x-auto max-h-[640px] leading-relaxed whitespace-pre-wrap">
-              {activeDocTab === 'adimNotu'
-                ? M0_AUDIT_DATA.docs.adimNotuMd
-                : activeDocTab === 'kararlar'
-                ? M0_AUDIT_DATA.docs.kararlarMd
-                : M0_AUDIT_DATA.docs.acikSorularMd}
-            </pre>
-          </section>
-        )}
+      {/* ANA 5 PANELLİ ÇALIŞMA ALANI (KARAR D-23) */}
+      <main className="flex-1 min-h-0 w-full overflow-hidden">
+        {renderMainWorkspace()}
       </main>
 
-      {/* Quiet Footer */}
-      <footer className="border-t border-slate-200 bg-white px-6 py-4 text-xs text-slate-500">
-        <div className="max-w-[1400px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div>
-            TKGM 3B Sayısal Yapı Modeli (CityGML 2.0) · M0 Saf TypeScript Çekirdek Sürümü (v3.5.5)
-          </div>
-          <div className="font-mono tabular-nums">
-            15/15 Resmi Dosya SHA-256 · 19/19 Birim Test · Sıfır Ağ İsteği (K91)
-          </div>
+      {/* ALT DURUM ÇUBUĞU (D-23.1: EPSG | Koordinat | Aktif Kat | K89 Hash | Hata/Uyarı/Bilgi) */}
+      <footer className="flex flex-wrap items-center justify-between gap-2 px-3 py-1 bg-slate-950 border-t border-slate-800 text-[11px] font-mono text-slate-400 shrink-0">
+        <div className="flex items-center gap-3">
+          <span className="text-slate-200 font-semibold">{model.fileName}</span>
+          <span>SRS: {model.srsName}</span>
+          <span>
+            P_origin: E={model.originTuref.e.toFixed(3)} N={model.originTuref.n.toFixed(3)} Z=
+            {model.originTuref.z.toFixed(3)}
+          </span>
+          <span>
+            Aktif Kat:{' '}
+            <strong className="text-emerald-300">
+              {activeStoreyId
+                ? model.objectsById[activeStoreyId]?.gmlName ?? activeStoreyId
+                : `Tümü (${objectCounts.K} Kat)`}
+            </strong>
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span>
+            Kalıp: <strong className="text-amber-300">{workspaceState.preset}</strong>
+          </span>
+          <span>
+            K89: <strong className="text-emerald-300">{liveCanonicalHash.slice(0, 16)}</strong>
+          </span>
+          <span className="text-rose-400">H:{issueCounts.H}</span>
+          <span className="text-amber-400">U:{issueCounts.U}</span>
+          <span className="text-sky-400">B:{issueCounts.B}</span>
         </div>
       </footer>
+
+      {/* M0 / M1 DENETİM VE KANIT MODAL PENCERESİ */}
+      {showAuditModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 text-xs font-mono rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                  Kaydedilmiş Denetim Çıktısı: {M0_AUDIT_DATA.generatedAtIso}
+                </span>
+                <h2 className="text-sm font-bold text-slate-100">
+                  M0 & M1 Doğrulama Kanıtları, KONTROL-M0 (F1–F12) ve KARAR D-23 Özeti
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAuditModal(false)}
+                className="px-2.5 py-1 text-xs rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold"
+              >
+                ✕ Kapat
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 border-b border-slate-800">
+              {(
+                [
+                  { id: 'kontrol_m0', label: 'KONTROL-M0 (F1–F12)' },
+                  { id: 'adim_notu', label: 'docs/ADIM_NOTU.md' },
+                  { id: 'kararlar', label: 'docs/KARARLAR.md (D-23 dahil)' },
+                  { id: 'codelists', label: '14 Resmi XML Kod Listesi' },
+                  { id: 'trace', label: 'K98 İzlenebilirlik Matrisi' },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setAuditModalTab(t.id)}
+                  className={`px-3 py-1 text-xs rounded font-medium ${
+                    auditModalTab === t.id
+                      ? 'bg-amber-500 text-slate-950 font-semibold'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 text-xs font-mono">
+              {auditModalTab === 'kontrol_m0' && (
+                <div className="space-y-2">
+                  {M0_AUDIT_DATA.kontrolM0Findings.map((f) => (
+                    <div
+                      key={f.code}
+                      className="p-2.5 rounded bg-slate-950 border border-slate-800 flex items-start justify-between gap-4"
+                    >
+                      <div>
+                        <span className="font-bold text-amber-300">{f.code}</span> —{' '}
+                        <span className="text-slate-200 font-sans font-medium">
+                          {f.summary}
+                        </span>
+                        <div className="text-slate-400 font-sans mt-1">
+                          {f.resolutionNote}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+                        {f.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {auditModalTab === 'adim_notu' && (
+                <pre className="whitespace-pre-wrap text-slate-200 bg-slate-950 p-3 rounded border border-slate-800">
+                  {M0_AUDIT_DATA.docs.adimNotuMd}
+                </pre>
+              )}
+
+              {auditModalTab === 'kararlar' && (
+                <pre className="whitespace-pre-wrap text-slate-200 bg-slate-950 p-3 rounded border border-slate-800">
+                  {M0_AUDIT_DATA.docs.kararlarMd}
+                </pre>
+              )}
+
+              {auditModalTab === 'codelists' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-sans">
+                  {M0_AUDIT_DATA.codelistsDetailed.map((cl) => (
+                    <div
+                      key={cl.listName}
+                      className="p-3 rounded bg-slate-950 border border-slate-800"
+                    >
+                      <div className="font-bold text-amber-300 font-mono mb-1">
+                        {cl.listName}.xml ({cl.entries.length} kod)
+                      </div>
+                      <div className="space-y-1">
+                        {cl.entries.map((e) => (
+                          <div
+                            key={`${cl.listName}-${e.code}`}
+                            className="flex justify-between text-xs border-b border-slate-900 pb-0.5"
+                          >
+                            <span className="font-mono text-sky-300">{e.code}</span>
+                            <span className="text-slate-200">{e.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {auditModalTab === 'trace' && (
+                <pre className="whitespace-pre-wrap text-emerald-300 bg-slate-950 p-3 rounded border border-slate-800">
+                  {M0_AUDIT_DATA.traceReport.summaryText}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

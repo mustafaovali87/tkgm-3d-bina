@@ -77,6 +77,21 @@ export interface Part {
   readonly remote?: boolean;
 }
 
+/**
+ * Açıklık (kapı/pencere), şartname §4.2 + §5.4. Bir yüz üzerinde iki nokta (a, b) ile çizilir; yüz bir kısım kenarı
+ * veya kat dış sınırı olabilir. Karşı yüz (duvarın öbür tarafı) üretimde aranır; bir açıklık n temsile dönüşür (T1–T4).
+ */
+export interface Opening {
+  readonly id: string;
+  readonly kind: 'door' | 'window';
+  readonly usage: number; // doorUsage / windowUsage
+  readonly storeyId: string;
+  readonly anchor: { readonly a: Pt2; readonly b: Pt2 };
+  readonly sill: Mm; // kısım tabanından (oda Floor_) yükseklik; kapıda 10 (K45a)
+  readonly height: Mm;
+  readonly spansStoreys?: readonly string[]; // sahanlık penceresi (M5 kapsamı dışında)
+}
+
 export interface DesignBuilding {
   readonly id: string;
   readonly letter: string;
@@ -84,6 +99,8 @@ export interface DesignBuilding {
   readonly sections: readonly IndependentSection[];
   readonly sectionParts: readonly SectionPart[];
   readonly parts: readonly Part[];
+  /** M5: açıklıklar. M4 proje dosyalarında yoktur; okuyucu boş dizi varsayar. */
+  readonly openings?: readonly Opening[];
 }
 
 export interface DesignProject {

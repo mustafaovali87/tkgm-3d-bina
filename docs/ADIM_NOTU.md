@@ -5,6 +5,20 @@
 
 ---
 
+## M5 — GEOMETRİ MOTORU I (Claude, 08.11.2026)
+
+> Ayrıntı: `docs/M5_GEOMETRI_MOTORU.md`.
+
+| Madde | Durum |
+|---|---|
+| `src/core/brep/` (types, generate, shellCheck); `Opening` modeli ve GML'den açıklık çıkarma | YAPILDI |
+| Kabul: Ornek6 altın testi (çatı hariç) | YAPILDI. K 2, BB 2, BBK 16, KAPI 44, PEN 38 birebir; alan ±0,01 ve hacim ±0,05 (16/16); BB 91,34; kotlar birebir; LoD2 8 kapı + 19 pencere |
+| Kabuk denetimi | YAPILDI. 16/16 oda kapalı; BB küvetinde açık kenar yalnız döşeme üstünde (§5.6 alt yüz yok) |
+| Arayüz | YAPILDI. Tasarım Editörü → "3B üret" + 3B önizleme; tarayıcıda Ornek6 ile denendi, konsolda hata yok |
+| Komutlar | `typecheck` 0 hata ✔, `npm test` 114/114 ✔ |
+| M6'ya kalan | GML yazımı, LoD0/1/2, TIC, Envelope, balkon, çatı, W Boolean farkı (Clipper2), OA kalınlıklı duvar |
+---
+
 ## M4 — TASARIM MODELİ VE 2B EDİTÖR (Claude, 08.11.2026)
 
 > Ayrıntı: `docs/M4_TASARIM_EDITORU.md`.

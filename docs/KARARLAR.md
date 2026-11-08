@@ -226,3 +226,15 @@
   - Uzak kısım içerme denetiminden muaftır.
   - Çatı arası (usage 1004) için içerme ihlali UYARI'dır (§5.9).
 - **Proje dosyası `.tkgm3b`:** JSON, deterministik. Malik listesi yalnız burada tutulur, GML'e yazılmaz (K88-yeni).
+
+## A.10 M5 Geometri Motoru I (Claude, 08.11.2026)
+
+- **Çıktı:** B-rep yapısı (`src/core/brep/`). Koordinatlar tamsayı mm; kimlikler `uuidv5` ile deterministik. GML'e yazım M6'dadır.
+- **Kat biçimi:** varsayılan Biçim B + döşeme kenarları (§4.2). Ornek6 ölçümü Biçim A ve döşeme kenarsızdır; `ORNEK6_BREP_OPTIONS`.
+- **Açıklık:**
+  - Karşı yüz uzaklığı karşı kenara dik ölçülür. Eğik binada kenar ucundan ölçmek yanlış sonuç verdi.
+  - En ince duvar 10 mm, en kalın 1000 mm.
+  - Delik köşeleri açıklık noktalarının kendisidir.
+- **Kapı kotu:** Oda ve BB deliği `zFloorTop + 10 mm` (K45a). LoD2 (T1) kapısı `zFloorTop`'tan başlar (Ornek6 ölçümü).
+- **BB küveti:** Alt yüz üretilmez (§5.6). Kapalılık denetiminde açık kenarlar yalnız `zFloorTop`'ta kabul edilir.
+- **Açıklık modeli:** `DesignBuilding.openings` isteğe bağlıdır. M4 proje dosyaları açılır; yoksa boş dizi varsayılır.

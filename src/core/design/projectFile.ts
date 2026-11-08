@@ -63,6 +63,10 @@ export function parseProject(text: string): ParsedProjectFile {
     for (const s of b.storeys) s.outline.forEach((o, i) => checkPoly(o, `Kat_${s.storeyNumber} sınır ${i + 1}`));
     for (const sp of b.sectionParts) checkPoly(sp.outline, `BB parçası ${sp.id}`);
     for (const pt of b.parts) checkPoly(pt.polygon, `Kısım ${pt.id}`);
+    for (const o of b.openings ?? []) {
+      if (!isInt(o.anchor?.a?.x) || !isInt(o.anchor?.a?.y) || !isInt(o.anchor?.b?.x) || !isInt(o.anchor?.b?.y)) throw new Error(`Açıklık ${o.id}: koordinatlar mm tamsayı olmalı (§4.1).`);
+      if (!isInt(o.sill) || !isInt(o.height) || o.height <= 0) throw new Error(`Açıklık ${o.id}: denizlik/yükseklik mm tamsayı olmalı.`);
+    }
   }
   const malikler: Malik[] = (root.malikler ?? []).map((m) => ({
     bbAnahtari: m.bbAnahtari,

@@ -4,7 +4,7 @@
 import type { ImportedCityObject, ImportedModel, ImportedPolygon } from '../gml/gmlReader.ts';
 import { uuidv5 } from '../hash/canonical.ts';
 import { normalizeOrientation, polyAreaM2, polyIntersectionAreaM2 } from './geometry2d.ts';
-import type { DesignProject, IndependentSection, Part, Poly2, Pt2, SectionPart, Storey } from './types.ts';
+import type { DesignProject, IndependentSection, Opening, Part, Poly2, Pt2, SectionPart, Storey } from './types.ts';
 
 export interface ExtractionNote {
   readonly objectGmlId: string;
@@ -192,6 +192,97 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
   });
   parts.splice(0, parts.length, ...finalParts);
 
+  // Döşeme kalınlığı (M5): kattaki olağan oda taban kotu − kat taban kotu (Ornek6: 200 mm). Bulunamazsa 200.
+  const slabFinal = storeys.map((s) => {
+    const counts = new Map<number, number>();
+    for (const p of parts) {
+      if (p.storeyId !== s.id || p.zFloorOverride !== undefined) continue;
+      const d = partFloorZ.get(p.id)! - s.zBottom;
+      if (d > 0 && d < 1000) counts.set(d, (counts.get(d) ?? 0) + 1);
+    }
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+    return best ? { ...s, slabThickness: best[0] } : s;
+  });
+  storeys.splice(0, storeys.length, ...slabFinal);
+
+  // Açıklıklar (M5, §4.2 Opening). Önce oda açıklıkları (T4) okunur; aynı fiziksel açıklığın ikinci oda temsili ve
+  // bina (LoD2, T1) temsili, aynı duvar diliminde (paralel, ≤ 1000 mm, örtüşen) ve aynı kotta olduğu için tekrar eklenmez.
+  const openings: Opening[] = [];
+  const placed: { o: Opening; zb: number; zt: number }[] = [];
+  const partIdByGml = new Map<string, string>();
+  for (const p of parts) partIdByGml.set(sourceIds.get(p.id) ?? '', p.id);
+  const hostOf = (o: ImportedCityObject) => (o.parentGmlId ? model.objectsById[o.parentGmlId] : undefined);
+  const isRoomHost = (o: ImportedCityObject) => {
+    const h = hostOf(o);
+    return h !== undefined && (h.prefix === 'BBK_' || h.prefix === 'OA_');
+  };
+  const sameWall = (o: Opening, a: Pt2, b: Pt2): boolean => {
+    const ux = o.anchor.b.x - o.anchor.a.x;
+    const uy = o.anchor.b.y - o.anchor.a.y;
+    const L = Math.hypot(ux, uy);
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const M = Math.hypot(vx, vy);
+    if (L < 1 || M < 1) return false;
+    if (Math.abs(ux * vy - uy * vx) / (L * M) > Math.sin((0.5 * Math.PI) / 180)) return false;
+    const dist = Math.abs((a.x - o.anchor.a.x) * uy - (a.y - o.anchor.a.y) * ux) / L;
+    if (dist > 1000) return false;
+    const t = (p: Pt2) => ((p.x - o.anchor.a.x) * ux + (p.y - o.anchor.a.y) * uy) / L;
+    const lo = Math.max(0, Math.min(t(a), t(b)));
+    const hi = Math.min(L, Math.max(t(a), t(b)));
+    return hi - lo >= 0.5 * Math.min(L, M);
+  };
+  const srcOpenings = model.objects.filter((o) => o.prefix === 'KAPI_' || o.prefix === 'PEN_');
+  const ordered = [...srcOpenings.filter(isRoomHost), ...srcOpenings.filter((o) => !isRoomHost(o))];
+  for (const op of ordered) {
+    const poly = polysOf(op)[0];
+    if (!poly) {
+      notes.push({ objectGmlId: op.gmlId, message: 'Açıklık poligonu bulunamadı.' });
+      continue;
+    }
+    const bottom = toRing(poly.exteriorRing.vertices.filter((v) => Math.abs(v.z - poly.minZ) < 0.0005));
+    const uniq = bottom.filter((p, i) => bottom.findIndex((q) => q.x === p.x && q.y === p.y) === i);
+    if (uniq.length < 2) {
+      notes.push({ objectGmlId: op.gmlId, message: 'Açıklık alt kenarı bulunamadı (dikdörtgen değil).' });
+      continue;
+    }
+    let a = uniq[0];
+    let b = uniq[1];
+    for (const p of uniq) for (const q of uniq) if (Math.hypot(p.x - q.x, p.y - q.y) > Math.hypot(a.x - b.x, a.y - b.y)) [a, b] = [p, q];
+    const kind: Opening['kind'] = op.prefix === 'KAPI_' ? 'door' : 'window';
+    const zb = Math.round(poly.minZ * 1000);
+    const zt = Math.round(poly.maxZ * 1000);
+    const host = hostOf(op);
+    let storeyId: string | undefined;
+    let base: number;
+    let sill: number;
+    if (host && isRoomHost(op)) {
+      const pid = partIdByGml.get(host.gmlId);
+      const part = parts.find((p) => p.id === pid);
+      if (!part) {
+        notes.push({ objectGmlId: op.gmlId, message: 'Açıklığın odası tasarımda yok; atlandı.' });
+        continue;
+      }
+      storeyId = part.storeyId;
+      base = partFloorZ.get(part.id)!;
+      sill = zb - base;
+    } else {
+      const st = physicalStorey(zb);
+      storeyId = st?.id;
+      base = (st?.zBottom ?? 0) + (st?.slabThickness ?? 200);
+      // LoD2 kapısı zFloorTop'tan başlar; odadaki karşılığı +10 mm (K45a)
+      sill = kind === 'door' ? Math.max(10, zb - base) : zb - base;
+    }
+    if (!storeyId) continue;
+    const dup = placed.find((x) => x.o.kind === kind && x.o.storeyId === storeyId && Math.abs(x.zt - zt) <= 2 && (kind === 'door' || Math.abs(x.zb - zb) <= 2) && sameWall(x.o, a, b));
+    if (dup) continue;
+    const usage = Number((kind === 'door' ? op.attributesMap.doorUsage : op.attributesMap.windowUsage) ?? (kind === 'door' ? 1004 : 1001));
+    const o: Opening = { id: nid('acik'), kind, usage, storeyId, anchor: { a, b }, sill, height: zt - (base + sill) };
+    sourceIds.set(o.id, op.gmlId);
+    openings.push(o);
+    placed.push({ o, zb: base + sill, zt });
+  }
+
   const epsgNum = Number(model.srsName.replace(/^EPSG:/, ''));
   const epsg = (EPSG as readonly number[]).includes(epsgNum) ? (epsgNum as DesignProject['georef']['epsg']) : 5254;
   const project: DesignProject = {
@@ -206,7 +297,7 @@ export function designFromImportedModel(model: ImportedModel): ExtractionResult 
       parcelNumber: mb?.attributesMap.parcelNumber ?? '',
       takbisNeighbourhoodReference: Number(mb?.attributesMap.takbisNeighbourhoodReference ?? 0),
     },
-    buildings: [{ id: nid('bina'), letter: cid.split('-').pop() ?? 'A', storeys, sections, sectionParts, parts }],
+    buildings: [{ id: nid('bina'), letter: cid.split('-').pop() ?? 'A', storeys, sections, sectionParts, parts, openings }],
   };
   return { project: { ...project, idSeq: seq }, sourceIds, notes };
 }

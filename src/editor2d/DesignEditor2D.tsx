@@ -10,6 +10,10 @@ import { parseProject, serializeProject } from '../core/design/projectFile.ts';
 import { snapPoint, type SnapKind, type SnapResult } from '../core/design/snap.ts';
 import type { DesignProject, Poly2, Pt2, Ring2 } from '../core/design/types.ts';
 import type { ImportedModel } from '../core/gml/gmlReader.ts';
+import { generateBrep } from '../core/brep/generate.ts';
+import { checkShell } from '../core/brep/shellCheck.ts';
+import type { BrepBuilding, BrepOptions } from '../core/brep/types.ts';
+import { BrepPreview3D } from '../viewer3d/BrepPreview3D.tsx';
 
 export interface DesignEditor2DProps {
   readonly model: ImportedModel;
@@ -66,6 +70,17 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
   const boxRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // M5: tasarımdan B-rep üretimi
+  const [brepStyle, setBrepStyle] = useState<BrepOptions['storeyStyle']>('B');
+  const [brep, setBrep] = useState<{ result: BrepBuilding; ms: number; closedRooms: number } | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const runBrep = () => {
+    const t0 = globalThis.performance.now();
+    const result = generateBrep(state.project, state.project.buildings[0], { storeyStyle: brepStyle, emitSlabEdges: brepStyle === 'B' });
+    const ms = globalThis.performance.now() - t0;
+    setBrep({ result, ms, closedRooms: result.rooms.filter((r) => checkShell(r).closed).length });
+    setShowPreview(true);
+  };
 
   const b = state.project.buildings[0];
   const sid = state.activeStoreyId;
@@ -190,6 +205,7 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
     <div className="flex h-full w-full text-xs" onKeyDown={onKeyDown} onKeyUp={(e) => e.key === 'Shift' && setShift(false)} tabIndex={0} aria-label="2B tasarım editörü">
       {/* Çizim alanı */}
       <div ref={boxRef} className="relative flex-1 min-w-0 bg-white overflow-hidden">
+        {brep && showPreview && <BrepPreview3D brep={brep.result} onClose={() => setShowPreview(false)} />}
         <svg
           ref={svgRef}
           width={size.w}
@@ -257,6 +273,12 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
               </g>
             );
           })}
+          {/* Açıklıklar (M5): kapı kahverengi, pencere mavi; çizim yüzü üzerindeki genişlik */}
+          {(b?.openings ?? []).filter((o) => o.storeyId === sid).map((o) => (
+            <line key={o.id} x1={o.anchor.a.x} y1={-o.anchor.a.y} x2={o.anchor.b.x} y2={-o.anchor.b.y} stroke={o.kind === 'door' ? '#92400e' : '#0284c7'} strokeWidth={4 * sw} strokeLinecap="butt" pointerEvents="none">
+              <title>{o.kind === 'door' ? 'Kapı' : 'Pencere'} · denizlik {o.sill} mm · yükseklik {o.height} mm</title>
+            </line>
+          ))}
           {/* Taslak */}
           {draftWithCursor.length > 0 && <path d={ringPath(draftWithCursor, false)} fill={draftWithCursor.length >= 3 ? '#f59e0b22' : 'none'} stroke="#f59e0b" strokeWidth={2 * sw} />}
           {state.draft.map((q, i) => <circle key={`d${i}`} cx={q.x} cy={-q.y} r={3 * sw} fill={i === 0 ? '#f59e0b' : '#fff'} stroke="#f59e0b" strokeWidth={sw} />)}
@@ -378,6 +400,38 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
               </li>
             ))}
           </ul>
+        </div>
+
+        <div className="space-y-1 pt-1 border-t border-slate-800">
+          <div className="text-[10px] text-slate-400">Geometri motoru (M5, §5): açıklık {b.openings?.length ?? 0}</div>
+          <div className="flex gap-1 items-center">
+            <select value={brepStyle} onChange={(e) => setBrepStyle(e.target.value as BrepOptions['storeyStyle'])} className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px]" title="Kat geometrisi biçimi (§4.2 storeyGeometryStyle)" aria-label="Kat geometrisi biçimi">
+              <option value="B">Biçim B</option>
+              <option value="A">Biçim A</option>
+            </select>
+            <button type="button" onClick={runBrep} className="flex-1 px-1 py-0.5 rounded bg-sky-700 hover:bg-sky-600 text-white" title="Tasarımdan oda kabukları, BB küvetleri, kat kabukları ve açıklıkları üretir">3B üret</button>
+          </div>
+          {brep && (
+            <div className="text-[10px] space-y-0.5" role="status">
+              <div>
+                K {brep.result.storeys.length} · BB {brep.result.sectionParts.length} · oda {brep.result.rooms.length} · KAPI {brep.result.rooms.flatMap((r) => r.surfaces.flatMap((s) => s.openings)).filter((o) => o.prefix === 'KAPI_').length + brep.result.lod2Openings.filter((o) => o.prefix === 'KAPI_').length} · PEN {brep.result.rooms.flatMap((r) => r.surfaces.flatMap((s) => s.openings)).filter((o) => o.prefix === 'PEN_').length + brep.result.lod2Openings.filter((o) => o.prefix === 'PEN_').length}
+              </div>
+              <div>Kapalı oda kabuğu {brep.closedRooms}/{brep.result.rooms.length} · {brep.ms.toFixed(0)} ms</div>
+              <div className={brep.result.issues.some((i) => i.severity === 'H') ? 'text-red-300' : 'text-emerald-300'}>Üretim: H {brep.result.issues.filter((i) => i.severity === 'H').length} · U {brep.result.issues.filter((i) => i.severity === 'U').length}</div>
+              <ul className="max-h-24 overflow-y-auto space-y-0.5">
+                {brep.result.issues.slice(0, 30).map((i, idx) => (
+                  <li key={`${i.code}-${idx}`}>
+                    <button type="button" onClick={() => dispatch({ type: 'select', id: i.elementId })} className={`w-full text-left px-1 rounded ${i.severity === 'H' ? 'bg-red-950/60 text-red-200' : 'bg-amber-950/40 text-amber-200'}`}>
+                      {i.severity} {i.code}: {i.message}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {!showPreview && (
+                <button type="button" onClick={() => setShowPreview(true)} className="w-full px-1 py-0.5 rounded bg-slate-800 border border-slate-700">3B önizlemeyi aç</button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="space-y-1 pt-1 border-t border-slate-800">

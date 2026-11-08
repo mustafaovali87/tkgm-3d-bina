@@ -15,6 +15,7 @@ import type {
   Pt2,
   Roof,
   RoomInstallation,
+  SectionInfo,
   SectionPart,
   Storey,
 } from '../design/types.ts';
@@ -282,6 +283,25 @@ export function createApartmanTemplate(seed = 'sablon_apartman'): DesignProject 
     pitchDeg: 33,
   };
 
+  const sectionInfo: Record<string, SectionInfo> = {};
+  for (let i = 1; i <= sections.length; i++) {
+    const sec = sections[i - 1];
+    if (sec) {
+      sectionInfo[sec.id] = {
+        maksIdentityNumber: 100000000 + i,
+        maksNumaratajIdentityNumber: 200000000 + i,
+        maksIntegrationState: 1003,
+        integrationState: 1004,
+        geometrySuitability: 1001,
+        additionalNote: '-',
+      };
+    }
+  }
+  const cardinalDirections: Record<string, readonly number[]> = {};
+  for (const sp of sectionParts) {
+    cardinalDirections[sp.id] = [1001];
+  }
+
   const building: DesignBuilding = {
     id: buildingId,
     letter: 'A',
@@ -293,13 +313,15 @@ export function createApartmanTemplate(seed = 'sablon_apartman'): DesignProject 
     installations,
     balconies,
     roof,
+    sectionInfo,
+    cardinalDirections,
     info: {
       maksIdentityNumber: 12345678,
       maksIntegrationState: 1003,
       buildingType: 1001,
       geometrySuitability: [1006],
-      tenderRegistrationNumber: 'TKGM-2026-AP-01',
-      architecturalPlanID: 'AP-2026-001',
+      tenderRegistrationNumber: '',
+      architecturalPlanID: '',
       additionalNote: '4 Katlı 8 Daireli Standart Apartman Şablonu',
       elevatorCount: 1,
       buildingHeight: 11.4,
@@ -372,8 +394,8 @@ export function createVillaTemplate(seed = 'sablon_villa'): DesignProject {
     storeyId: s0Id,
     sectionPartIds: [sp0Id],
     usage: 1001, // Salon
-    polygon: rectPoly(0, 0, 8000, 10000),
-    planArea: 80.0,
+    polygon: rectPoly(200, 200, 7800, 9800),
+    planArea: 72.96,
   });
   parts.push({
     id: `ROOM_${uuidv5(`${seed}::room_mutfak`)}`,
@@ -381,15 +403,15 @@ export function createVillaTemplate(seed = 'sablon_villa'): DesignProject {
     storeyId: s0Id,
     sectionPartIds: [sp0Id],
     usage: 1003, // Mutfak
-    polygon: rectPoly(8000, 0, 12000, 10000),
-    planArea: 40.0,
+    polygon: rectPoly(8200, 200, 11800, 9800),
+    planArea: 34.56,
   });
   openings.push({
     id: `KAPI_${uuidv5(`${seed}::giris`)}`,
     kind: 'door',
     usage: 1001,
     storeyId: s0Id,
-    anchor: { a: { x: 5000, y: 0 }, b: { x: 7000, y: 0 } },
+    anchor: { a: { x: 3000, y: 0 }, b: { x: 5000, y: 0 } },
     sill: 10,
     height: 2200,
   });
@@ -434,8 +456,8 @@ export function createVillaTemplate(seed = 'sablon_villa'): DesignProject {
     storeyId: s1Id,
     sectionPartIds: [sp1Id],
     usage: 1002, // Yatak Odası
-    polygon: rectPoly(0, 0, 6000, 10000),
-    planArea: 60.0,
+    polygon: rectPoly(200, 200, 5800, 9800),
+    planArea: 53.76,
   });
   parts.push({
     id: `ROOM_${uuidv5(`${seed}::room_cocuk`)}`,
@@ -443,8 +465,8 @@ export function createVillaTemplate(seed = 'sablon_villa'): DesignProject {
     storeyId: s1Id,
     sectionPartIds: [sp1Id],
     usage: 1002, // Yatak Odası
-    polygon: rectPoly(6000, 0, 12000, 10000),
-    planArea: 60.0,
+    polygon: rectPoly(6200, 200, 11800, 9800),
+    planArea: 53.76,
   });
 
   const roof: Roof = {
@@ -452,6 +474,21 @@ export function createVillaTemplate(seed = 'sablon_villa'): DesignProject {
     eaveOverhang: 600,
     thickness: 250,
     pitchDeg: 35,
+  };
+
+  const sectionInfo: Record<string, SectionInfo> = {
+    [secId]: {
+      maksIdentityNumber: 87654321,
+      maksNumaratajIdentityNumber: 87654322,
+      maksIntegrationState: 1003,
+      integrationState: 1004,
+      geometrySuitability: 1001,
+      additionalNote: '-',
+    },
+  };
+  const cardinalDirections: Record<string, readonly number[]> = {
+    [sp0Id]: [1001, 1002],
+    [sp1Id]: [1001, 1002],
   };
 
   const building: DesignBuilding = {
@@ -464,13 +501,15 @@ export function createVillaTemplate(seed = 'sablon_villa'): DesignProject {
     openings,
     balconies,
     roof,
+    sectionInfo,
+    cardinalDirections,
     info: {
       maksIdentityNumber: 87654321,
       maksIntegrationState: 1003,
       buildingType: 1001,
       geometrySuitability: [1006],
-      tenderRegistrationNumber: 'TKGM-2026-VL-02',
-      architecturalPlanID: 'VL-2026-002',
+      tenderRegistrationNumber: '',
+      architecturalPlanID: '',
       additionalNote: '2 Katlı Müstakil Villa Şablonu',
       elevatorCount: 0,
       buildingHeight: 6.2,
@@ -544,8 +583,8 @@ export function createDubleksTemplate(seed = 'sablon_dubleks'): DesignProject {
     storeyId: s3Id,
     sectionPartIds: [sp3Id],
     usage: 1001, // Salon
-    polygon: rectPoly(0, 0, 9000, 10000),
-    planArea: 90.0,
+    polygon: rectPoly(200, 200, 8800, 9800),
+    planArea: 82.56,
   });
   parts.push({
     id: `ROOM_${uuidv5(`${seed}::mutfak`)}`,
@@ -553,14 +592,23 @@ export function createDubleksTemplate(seed = 'sablon_dubleks'): DesignProject {
     storeyId: s3Id,
     sectionPartIds: [sp3Id],
     usage: 1003, // Mutfak
-    polygon: rectPoly(9000, 0, 14000, 10000),
-    planArea: 50.0,
+    polygon: rectPoly(9200, 200, 13800, 9800),
+    planArea: 44.16,
   });
   installations.push({
     id: `BBKIY_${uuidv5(`${seed}::ic_merdiven`)}`,
     partId: salonPartId,
     usage: 1001, // Merdiven
-    polygon: rectPoly(6000, 2000, 8500, 5000),
+    polygon: rectPoly(5000, 2000, 7500, 5000),
+  });
+  openings.push({
+    id: `KAPI_${uuidv5(`${seed}::giris`)}`,
+    kind: 'door',
+    usage: 1001,
+    storeyId: s3Id,
+    anchor: { a: { x: 3000, y: 0 }, b: { x: 5000, y: 0 } },
+    sill: 10,
+    height: 2200,
   });
 
   // Çatı Arası Katı (Piyes Katı, groupStoreyId ile 3. kata bağlı)
@@ -592,8 +640,8 @@ export function createDubleksTemplate(seed = 'sablon_dubleks'): DesignProject {
     storeyId: scId,
     sectionPartIds: [spCatiId],
     usage: 1004,
-    polygon: rectPoly(0, 0, 7000, 10000),
-    planArea: 70.0,
+    polygon: rectPoly(200, 200, 6800, 9800),
+    planArea: 63.36,
     clipToRoof: true,
   });
   parts.push({
@@ -602,8 +650,8 @@ export function createDubleksTemplate(seed = 'sablon_dubleks'): DesignProject {
     storeyId: scId,
     sectionPartIds: [spCatiId],
     usage: 1004,
-    polygon: rectPoly(7000, 0, 14000, 10000),
-    planArea: 70.0,
+    polygon: rectPoly(7200, 200, 13800, 9800),
+    planArea: 63.36,
     clipToRoof: true,
   });
 
@@ -613,6 +661,21 @@ export function createDubleksTemplate(seed = 'sablon_dubleks'): DesignProject {
     thickness: 200,
     pitchDeg: 35,
     eaveZ: zBottoms[1] + 1200,
+  };
+
+  const sectionInfo: Record<string, SectionInfo> = {
+    [secId]: {
+      maksIdentityNumber: 55443322,
+      maksNumaratajIdentityNumber: 55443323,
+      maksIntegrationState: 1003,
+      integrationState: 1004,
+      geometrySuitability: 1001,
+      additionalNote: '-',
+    },
+  };
+  const cardinalDirections: Record<string, readonly number[]> = {
+    [sp3Id]: [1001],
+    [spCatiId]: [1001],
   };
 
   const building: DesignBuilding = {
@@ -625,13 +688,15 @@ export function createDubleksTemplate(seed = 'sablon_dubleks'): DesignProject {
     openings,
     installations,
     roof,
+    sectionInfo,
+    cardinalDirections,
     info: {
       maksIdentityNumber: 55443322,
       maksIntegrationState: 1003,
       buildingType: 1001,
       geometrySuitability: [1006],
-      tenderRegistrationNumber: 'TKGM-2026-DB-03',
-      architecturalPlanID: 'DB-2026-003',
+      tenderRegistrationNumber: '',
+      architecturalPlanID: '',
       additionalNote: 'Çatı Piyesli Dubleks Daire Şablonu',
       elevatorCount: 1,
       buildingHeight: 5.5,
@@ -704,15 +769,15 @@ export function createTicariZeminTemplate(seed = 'sablon_ticari'): DesignProject
     storeyId: s0Id,
     sectionPartIds: [dp1Id],
     usage: 1002,
-    polygon: rectPoly(0, 0, 9000, 12000),
-    planArea: 108.0,
+    polygon: rectPoly(200, 200, 8800, 11800),
+    planArea: 99.76,
   });
   openings.push({
     id: `KAPI_${uuidv5(`${seed}::kapi_dukkan1`)}`,
     kind: 'door',
     usage: 1001,
     storeyId: s0Id,
-    anchor: { a: { x: 3000, y: 0 }, b: { x: 6000, y: 0 } },
+    anchor: { a: { x: 3000, y: 0 }, b: { x: 5000, y: 0 } },
     sill: 10,
     height: 2800,
   });
@@ -745,15 +810,15 @@ export function createTicariZeminTemplate(seed = 'sablon_ticari'): DesignProject
     storeyId: s0Id,
     sectionPartIds: [dp2Id],
     usage: 1002,
-    polygon: rectPoly(9000, 0, 18000, 12000),
-    planArea: 108.0,
+    polygon: rectPoly(9200, 200, 17800, 11800),
+    planArea: 99.76,
   });
   openings.push({
     id: `KAPI_${uuidv5(`${seed}::kapi_dukkan2`)}`,
     kind: 'door',
     usage: 1001,
     storeyId: s0Id,
-    anchor: { a: { x: 12000, y: 0 }, b: { x: 15000, y: 0 } },
+    anchor: { a: { x: 12000, y: 0 }, b: { x: 14000, y: 0 } },
     sill: 10,
     height: 2800,
   });
@@ -800,8 +865,8 @@ export function createTicariZeminTemplate(seed = 'sablon_ticari'): DesignProject
       storeyId: sId,
       sectionPartIds: [kpId],
       usage: 1001,
-      polygon: outline,
-      planArea: 216.0,
+      polygon: rectPoly(200, 200, 17800, 11800),
+      planArea: 204.16,
     });
     openings.push({
       id: `PEN_${uuidv5(`${seed}::pen_konut::${konutNo}`)}`,
@@ -823,6 +888,25 @@ export function createTicariZeminTemplate(seed = 'sablon_ticari'): DesignProject
     pitchDeg: 0,
   };
 
+  const sectionInfo: Record<string, SectionInfo> = {};
+  for (let i = 1; i <= sections.length; i++) {
+    const sec = sections[i - 1];
+    if (sec) {
+      sectionInfo[sec.id] = {
+        maksIdentityNumber: 99880000 + i,
+        maksNumaratajIdentityNumber: 99881000 + i,
+        maksIntegrationState: 1003,
+        integrationState: 1004,
+        geometrySuitability: 1001,
+        additionalNote: '-',
+      };
+    }
+  }
+  const cardinalDirections: Record<string, readonly number[]> = {};
+  for (const sp of sectionParts) {
+    cardinalDirections[sp.id] = [1001];
+  }
+
   const building: DesignBuilding = {
     id: buildingId,
     letter: 'A',
@@ -832,13 +916,15 @@ export function createTicariZeminTemplate(seed = 'sablon_ticari'): DesignProject
     parts,
     openings,
     roof,
+    sectionInfo,
+    cardinalDirections,
     info: {
       maksIdentityNumber: 99887766,
       maksIntegrationState: 1003,
       buildingType: 1001,
       geometrySuitability: [1006],
-      tenderRegistrationNumber: 'TKGM-2026-TC-04',
-      architecturalPlanID: 'TC-2026-004',
+      tenderRegistrationNumber: '',
+      architecturalPlanID: '',
       additionalNote: 'Zemin Ticari + Üst Katlar Konut Karma Yapı Şablonu',
       elevatorCount: 1,
       buildingHeight: 9.6,

@@ -71,34 +71,62 @@ describe('M10 — Mimari Proje Şablonları & Hazır Modeller (F10)', () => {
 describe('M10 — Şablon B-Rep ve CityGML Üretim Doğrulaması', () => {
   const codelists = getOfflineCodelistRegistry();
 
-  it('Apartman şablonundan B-Rep ve CityGML üretimi hatasız çalışır ve doğrulamadan geçer', () => {
+  it('Apartman şablonundan B-Rep ve CityGML üretimi hatasız çalışır ve doğrulamadan geçer (0 HATA)', () => {
     const proj = loadProjectTemplate('apartman');
     const brep = generateBrep(proj);
     expect(brep.storeys.length).toBeGreaterThan(0);
     expect(brep.rooms.length).toBeGreaterThan(0);
 
-    const { xml: gml } = writeCityGml(proj, brep, codelists);
-    expect(gml).toContain('<bldg:Building');
-    expect(gml).toContain('posList');
+    const out = writeCityGml(proj, brep, codelists);
+    expect(out.xml).toContain('<bldg:Building');
+    expect(out.xml).toContain('posList');
 
-    const model = parseCityGmlModel(gml, 'apartman.gml', codelists);
+    const model = parseCityGmlModel(out.xml, out.fileName, codelists);
     expect(model.objects.length).toBeGreaterThan(0);
 
-    const report = validateCityGml(gml, 'apartman.gml', model, codelists);
+    const report = validateCityGml(out.xml, out.fileName, model, codelists);
     const errors = report.findings.filter((f) => f.severity === 'H');
     expect(errors.length).toBe(0);
   });
 
-  it('Villa şablonundan B-Rep ve CityGML üretimi hatasız çalışır', () => {
+  it('Villa şablonundan B-Rep ve CityGML üretimi hatasız çalışır (0 HATA)', () => {
     const proj = loadProjectTemplate('villa');
     const brep = generateBrep(proj);
     expect(brep.storeys.length).toBeGreaterThan(0);
 
-    const { xml: gml } = writeCityGml(proj, brep, codelists);
-    const model = parseCityGmlModel(gml, 'villa.gml', codelists);
+    const out = writeCityGml(proj, brep, codelists);
+    const model = parseCityGmlModel(out.xml, out.fileName, codelists);
     expect(model.objects.length).toBeGreaterThan(0);
 
-    const report = validateCityGml(gml, 'villa.gml', model, codelists);
+    const report = validateCityGml(out.xml, out.fileName, model, codelists);
+    const errors = report.findings.filter((f) => f.severity === 'H');
+    expect(errors.length).toBe(0);
+  });
+
+  it('Dubleks şablonundan B-Rep ve CityGML üretimi hatasız çalışır (0 HATA)', () => {
+    const proj = loadProjectTemplate('dubleks');
+    const brep = generateBrep(proj);
+    expect(brep.storeys.length).toBeGreaterThan(0);
+
+    const out = writeCityGml(proj, brep, codelists);
+    const model = parseCityGmlModel(out.xml, out.fileName, codelists);
+    expect(model.objects.length).toBeGreaterThan(0);
+
+    const report = validateCityGml(out.xml, out.fileName, model, codelists);
+    const errors = report.findings.filter((f) => f.severity === 'H');
+    expect(errors.length).toBe(0);
+  });
+
+  it('Ticari + Konut şablonundan B-Rep ve CityGML üretimi hatasız çalışır (0 HATA)', () => {
+    const proj = loadProjectTemplate('ticariZemin');
+    const brep = generateBrep(proj);
+    expect(brep.storeys.length).toBeGreaterThan(0);
+
+    const out = writeCityGml(proj, brep, codelists);
+    const model = parseCityGmlModel(out.xml, out.fileName, codelists);
+    expect(model.objects.length).toBeGreaterThan(0);
+
+    const report = validateCityGml(out.xml, out.fileName, model, codelists);
     const errors = report.findings.filter((f) => f.severity === 'H');
     expect(errors.length).toBe(0);
   });

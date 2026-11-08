@@ -19,6 +19,7 @@ import { parseCityGmlModel } from '../core/gml/gmlReader.ts';
 import { validateCityGml } from '../core/validation/index.ts';
 import type { Malik } from '../core/model/malik.ts';
 import { M7ImportWizardsModal, type CalibratedRasterUnderlay } from './M7ImportWizardsModal.tsx';
+import { DesignInfoModal } from './DesignInfoModal.tsx';
 
 export interface DesignEditor2DProps {
   readonly model: ImportedModel;
@@ -29,9 +30,12 @@ const TOOLS: ReadonlyArray<{ id: EditorTool; label: string; key: string; title: 
   { id: 'sec', label: 'Seç', key: 'V', title: 'Seç (V)' },
   { id: 'kat', label: 'Kat sınırı', key: 'K', title: 'Kat dış sınırı: kapalı çokgen (K)' },
   { id: 'bb', label: 'BB', key: 'B', title: 'BB parçası: listeden seçili bağımsız bölüme bağlanır (B)' },
-  { id: 'kisim', label: 'Kısım', key: 'R', title: 'Kısım (BBK): BB parçasının içinde; kısmın içine çizilen kısım delik açar (R)' },
+  { id: 'kisim', label: 'Kısım', key: 'R', title: 'Kısım (BBK): BB parçasının içinde (R)' },
   { id: 'oa', label: 'Ortak alan', key: 'O', title: 'Ortak alan (OA) (O)' },
-  { id: 'iy', label: 'İç yapı', key: 'I', title: 'İç yapı (BBKIY/OAIY): merdiven (1001), sütun (1002), asansör (1003) (I)' },
+  { id: 'balkon', label: 'Balkon', key: 'L', title: 'Balkon/Teras: kapalı çokgen (L)' },
+  { id: 'kapi', label: 'Kapı', key: 'D', title: 'Kapı: duvarda iki nokta (D)' },
+  { id: 'pencere', label: 'Pencere', key: 'W', title: 'Pencere: duvarda iki nokta (W)' },
+  { id: 'iy', label: 'İç yapı', key: 'I', title: 'İç yapı (BBKIY/OAIY): merdiven, sütun, asansör (I)' },
   { id: 'olcu', label: 'Ölçü', key: 'M', title: 'Ölçü: uzunluk ve alan (M)' },
 ];
 
@@ -84,6 +88,7 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
   const [showRasterUnderlay, setShowRasterUnderlay] = useState(true);
   const [malikler, setMalikler] = useState<readonly Malik[]>([]);
   const [showM7Modal, setShowM7Modal] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [view, setView] = useState({ cx: 0, cy: 0, mmPerPx: 20 });
   const [cursor, setCursor] = useState<SnapResult | null>(null);
@@ -464,6 +469,14 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
         )}
         <button
           type="button"
+          onClick={() => setShowInfoModal(true)}
+          className="w-full px-1.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-semibold text-[11px]"
+          title="M11: Proje, Bina, Katlar, Bağımsız Bölüm MAKS Numaraları ve Çatı & TIC Paneli (§2.1, §2.3)"
+        >
+          📋 Bilgiler & MAKS Girişi
+        </button>
+        <button
+          type="button"
           onClick={() => setShowM7Modal(true)}
           className="w-full px-1.5 py-1 rounded bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold text-[11px]"
           title="M7: Helmert konumlandırma, DXF içe aktarma, Raster kalibrasyon ve Liste Beyan / Malik sihirbazı (§7.3, §8)"
@@ -668,6 +681,16 @@ export const DesignEditor2D: React.FC<DesignEditor2DProps> = ({ model, codelists
           }}
           rasterUnderlay={rasterUnderlay}
           onClose={() => setShowM7Modal(false)}
+        />
+      )}
+      {showInfoModal && (
+        <DesignInfoModal
+          project={state.project}
+          onClose={() => setShowInfoModal(false)}
+          onSave={(updated) => {
+            dispatch({ type: 'load', project: updated });
+            setFileError(null);
+          }}
         />
       )}
     </div>

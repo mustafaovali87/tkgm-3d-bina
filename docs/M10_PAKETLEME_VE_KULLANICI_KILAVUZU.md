@@ -14,7 +14,7 @@ M10 aşaması ile aşağıdaki temel yetenekler sisteme kazandırılmıştır:
 1. **Platform Soyutlama Katmanı (`PlatformAdapter`):** Çekirdek geometri, doğrulama ve GML motorunun DOM/Node bağımlılıklarından tamamen yalıtılması. Web, CLI ve Masaüstü (Electron) ortamlarında deterministik ve sıfır dış bağımlılıkla çalışma.
 2. **Çift Monitör / İkinci Pencere Protokolü (`DualWindowCoordinator`):** Ana pencere ile harici monitördeki ikinci pencere (3B Sahne veya 2B Çizim) arasında kesintisiz, gecikmesiz ve çift yönlü senkronizasyon (BroadcastChannel, LocalStorage fallback, Electron IPC).
 3. **Hazır Mimari Proje Şablonları (F10):** Standart 4 katlı apartman, 2 katlı beşik çatılı villa, çatı piyesli dubleks daire ve zemin katı ticari dükkanlı karma konut şablonları. Tek tıkla geçerli B-Rep ve CityGML üretimi.
-4. **Windows 11 NSIS Kurulum & Taşınabilir (Portable) Paketleme:** `electron-builder.json5` ve Electron ana süreç yönetimi ile `.gml` ve `.tkgm3b` dosya ilişkilendirmeleri, masaüstü simgesi ve otomatik güncelleme/çevrimdışı kurulum altyapısı.
+4. **Windows 11 NSIS Kurulum & Taşınabilir (Portable) Paketleme:** `electron-builder.json5` ve Electron ana süreç yönetimi ile `.gml` ve `.tkgm3b` dosya ilişkilendirmeleri, masaüstü simgesi ve K91 tam çevrimdışı bağımsız kurulum altyapısı (otomatik güncelleme kapalıdır; güncellemeler yeni kurulum paketiyle çevrimdışı yapılır).
 
 ---
 

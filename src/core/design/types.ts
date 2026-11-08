@@ -41,6 +41,8 @@ export interface Storey {
   readonly clipToRoof?: boolean;
   /** M8 (§5.9): Çatı arası katında saçak/parapet (dizlik duvarı) yüksekliği (oda tabanından çatı eğimi başlangıcına, mm). */
   readonly kneeWallHeight?: Mm;
+  /** M13 (P-09): Çatı arası katı: dış duvarların (diz duvarı) plan sınırı. Yoksa outline kullanılır. */
+  readonly atticOutline?: readonly Poly2[];
 }
 
 /** Liste beyandaki mülkiyet birimi (bağımsız bölüm). Malik bilgisi burada değil, proje dosyasında ayrı tutulur. */
@@ -224,7 +226,7 @@ export const DEFAULT_SECTION_INFO: SectionInfo = { maksIdentityNumber: null, mak
 export const DEFAULT_ROOF: Roof = { mode: 'flat', eaveOverhang: 0, thickness: 200, pitchDeg: 30 };
 
 export interface DesignProject {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly id: string;
   readonly name: string;
   /** Deterministik kimlik sayacı: yeni nesne kimliği = uuidv5(`${id}:${tür}:${idSeq}`) (Mutlak Kural 6). */

@@ -73,7 +73,31 @@ export const EXTRA_RULES: readonly RuleDefinition[] = [
       if (d > 0.001 + 1e-9) emit({ message: `Envelope gerçek geometri kutusundan ${(d * 1000).toFixed(0)} mm farklı.` });
     },
   },
-  { id: 'V-206', severity: 'U', source: 'v3 §3.5', status: 'ertelendi', note: 'storeyUsage ↔ BB kullanım uyum tablosu tanımlı değil; ACIK_SORULAR.' },
+  {
+    id: 'V-206',
+    severity: 'U',
+    source: 'v3 §3.5, Şartname Ek-1 P-16/P-17',
+    status: 'uygulandi',
+    run: (ctx, emit) => {
+      // Kat kullanım kodu (1001 Mesken, 1002 Ticari, 1003 Nitelikli Ortak Alan).
+      // Katta bağlı BB'lerin kullanım türleriyle katın storeyUsage beyanı tutarlı olmalıdır.
+      for (const k of ctx.byPrefix('K_')) {
+        const declaredUsages = k.attributes
+          .filter((a) => a.name === 'storeyUsage')
+          .map((a) => a.cleanValue);
+        const memberBbIds = k.groupMemberHrefs.map((h) => h.replace(/^#/, ''));
+        const memberBbs = memberBbIds.map((id) => ctx.obj(id)).filter((b): b is import('../gml/gmlReader.ts').ImportedCityObject => Boolean(b && b.prefix === 'BB_'));
+        const hasMesken = memberBbs.some((b) => b.attributesMap.independentSectionUsage === '1001');
+        const hasTicari = memberBbs.some((b) => b.attributesMap.independentSectionUsage === '1002');
+        if (hasMesken && !declaredUsages.includes('1001')) {
+          emit({ message: `${k.gmlName}: Katta mesken BB bulunmasına rağmen storeyUsage 1001 beyan edilmemiş.`, targetGmlId: k.gmlId });
+        }
+        if (hasTicari && !declaredUsages.includes('1002')) {
+          emit({ message: `${k.gmlName}: Katta ticari BB bulunmasına rağmen storeyUsage 1002 beyan edilmemiş.`, targetGmlId: k.gmlId });
+        }
+      }
+    },
+  },
   {
     id: 'V-207',
     severity: 'U',

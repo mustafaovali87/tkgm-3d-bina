@@ -49,7 +49,7 @@ import type {
 import { DEFAULT_BREP_OPTIONS } from './types.ts';
 
 const TOL = 1; // mm, kenar eşleştirme toleransı (§5.1 madde 3)
-const MAX_WALL = 1000; // mm, karşı yüz arama mesafesi (§5.4 madde 1)
+const MAX_WALL = 1500; // mm, karşı yüz arama mesafesi (P-12: bodrum perdeleri ve balkonlar için 1500 mm'ye çıkarıldı)
 const MIN_WALL = 10; // mm, bundan ince duvar dilimi yok sayılır (çizim yüzünün kendisi/yuvarlama)
 const PARALLEL_SIN = Math.sin((0.5 * Math.PI) / 180);
 
@@ -91,12 +91,42 @@ export function projOn(e: Edge, s: { x: number; y: number }): { t: number; d: nu
   return { t: vx * u.x + vy * u.y, d: Math.abs(vx * u.y - vy * u.x) };
 }
 
-/** [a, b] parçası kenarın üzerinde mi (doğrusal, uç noktalar kenar içinde; TOL)? */
+/** P-08: Doğrusal ardışık kenarları birleştirilmiş halka kenarları (açı < 0.5°, sapma <= 1 mm). */
+export function mergedCollinearRingEdges(r: Ring2): Edge[] {
+  if (r.length < 3) return ringEdges(r);
+  const edges: Edge[] = [];
+  const n = r.length;
+  let startIdx = 0;
+  while (startIdx < n) {
+    let curEnd = (startIdx + 1) % n;
+    while (true) {
+      const nextEnd = (curEnd + 1) % n;
+      if (nextEnd === startIdx) break;
+      const p = r[startIdx];
+      const q = r[curEnd];
+      const nextP = r[nextEnd];
+      const eFull: Edge = { p, q: nextP };
+      const pr = projOn(eFull, q);
+      if (pr.d <= 1 && pr.t >= -1 && pr.t <= len(eFull) + 1) {
+        curEnd = nextEnd;
+      } else {
+        break;
+      }
+    }
+    edges.push({ p: r[startIdx], q: r[curEnd] });
+    if (curEnd <= startIdx) break;
+    startIdx = curEnd;
+  }
+  return edges.length > 0 ? edges : ringEdges(r);
+}
+
+/** [a, b] parçası kenarın üzerinde mi (doğrusal, uç noktalar kenar içinde; TOL=2mm, P-08)? */
 export function edgeCovers(e: Edge, a: Pt2, b: Pt2): boolean {
   const L = len(e);
   const pa = projOn(e, a);
   const pb = projOn(e, b);
-  return pa.d <= TOL && pb.d <= TOL && Math.min(pa.t, pb.t) >= -TOL && Math.max(pa.t, pb.t) <= L + TOL;
+  const tol2 = 2; // P-08: 2 mm tolerans
+  return pa.d <= tol2 && pb.d <= tol2 && Math.min(pa.t, pb.t) >= -tol2 && Math.max(pa.t, pb.t) <= L + tol2;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -424,14 +454,17 @@ function resolveOpening(o: Opening, ctx: StoreyCtx, issues: BrepIssue[]): Resolv
   const probe = (s: number) => ({ x: mid.x + left.x * s, y: mid.y + left.y * s });
   const polyOf = (p: Part) => ctx.effectivePolys.get(p.id) ?? p.polygon;
 
-  // Çizim yüzü: varsa hostPartId, yoksa kotu uyumlu bir kısım kenarı (öncelikli) veya kat dış sınırı
+  // Çizim yüzü: varsa hostPartId, yoksa kotu uyumlu bir kısım kenarı (öncelikli) veya kat dış sınırı / çatı arası sınırı (P-09)
   const coveringParts = ctx.parts.filter((p) => polyRings(polyOf(p)).some((r) => ringEdges(r).some((e) => edgeCovers(e, a, b))));
   const anchorPart =
     (o.hostPartId ? coveringParts.find((p) => p.id === o.hostPartId) : undefined) ??
     (o.zBaseOverride !== undefined ? coveringParts.find((p) => Math.abs(partFloorZ(p, ctx.lv) - o.zBaseOverride!) <= 50) : undefined) ??
     coveringParts.find((p) => o.zBaseOverride === undefined && p.zFloorOverride === undefined) ??
     coveringParts[0];
-  const anchorOutline = ctx.storey.outline.find((pl) => polyRings(pl).some((r) => ringEdges(r).some((e) => edgeCovers(e, a, b))));
+  const activeOutlines = ctx.storey.atticOutline && ctx.storey.atticOutline.length > 0 ? ctx.storey.atticOutline : ctx.storey.outline;
+  const anchorOutline = activeOutlines.find((pl) =>
+    polyRings(pl).some((r) => mergedCollinearRingEdges(r).some((e) => edgeCovers(e, a, b)))
+  );
   let side: 1 | -1;
   if (anchorPart) side = pointInPoly(probe(5), polyOf(anchorPart)) === 1 ? -1 : 1;
   else if (anchorOutline) side = pointInPoly(probe(5), anchorOutline) === 1 ? 1 : -1;
@@ -503,7 +536,12 @@ function resolveOpening(o: Opening, ctx: StoreyCtx, issues: BrepIssue[]): Resolv
         partFaces.push({ partId: p.id, line: k });
       }
     }
-    if (extLine === null && ctx.storey.outline.some((pl) => polyRings(pl).some((r) => ringEdges(r).some((e) => edgeCovers(e, la, lb))))) extLine = k;
+    if (
+      extLine === null &&
+      activeOutlines.some((pl) => polyRings(pl).some((r) => mergedCollinearRingEdges(r).some((e) => edgeCovers(e, la, lb))))
+    ) {
+      extLine = k;
+    }
   }
   // T3: kesit merkezi aynı kot aralığındaki bir BB parçasının içinde ve o kottaki kısımlarının dışında
   const c = { x: mid.x + (n.x * t) / 2, y: mid.y + (n.y * t) / 2 };
@@ -899,8 +937,10 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
     // K71: Bir kısmın kendi poligonunda açıkça tanımlanmış delik varsa ve içinde et kalınlıklı iç kısım varsa, ara duvar adasını da üret
     const innerIslands: Poly2[] = [];
     for (const p of topLevelParts) {
-      const touches = ringEdges(p.polygon.outer).some((e) => polyRings(sp.outline).some((r) => r.some((v) => projOn(e, v).d <= TOL && projOn(e, v).t >= -TOL && projOn(e, v).t <= len(e) + TOL)));
-      if (touches) issues.push({ code: 'B-BB-03', severity: 'U', elementId: p.id, message: 'Kısım BB sınırına değiyor; duvar malzemesi bölgesi (W) basit delik varsayımıyla üretildi.' });
+      const touches = ringEdges(p.polygon.outer).some((e) =>
+        polyRings(sp.outline).some((r) => ringEdges(r).some((re) => edgeCovers(re, e.p, e.q)))
+      );
+      if (touches) issues.push({ code: 'B-BB-03', severity: 'B', elementId: p.id, message: 'Kısım BB sınırına değiyor; duvar malzemesi bölgesi (W) Boolean farkla işlendi.' });
       for (const h of p.polygon.holes) {
         const islandOuter = reversed(h); // CCW
         const innerPartsInHole = myParts.filter(
@@ -990,14 +1030,15 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
     const wallPolys: BrepPolygon[] = [];
     const splitPts = splitPtsOf(ctx, { z0: zFB, z1: zC }, Boolean(ctx.roofEnv));
     const extResolved = resolved.filter((r) => r.opening.storeyId === s.id && r.extLine !== null);
-    s.outline.forEach((pl, pi) => {
+    const activeStoreyOutlines = s.atticOutline && s.atticOutline.length > 0 ? s.atticOutline : s.outline;
+    activeStoreyOutlines.forEach((pl, pi) => {
       floorPolys.push(horizontal(pl, zFB, false, 'Floor_', pid('Floor_', `alt:${pi}`)));
       if (options.storeyStyle === 'B') {
         floorPolys.push(horizontal(pl, zFT, true, 'Floor_', pid('Floor_', `ust:${pi}`)));
         if (options.emitSlabEdges) polyRings(pl).forEach((r, ri) => ringEdges(r).forEach((e, ei) => floorPolys.push(...wallFaces(e, zFB, zFT, splitPts, [], 'Floor_', (role) => pid('Floor_', `kenar:${pi}:${ri}:${ei}:${role}`), issues, s.id).polygons)));
       }
       polyRings(pl).forEach((r, ri) =>
-        ringEdges(r).forEach((e, ei) => {
+        mergedCollinearRingEdges(r).forEach((e, ei) => {
           const holes: FaceHole[] = [];
           for (const x of extResolved) {
             const k = x.extLine!;

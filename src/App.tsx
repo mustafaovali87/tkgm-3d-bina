@@ -692,7 +692,7 @@ export function App() {
       </div>
       <div className="flex-1 min-h-0">
         {cad2dMode === 'tasarim' ? (
-          <DesignEditor2D key={model.canonicalHash} model={model} codelists={getOfflineCodelistRegistry()} />
+          <DesignEditor2D model={model} codelists={getOfflineCodelistRegistry()} />
         ) : (
           <FloorPlanPreview2D
             model={model}

@@ -4,7 +4,7 @@ import { uuidv5 } from '../hash/canonical.ts';
 import { isSimpleRing, normalizeOrientation, pointInPoly, polyAreaM2, ringCentroid, ringInsidePoly } from './geometry2d.ts';
 import type { DesignBuilding, DesignProject, IndependentSection, Part, Poly2, Pt2, Roof, RoomInstallation, SectionPart, Storey } from './types.ts';
 
-export type EditorTool = 'sec' | 'kat' | 'bb' | 'kisim' | 'oa' | 'iy' | 'olcu';
+export type EditorTool = 'sec' | 'kat' | 'bb' | 'kisim' | 'oa' | 'iy' | 'olcu' | 'balkon' | 'kapi' | 'pencere';
 
 export interface EditorOptions {
   /** BB çizerken bağlanacak bağımsız bölüm (liste beyandan). */
@@ -131,6 +131,41 @@ function finishDraft(s: EditorState): EditorState {
     const sp: SectionPart = { id, sectionId, storeyId, usage: s.options.sectionPartUsage, outline: poly };
     const no = b.sections.find((x) => x.id === sectionId)?.number ?? '?';
     return commit(s, withBuilding(project, (bb) => ({ ...bb, sectionParts: [...bb.sectionParts, sp] })), { kind: 'ok', text: `BB ${no} parçası eklendi (${fmtArea(area)}).` });
+  }
+
+  if (s.tool === 'balkon') {
+    const { id, project } = newId(s.project, 'balkon');
+    const bPart = b.sectionParts.find((sp) => sp.storeyId === storeyId);
+    const balcony = {
+      id,
+      kind: 'Balkon' as const,
+      storeyId,
+      sectionPartId: bPart?.id ?? null,
+      outline: poly.outer,
+      attachedEdges: [],
+      parapetHeight: 1100,
+      parapetThickness: 100,
+      planArea: area,
+    };
+    const next = withBuilding(project, (bb) => ({ ...bb, balconies: [...(bb.balconies ?? []), balcony] }));
+    return commit(s, next, { kind: 'ok', text: `Balkon eklendi (${fmtArea(area)}).` });
+  }
+
+  if (s.tool === 'kapi' || s.tool === 'pencere') {
+    const { id, project } = newId(s.project, s.tool === 'kapi' ? 'kapi' : 'pen');
+    const a = pts[0];
+    const bPt = pts[1] ?? { x: a.x + 900, y: a.y };
+    const opening = {
+      id,
+      kind: (s.tool === 'kapi' ? 'door' : 'window') as 'door' | 'window',
+      usage: s.tool === 'kapi' ? 1001 : 1001,
+      storeyId,
+      anchor: { a, b: bPt },
+      sill: s.tool === 'kapi' ? 10 : 900,
+      height: s.tool === 'kapi' ? 2100 : 1300,
+    };
+    const next = withBuilding(project, (bb) => ({ ...bb, openings: [...(bb.openings ?? []), opening] }));
+    return commit(s, next, { kind: 'ok', text: `${s.tool === 'kapi' ? 'Kapı' : 'Pencere'} eklendi.` });
   }
 
   if (s.tool === 'iy') {

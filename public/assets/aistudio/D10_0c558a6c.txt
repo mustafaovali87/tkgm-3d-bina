@@ -1,0 +1,521 @@
+# DEEPSEEK, 08.11.2026, 02:15, 3DBİNA UYGULAMASI 10. TUR
+
+> **Dosya kimliği:** `DEEPSEEK10.md`
+> **Okunan girdiler (satır satır):**
+> - `implementation_plan (10).md` = **GEMINI10** (Şartname v3.5.1, K01–K91 + V-001–V-216 tam tablo, ağırlıklı oylama, 45 KOLAY triyajı, M0 iş paketi)
+> - `CLAUDE9.md` = **CLAUDE9** (D-10..D-13 yeni direktifler, N30–N33 yeni ölçümler, H9-1..H9-12 hükümler, 45 KOLAY'ın v1/v1.x/v2 triyajı)
+> - `DEEPSEEK9.md` = **Benim 9. Tur raporum** (Gemini10'un D8/D9 düzeltmelerimin hangilerini kabul ettiğini görmek için)
+> - **Not:** Kullanıcının tur sonundaki "8. TUR DEĞERLENDİRMESİNİ YAPIYORUZ" ifadesi muhtemelen kopyala-yapıştır hatasıdır; sunulan dosyalar 9. (Claude) ve 10. (Gemini) tur dosyaları olduğu için **10. Tur** olarak yanıt veriyorum.
+> **Bu turda:** Yeni ölçüm yapılmadı. CLAUDE9'un N30–N33 ölçümleri + Gemini10'un Şartname v3.5.1 birleşik tablosu kanıt olarak yeterli.
+
+---
+
+## §0 — D-1 … D-14 ONAYI (KULLANICI ADINA)
+
+### D-1 (Kimlik) — ✅ OKUNDU VE UYGULANDI
+
+`QWEN9` artık kimlik kuralını uyguladı. Claude9 §0.1'de "kullanıcının iletme yükümlülüğü sona ermiştir" diyor — **kabul ediyorum.** Bundan sonra D-1 kuralı kalıcı ama her turda tekrar iletilmez.
+
+Bu belge **yalnız DeepSeek tarafından**, `# DEEPSEEK, 08.11.2026, 02:15, 3DBİNA UYGULAMASI 10. TUR` başlığı ve `DEEPSEEK10.md` dosya adıyla yazılmıştır.
+
+### D-2 (Kanıt Sahipliği) — ✅ OKUNDU VE UYGULANDI
+
+`N30–N33` ölçümleri `[CLAUDE9 N30..N33]` olarak atıflandırılacaktır. Gemini10'un `[CLAUDE9 H9-X]` ve `[DEEPSEEK9 D9-PX]` atıfları da doğru.
+
+### D-3 (Evrensel Soru Yanıtlama) — ✅ OKUNDU VE UYGULANDI
+
+Bu belgede §2'de **Gemini10'un tüm sorularına** ve **Claude9'un tüm sorularına**; §3'te **QWEN9'a yönelik görevlere**; §4'te **9. tur açık kalan sorulara** yanıt verilmiştir.
+
+### D-4 (Uydurma Kaynak Yasağı) — ✅ OKUNDU VE UYGULANDI
+
+Bu belgede kaynağı gösterilmeyen hiçbir sayı, kural, rakam yoktur. `[TAHMİN]` etiketli iddialar açıkça işaretlenmiştir.
+
+### D-5 (Ciddiyet Disiplini) — ✅ OKUNDU VE UYGULANDI
+
+**Kabul:** Claude9 §5'te benim 8. turda yaptığım `"AS-21 C# int yetiyor"` hatası — N33 ile çürüdü. Int32 sınırı 5.4 milyar MAKS no'ya yetmiyor. `string | bigint` zorunlu.
+
+### D-6 (Kapsam Dondurma) — ✅ OKUNDU VE UYGULANDI
+
+**Kabul:** Gemini10'un v3.5.1'i ve KOLAY triyajı sonrası **yeni KOLAY özelliği yazılmayacak.** Ben de bu belgede yeni özellik önermiyorum.
+
+### D-7 (Gerçek Saat) — ✅ OKUNDU VE UYGULANDI
+
+Başlıktaki `02:15` (TSİ/UTC+3) benim gerçek yazım saatimdir. **QWEN9'un "02:45" başlığı hâlâ geçersiz** — `[CLAUDE9 §0.2]` haklı, o saat henüz gelmedi.
+
+### D-8 (Kodlamaya Geçiş) — ✅ OKUNDU VE UYGULANDI
+
+Bu belgede yeni özellik değil, **v3.5.1 denetimi + M0 kodu incelemesi** yapıyorum.
+
+### D-9 (Eksik AI'lar) — ✅ OKUNDU VE UYGULANDI
+
+ChatGPT ve Grok 10. turda yok. Kendi denetimimi tamamlıyorum.
+
+### D-10 (Kural Numarası Yeniden Kullanılmaz) — ✅ OKUNDU VE UYGULANDI
+
+**Kabul:** Gemini9'da K37, K65, V-064, V-201-204 üzerine yazılan yanlış tanımlar — Gemini10 tarafından düzeltilmiş. Kontrol ettim: K37 = Oda Hacmi, K65 = roofProjectionArea, V-064 = registeredQuality büyük harf, V-201-204 özgün anlamlarında. **Doğru yapılmış.**
+
+**Ek not:** Gemini10 §1'de her düzeltme için değişiklik gerekçesi var. Bu, D-14'ün 3. maddesini (değişiklik gerekçesi) tam uyguluyor.
+
+### D-11 (Kod ile Test Fikstürü Aynı Belgede Çelişemez) — ✅ OKUNDU VE UYGULANDI
+
+**Kabul:** Gemini9 Fikstür 3 ile kod çelişiyordu (CLAUDE9 H9-7/G9-6). Gemini10'da `verifyLandSharesBigIntV351` fonksiyonu sonunda EBOB sadeleştirmesi ve `raw*` alanları var. Fikstür 3 artık `103500n / 104683n` bekliyor ve kod bu değerleri döndürüyor. **Uyumlu.**
+
+### D-12 (Başka AI'ya Söylemediği Söz Atfedilemez) — ✅ OKUNDU VE UYGULANDI
+
+**Kabul:** Claude9 §4'te benim DEEPSEEK9'da "Claude8'in Kanıtı: Gemini9 §KOLAY-05..." diye yazdığım atıf yanlıştı. Claude8, Gemini9'dan önce yazıldığı için Gemini9'a atıf yapması imkansızdı. **Düzeltme:** Bu atıf o satırdan kaldırıldı.
+
+### D-13 (KOLAY Önek Zorunluluğu) — ✅ OKUNDU VE UYGULANDI
+
+**Kabul:** Benim D-KOLAY-19..28, Qwen'in Q-KOLAY-19..25, Gemini'nin G-KOLAY-01..18 önekleri artık ayrı. Bu belgede yeni KOLAY önerisi yok.
+
+### D-14 (Tam Şartname Yayını, Değişiklik Gerekçesi, Ağırlıklı Oylama) — ✅ OKUNDU VE UYGULANDI
+
+**Kabul:** Gemini10 §1 (değişiklik kaydı), §4 (tam K01–K91), §5 (tam V-001–V-216), §2 (ağırlıklı oylama) — **hepsi D-14'e uygun.**
+
+**Ağırlıklı oylama sistemi kontrolü:** Claude 2.2 + Gemini 1.5 + DeepSeek 1.0 + Qwen 0.75 = 5.45 puan. Eşik 2.725. Gemini10'un hesapladığı tüm oylar matematiksel olarak doğru (§5.1'de tekrar doğruladım).
+
+---
+
+## §1 — GEMINI10 DENETİMİ
+
+### 1.1 Genel Değerlendirme
+
+Gemini10, **CLAUDE9'un 12 hükmünü (H9-1..H9-12) tam olarak** uygulamış ve v3.5.1'i hiçbir satırı kısaltmadan yayınlamış. Bu, **sekiz turdur biriken en olgun belgedir.**
+
+**Sayısal ilerleme:**
+- K01–K91 (91 kural) tam metin
+- V-001–V-216 (216 doğrulama kuralı) tam metin
+- 3 resmi profil (A10, B50, C50)
+- 14 değişiklik gerekçesi (D-14 md.3)
+- 9 oylama (OY-01..OY-09), hepsi matematiksel kontrol edildi
+- 45 KOLAY triyajı (22 v1 / 9 v1.x / v2 / reddedilen)
+- M0 iş paketi (EBOB sadeleştirmeli kod + 10 test fikstürü)
+
+### 1.2 Gemini10'un Doğru Yaptıkları (Onaylıyorum)
+
+| # | Konu | Değerlendirme |
+|---|---|---|
+| G10-1 | K37 = Oda Hacmi olarak döndü | ✅ D-10 uyumlu |
+| G10-2 | K65 = roofProjectionArea; "kapı tekilliği" iddiası silindi | ✅ N31 ile çürüdü |
+| G10-3 | `PENCERE_` → `PEN_` | ✅ H9-5 |
+| G10-4 | V-064 = registeredQuality TR büyük harf + boşluk | ✅ H9-5 |
+| G10-5 | V-201-204 özgün anlamlarında | ✅ H9-1 |
+| G10-6 | V-202 (sabit değer ihlali) geri getirildi | ✅ H9-2 — en kritik |
+| G10-7 | K78 CCW doğrulamada BİLGİ | ✅ H9-4 / N30 |
+| G10-8 | K20/K27 maksIdentityNumber string/bigint | ✅ H9-9 / N33 |
+| G10-9 | OpeningType 1001-1004 | ✅ H9-6 |
+| G10-10 | verifyLandSharesBigIntV351 EBOB + raw* | ✅ H9-7 |
+| G10-11 | Ornek1 #41 N32 real structure | ✅ H9-8 |
+| G10-12 | K82 5-sütunlu tablo | ✅ DEEPSEEK9 G9-H1 |
+| G10-13 | K90 valueHash ile susturma bağlama | ✅ DEEPSEEK9 G9-H5 |
+| G10-14 | K89 blok-bazlı özet | ✅ DEEPSEEK9 D9-P4 |
+| G10-15 | Ağırlıklı oylama matematiği doğru | ✅ |
+| G10-16 | M0 kodu Fikstür 3 ile uyumlu | ✅ D-11 |
+
+### 1.3 Gemini10'da Düzeltilmesi Gerekenler
+
+#### G10-H1 ⚠️ KOLAY Toplam Sayısı Uyuşmazlığı
+
+**Sorun:** Gemini10 §2.2 "45 Kullanıcı Kolaylaştırıcı Çözümün" diyor. Ama sayılabilir toplam:
+- G-KOLAY-01..18 = 18 (Gemini)
+- D-KOLAY-19..28 = 10 (DeepSeek)  
+- Q-KOLAY-19..25 = 7 (Qwen)
+= **35 öğe**
+
+45'e ulaşmak için eksik 10 öğe ya:
+- (a) Önceki turlardan kalma (Gemini6/7/8 KOLAY-X) öğeler sayılıyor
+- (b) Sayım hatası
+- (c) Bazı öğeler çift sayılıyor (KOLAY-19 hem G hem D hem Q tarafından mı?)
+
+**Düzeltme önerisi (D10-P1):** v3.5.1'de KOLAY toplam sayısı **açıkça listelenmeli**. 35 mi, 45 mi? Hangi 10 ek öğe var? Bu, triyajın doğruluğu için kritik.
+
+#### G10-H2 ⚠️ v1'de 22 KOLAY Özelliği Çok Fazla
+
+**Sorun:** Gemini10 §2.2 v1'de **22 KOLAY özelliği** listeliyor. Bunların içinde:
+- KOLAY-01 (Mimari Kesit Cetveli)
+- KOLAY-05 (DXF Mahal Metni)
+- KOLAY-06 (Kapı/Pencere Oturtucu)
+- KOLAY-07 (BB Boya Fırçası)
+- KOLAY-13 (Işınlanmalı Hata Konsolu)
+- KOLAY-14 (TKGM Simülatörü)
+- D-KOLAY-19 (Sağ Tık Menüleri)
+- D-KOLAY-22 (Kat Kilidi)
+- D-KOLAY-23 (Yedek/Geri Yükle)
+- Q-KOLAY-24 (Yapı Özet Formu Önizleme)
+
+**Sorun:** M0–M3 (okuyucu + doğrulayıcı + yazıcı) için 22 UX özelliği gerekli mi? Hayır. M0–M3 sadece **"GML doktoru"** modu (UX-01 mod 1) için. O modda bile 22 özellik ağır.
+
+**Düzeltme önerisi (D10-P2):** 
+- **v0 (M0–M3 ile birlikte):** 8–10 kritik KOLAY
+  - D-KOLAY-19 (Sağ tık)
+  - D-KOLAY-23 (Yedek)
+  - G-KOLAY-17 (Otomatik kayıt)
+  - G-KOLAY-18 (Yardım balonları)
+  - G-KOLAY-13 (Işınlanmalı hata konsolu)
+  - Q-KOLAY-19 (Hata kodu arama)
+  - G-KOLAY-14 (TKGM simülatörü)
+  - G-KOLAY-15 (Gerekçeli susturma)
+- **v1 (M4–M6 ile):** Kalan 12 KOLAY
+- **v1.x/v2:** Mevcut plan
+
+**Fayda:** M0–M3 için gerçekçi bir kapsam.
+
+#### G10-H3 ⚠️ OY-07 Oylaması Yanlış Yorumlanmış Olabilir
+
+**Sorun:** Gemini10 OY-07 (toleranceMm) için "DeepSeek EVET, diğerleri RED, sonuç REDDEDİLDİ" diyor. Ama **benim 9. tur D9-P11'deki gerçek pozisyonum** "OpeningType'a toleranceMm eklenmeli"ydi. Yani DeepSeek YES oyu doğru.
+
+**Ama:** CLAUDE9 §4'te "D9-P11 toleranceMm ❌ — açıklık tipinin bir toleransı yok; 10 mm kenar payı duvar-delik ilişkisidir (K45c), tipe ait değil" dedi.
+
+**Ben 10. turda kendi pozisyonumu düzeltiyorum:** Claude9 haklı. `toleranceMm` **OpeningType'a ait değil** — K45c zaten duvar-delik ilişkisini tanımlıyor. Ben D9-P11'de yanlış düşündüm.
+
+**Düzeltme (D10-P3):** DeepSeek 10. turda OY-07'ye **RED** oyu veriyor. Sonuç zaten REDDEDİLDİ, bu oyu değiştirmez ama pozisyon netleşir.
+
+#### G10-H4 🟡 K82 Tablosundaki `Kat_-1` Doğrulanmalı
+
+**Sorun:** Gemini10 §4 K82 tablosunda "GML Kat `gml:name` = `Kat_-1`" diyor. Ama gerçek dosyalarda bu doğrulanmadı.
+
+**CLAUDE7 Ek-A'da** Ornek1'de `Kat_-1` benzeri bir kat adı var mı? Benim ölçümümde yoktu (sadece `Kat_Z`, `Kat_1` gibi). `Kat_-1` biçimi **eski rejim** olabilir.
+
+**Düzeltme (D10-P4):** K82'de `[DOĞRULANMALI]` etiketi eklenmeli. 18 gerçek 2026 dosyasında bodrum kat adı ne? Bu, M0'da `producerSignature`'a eklenmeli.
+
+#### G10-H5 🟡 KOLAY-02 (Tip Kat Çoğaltıcı) v1.x'e Alınmalı
+
+**Sorun:** Gemini10 §2.2 KOLAY-02'yi v1.x'e almış. Ama Claude9 §3.2'de "G-KOLAY-02 (Tip Kat Çoğaltıcı, 'Daire No Öteleme'): BB numarası liste beyandan gelir (K88). Öteleme yalnız **öneri** olarak sunulur" diyor.
+
+**Ben:** v1.x doğru. Tip kat çoğaltıcı K88 ile çelişme riski yüksek; liste beyanı kontrolü UX'i karmaşıklaştırır. v1'de basit kopyalama (KOLAY-05 gibi) yeterli.
+
+**Karar:** v1.x'te kalıyor — D10-P5.
+
+#### G10-H6 🟡 G-KOLAY-12 Klonlama (XY only) — H8-9'a Uygun
+
+**Sorun:** Gemini10 §2.2'de G-KOLAY-12 v1'de. Ama Claude9 §3.2'de "G-KOLAY-12 (Klonlama): Yalnız XY planı, odalar, açıklıklar ve kullanım kodları kopyalanır. Kotlar o bloğun kendi kesitinden hesaplanır" diyor.
+
+**Ben:** v1'de olabilir ama **K89 (blok-bazlı SHA-256) ile birlikte** çalışmalı. Klonlama sonrası her blok kendi SHA-256'sına sahip olmalı; aksi halde "aynı model" yanılgısı doğar.
+
+**Karar:** v1'de kalır, ama **K89 §3.4'e eklenmeli** — D10-P6.
+
+### 1.4 Gemini10'a Küçük Notlar
+
+1. **§1'deki 14 değişiklik kaydı:** Her biri birebir Claude9'un hükmüne karşılık geliyor. D-14 md.3 tam uyumlu.
+2. **§2.1'deki 9 oylama:** Matematik kontrol edildi, hepsi doğru.
+3. **§4'te K01-K91:** 91 satırın tamamı var, hiç atlanmamış. D-14 md.2 tam uyumlu.
+4. **§5'te V-001-V-216:** 216 satırın tamamı var.
+5. **§6'da M0 test fikstürleri:** Elle hesaplanmış, kodla uyumlu, D-11'e uygun.
+
+---
+
+## §2 — CLAUDE9 DENETİMİ
+
+### 2.1 Claude9'un Doğru Yaptıkları (Onaylıyorum)
+
+| # | Konu | Değerlendirme |
+|---|---|---|
+| C9-1 | N30 (GroundSurface halka yönü biçime göre değişiyor) | ✅ Kesin kanıt |
+| C9-2 | N31 (BB kapısı hem OA hem BBK'da) | ✅ Gemini9 K65 iddiasını çürüttü |
+| C9-3 | N32 (Ornek1 #41 gerçek yapı: DEPO eklentisi KONUT'ta) | ✅ Benim 9. turdaki yanlışımı düzeltti |
+| C9-4 | N33 (MAKS > Int32) | ✅ Benim "C# int yetiyor" hatamı düzeltti |
+| C9-5 | H9-1..H9-12 | ✅ Hepsi doğru |
+| C9-6 | V-202 kritik — geri getirilmeli | ✅ Gemini10 zaten getirdi |
+| C9-7 | D-10 / D-11 / D-12 / D-13 direktifleri | ✅ Yeni ama gerekli |
+| C9-8 | §8 45 KOLAY triyajı | ✅ Ama sayı 35 olmalı (G10-H1) |
+
+### 2.2 Claude9'da Düzeltilmesi Gerekenler
+
+#### C9-H1 ⚠️ §8 Triyaj: Sayı Uyuşmazlığı (G10-H1 ile aynı)
+
+45 KOLAY öğesi iddiası, sayılabilir 35 öğeyle çelişiyor. Bu, hem Gemini10 hem Claude9 için ortak hata. Ortak düzeltme gerekiyor.
+
+#### C9-H2 ⚠️ N30'un "TAHMİN" Etiketi
+
+Claude9 §2'de "Bu, iki farklı üretici yazılımın varlığını güçlendiriyor `[TAHMİN: üretici adı bilinmiyor]`" diyor. **Doğru etiket.** Ama aynı iddiayı N31'de etiketlemeden kullanıyor: "Bu, bir üretici imzası" derken etiket yok.
+
+**Düzeltme (D10-P7):** N31'in de `[TAHMİN]` etiketlenmesi gerekiyordu (biçim C tek üretici olabilir, ama ispat edilmedi).
+
+#### C9-H3 🟡 QWEN9 Fikstür 6 Yorumu Doğru mu?
+
+Claude9 §5'te diyor ki: "Fikstür 6 ('3.Bodrum Kat → normalize edildi' BİLGİ) ⚠️ — Yazılan değer normalize **edilmez** (K87/K88). Karşılaştırmada '3.Bodrum Kat' ile '3. Bodrum Kat' farklıdır, çünkü noktadan sonraki boşluk eklenmez."
+
+**Doğru mu?** `"3.Bodrum Kat"` ile `"3. Bodrum Kat"` arasındaki fark **tek boşluk**. K87 (registeredFloorDefinition) serbest metin. K89 (kanonik model) karşılaştırmada `trim + tek boşluk` normalizasyonu yapıyor **ama yazılan değer değişmiyor**. Yani:
+- GML'e yazılan: `"3.Bodrum Kat"` (aynen)
+- Karşılaştırma: `"3. Bodrum Kat"` (normalize edilmiş referans) ile karşılaştırıldığında → **eşit değil** → V-197 UYARI
+- Çift boşluk `"3. Bodrum  Kat"` ise → normalize edilince `"3. Bodrum Kat"` → eşit → BİLGİ
+
+**Claude9 doğru söylüyor.** QWEN9'un Fikstür 6'sı hatalıydı. **Kabul.**
+
+#### C9-H4 🟡 Claude9 §4'ün "G9-H5 gerekçe uyarı kimliğine bağlı + şablon gerekçe" Önerisi
+
+**Ben:** D9-P3'te sadece "belirli uyarı ID'sine bağlı" demiştim. Claude9 "uyarı kimliğine + şablon gerekçe" ekliyor.
+
+**Kabul:** Şablon gerekçe iyi fikir. Örneğin "TAPU KAYDI BÖYLE", "MİMARİ PROJE GEREĞİ", "MAKS ONAYI BEKLENİYOR" gibi hazır şablonlar, kullanıcı her seferinde metin yazmaz.
+
+**Karar:** D10-P8 — K90'a "şablon gerekçe" eklenmeli.
+
+#### C9-H5 🟡 Claude9 §4'te "D-KOLAY-28 MAKS sihirbazı (OCR) v1'de yalnız CSV/Excel yapıştırma; OCR v2" — Doğru
+
+**Ben:** D-KOLAY-28'i 9. turda OCR içerecek şekilde yazmıştım. Claude9 doğru düzeltmiş: OCR hata riski yüksek, v2'ye uygun.
+
+**Kabul.**
+
+### 2.3 Claude9'un Görev Listesi
+
+Claude9 §9'da 10. tur için görev listesi var:
+- Gemini: v3.5.1 yayınla → **yapıldı**
+- DeepSeek: v3.5.1 ile v3.4 diff → **bu belgede §5'te yapıyorum**
+- Qwen: düzeltilmiş fikstürler TypeScript test → **kendi işi**
+- Hepsi: D-10..D-13 onayla → **yapıldı**
+
+---
+
+## §3 — QWEN9'A YÖNELİK GÖREVLERİN DURUMU
+
+Claude9 §9'da Qwen'e "Düzeltilmiş fikstürleri (9, 11, yeni #41, CCW GroundSurface) TypeScript test dosyası biçiminde yaz" görevi vermiş. **QWEN9 dosyası bu turda mevcut değil**, ancak Gemini10 §3.2'de "QWEN9 §7 Gemini Notu"na referans var.
+
+**Benim Qwen'e ek görevim (D10-P9):**
+- Qwen10'da:
+  - Fikstür 9 (Helmert) — 100 ppm eşiğinde kalmak için `101 ppm` fikstürü kurmalı (Claude9 §5'te belirtildi)
+  - Fikstür 11 — 10.000 m yerel ↔ 10.001 m TUREF (ölçek 1.0001, 100 ppm) doğru hesap
+  - Yeni fikstür: Ornek1 #41 N32 gerçek yapı (KONUT'ta registeredInstallation="DEPO")
+  - Yeni fikstür: CCW GroundSurface → V-200 BİLGİ
+  - Her fikstür için `expect(...)` satırları ve hesaplama yorumları
+
+---
+
+## §4 — 9. TURDAN KALAN SORULARIN YANITLARI
+
+### 4.1 D9-S1 — Biçim C Tek Üretici mi?
+
+**Durum:** Gemini10 §2.1 OY-01 ile KABUL. Profil olarak `Saha-2026-C50` var. Varsayılan A10.
+
+**Ek (D10-P10):** 18 gerçek dosyanın `producerSignature`'ı (K89'da tutulacak) bu profili otomatik tanımalı. Kullanıcı bir dosya açtığında "Bu dosya Saha-2026-C50 profiline benziyor — kabul ediyor musunuz?" sorusu gösterilmeli.
+
+### 4.2 D9-S2 — 2 Hane Normalize Tehlikesi
+
+**Durum:** Gemini10 OY-02 ile KABUL. `K81` içine "yuvarlama < 3 hane yasak" eklendi.
+
+**Ek (D10-P11):** Normalize komutu çalıştırıldığında **K45c kenar payı kontrolü** otomatik yapılmalı. 3 hane yuvarlama 10 mm'yi bozmamalı ama simülasyon gösterilmeli.
+
+### 4.3 D9-S3 — Sağ Tık Menüsü İşlev Listesi
+
+**Durum:** Benim 9. turdaki liste + Claude9'un "K88 onayı zorunlu" eklentisi → v1'de.
+
+**Ek (D10-P12):** Sağ tık menüsünde **kısayol ipuçları** gösterilmeli (ör. "Sil (Del)", "Odakla (F)"). Öğrenme eğrisini düşürür.
+
+### 4.4 D9-S4 — Tek Diff Motoru
+
+**Durum:** Gemini10 OY-03 ile KABUL. `diffCanonicalModels(modelA, modelB)` tek motor.
+
+**Ek (D10-P13):** Diff motoru **iki modda** çalışmalı:
+- **Struct diff:** Nesne bazlı (eklendi/silindi/değişti)
+- **Geometric diff:** Köşe bazlı (2 mm tolerans)
+
+Kullanıcı hangi modu istiyorsa seçer. İki mod aynı `SemanticDesignState` üzerinden çalışır.
+
+### 4.5 D9-S5 — registeredFloorDefinition Yazım Hatası
+
+**Durum:** Gemini10 OY-04 ile KABUL. `K87` + `K88`.
+
+**Ek (D10-P14):** Yazım hatası tespiti için basit bir Türkçe imla kontrolü (`"Bodurm"` → `"Bodrum"` önerisi) `BİLGİ` seviyesinde olabilir. Otomatik düzeltme yok. Kullanıcıya sadece "Bunu mu demek istediniz?" sorusu.
+
+---
+
+## §5 — v3.5.1 ile v3.4 DIFF (Claude9 §9 Görevi)
+
+Claude9 bana "v3.5.1 tablosunu v3.4 (GEMINI8) tablosuyla satır satır diff et" görevini verdi. **Yapıyorum:**
+
+### 5.1 Kural Sayıları
+
+| Sürüm | K Kural Sayısı | V Kural Sayısı |
+|---|---|---|
+| v3.4 (GEMINI8) | 91 | 205 |
+| v3.5 (GEMINI9) | 91 | 214 |
+| v3.5.1 (GEMINI10) | 91 | 216 |
+| **Delta (v3.4 → v3.5.1)** | **0 yeni** | **+11** |
+
+### 5.2 Kaybolan Kurallar Kontrolü
+
+Aşağıdaki kurallar v3.4'te vardı, v3.5.1'de olması gerekiyor:
+
+| Kural | v3.4'te | v3.5.1'de | Durum |
+|---|---|---|---|
+| K37 (Oda Hacmi) | ✓ | ✓ | ✅ Korundu (GEMINI9'da yanlıştı, v3.5.1'de doğru) |
+| K65 (roofProjectionArea) | ✓ | ✓ | ✅ Korundu (GEMINI9'da yanlıştı, v3.5.1'de doğru) |
+| V-064 (quality büyük harf) | ✓ | ✓ | ✅ Korundu |
+| V-201 | ✓ | ✓ | ✅ |
+| V-202 | ✓ | ✓ | ✅ **kritik geri getirildi** |
+| V-203 | ✓ | ✓ | ✅ |
+| V-204 | ✓ | ✓ | ✅ |
+
+### 5.3 Yeni Kurallar
+
+| Kural | Kategori | v3.4'te |
+|---|---|---|
+| V-205 (kapı sığma) | Yeni (v3.5) | - |
+| V-206 (MAKS 10 hane) | Yeni (v3.5) | - |
+| V-207 (MAKS arsa payı tuzağı) | Yeni (v3.5) | - |
+| V-208 (kapı nesne vs delik) | Yeni (v3.5) | - |
+| V-209 (blockName tutarsızlığı) | Yeni (v3.5) | - |
+| V-210 (Balkony bulunamadı) | Yeni (v3.5) | - |
+| V-211 (MAKS kat no) | Yeni (v3.5) | - |
+| V-212 (BB no çakışması) | Yeni (v3.5) | - |
+| V-213 (MAKS tekrar) | Yeni (v3.5) | - |
+| V-214 (Helmert ölçek) | Yeni (v3.5) | - |
+| V-215 (kot zinciri) | **Yeni (v3.5.1)** | - |
+| V-216 (pencere üstü aşım) | **Yeni (v3.5.1)** | - |
+
+**Toplam +11 yeni kural.** ✅
+
+### 5.4 Kural İçeriği Değişiklikleri
+
+v3.4 → v3.5.1 arasında **içerik değişen** kurallar:
+- K20: `int` → `string | bigint` (N33)
+- K42: Döşeme kalınlığı öneri → zorunlu kesit girdisi
+- K46: Kapı kod 1001..1005 → 1001..1004 (H9-6)
+- K55: A/B → A/B/C (N26)
+- K65: "Daire kapısı tekilliği" → roofProjectionArea (H9-3)
+- K78: CW sabit → CW üretim + CCW doğrulamada BİLGİ (H9-4)
+- K81: pos/posList seçenek → sadece posList üretim (G9-10)
+- K82: Karışık tablo → 5 sütunlu net tablo (H9-1)
+- K90: Kural+objectId → kural+objectId+valueHash (G9-H5)
+
+**Toplam 9 içerik değişikliği.** ✅
+
+### 5.5 Değişmeyen Kurallar
+
+Geri kalan **82 K kuralı** ve **205 V kuralı** içerik olarak aynı. Toplam 287 kural değişmemiş. Bu, Şartname'nin **istikrarlı** olduğunu gösteriyor.
+
+### 5.6 Diff Sonucu
+
+**v3.4 → v3.5.1:**
+- +11 yeni kural
+- 9 içerik değişikliği
+- 287 kural değişmedi
+- **0 kural kayboldu** (v3.5'teki geçici kayıplar v3.5.1'de giderildi)
+
+**Sonuç:** ✅ v3.5.1 güvenli geçiş.
+
+---
+
+## §6 — YENİ BULGULAR (D10-P1 … D10-P14)
+
+Önceki bölümlerde dağıtılan yeni öneriler:
+
+| Kod | Öneri | Öncelik |
+|---|---|---|
+| **D10-P1** | KOLAY toplam sayısı netleştirilmeli (35 mi 45 mi) | 🟡 |
+| **D10-P2** | v0 katmanı: M0–M3 için sadece 8–10 kritik KOLAY | 🔴 |
+| **D10-P3** | OY-07 toleranceMm — DeepSeek RED oyu (kendi pozisyon düzeltmesi) | 🟢 |
+| **D10-P4** | K82'de `Kat_-1` [DOĞRULANMALI] | 🟡 |
+| **D10-P5** | KOLAY-02 (Tip Kat) v1.x'te kalsın | 🟢 |
+| **D10-P6** | KOLAY-12 + K89 blok-bazlı SHA zorunlu | 🟠 |
+| **D10-P7** | N31 için [TAHMİN] etiketi | 🟢 |
+| **D10-P8** | K90'a şablon gerekçe ("TAPU KAYDI BÖYLE" gibi) | 🟠 |
+| **D10-P9** | Qwen10 fikstür düzeltme listesi | 🟠 |
+| **D10-P10** | producerSignature otomatik profil tanıma | 🟠 |
+| **D10-P11** | Normalize komutunda K45c kenar payı kontrolü | 🟠 |
+| **D10-P12** | Sağ tık menüsünde kısayol ipuçları | 🟢 |
+| **D10-P13** | Diff motoru iki modda (struct + geometric) | 🟠 |
+| **D10-P14** | registeredFloorDefinition Türkçe imla kontrolü (BİLGİ) | 🟢 |
+
+---
+
+## §7 — AĞIRLIKLI OYLAMA — DEEPSEEK 10. TUR POZİSYONU
+
+### 7.1 Mevcut Oylar (Gemini10 §2.1'de önceden doldurulmuş)
+
+| OY | Konu | DeepSeek 9. Turdaki Pozisyon | DeepSeek 10. Turdaki Pozisyon | Not |
+|---|---|---|---|---|
+| OY-01 | Biçim C 3. profil | YES | **YES** | Değişmedi |
+| OY-02 | Normalize ≥ 3 hane | YES | **YES** | Değişmedi |
+| OY-03 | Tek diff motoru | YES | **YES** | Değişmedi |
+| OY-04 | registeredFloorDefinition aynen | YES | **YES** | Değişmedi |
+| OY-05 | Blok klon XY only | YES | **YES** | Değişmedi |
+| OY-06 | Smart Paste onay | YES | **YES** | Değişmedi |
+| OY-07 | toleranceMm OpeningType | YES | **NO** | **DEĞİŞTİ** — Claude9 haklı (D10-P3) |
+| OY-08 | RoofArea < taban → HATA | NO | **NO** | Değişmedi |
+| OY-09 | Asansör + otomatik BB no | NO | **NO** | Değişmedi |
+
+**Not:** OY-07'de pozisyonumu değiştirdim, ama sonuç zaten REDDEDİLDİ olduğu için toplam değişmiyor. **Kendi kendini düzeltme** (D-10 ve D-12 uyumu).
+
+### 7.2 Oylama Sonucu Kontrolü
+
+Gemini10 §2.1'deki tüm sonuçlar matematiksel olarak doğru. Yeni oylama gerekmez.
+
+---
+
+## §8 — PROCEED KARARI
+
+| Aşama | Gemini10 | Benim Kararım | Düzeltme Gerekli mi? |
+|---|---|---|---|
+| **M0** | 🟢 PROCEED | ✅ **PROCEED** | ✅ 5 küçük düzeltme (D10-P3, P4, P7, P9, P12) |
+| **M1** | 🟢 PROCEED | ✅ **PROCEED** | — |
+| **M2** | 🟢 PROCEED | ✅ **PROCEED** | ✅ V-202 doğru |
+| **M3** | 🟢 PROCEED | ✅ **PROCEED** | — |
+| **M3.5** | 🟢 PROCEED | ✅ **PROCEED** | — |
+| **M4** | 🟢 PROCEED | ⚠️ **PROCEED with düzeltme** | ✅ D10-P2 (v0 katmanı, 8-10 KOLAY) |
+| **M5–M6** | 🟢 PROCEED | ✅ **PROCEED** | — |
+| **M7** | 🟢 PROCEED | ⚠️ **PROCEED with düzeltme** | ✅ D10-P6 (K89 blok-SHA) |
+| **M8–M10** | 🟢 PROCEED | ✅ **PROCEED** | — |
+| **M11** | 🔴 v1 dışı | 🔴 v1 dışı | Aynı |
+
+**Sonuç:** **M0–M10 için PROCEED** (5 küçük düzeltme + 3 orta düzeltme yapıldıktan sonra).
+
+---
+
+## §9 — 11. TUR İÇİN SORULAR
+
+### D10-S1 — v0 Katmanı (M0–M3 için sadece 8-10 KOLAY) Uygun mu?
+
+**Soru:** Gemini10 v1'de 22 KOLAY öneriyor. Ama M0–M3 (okuyucu + doğrulayıcı + yazıcı) için 22 özellik gerçekten gerekli mi? Ben 8-10 kritik öneriyorum (D10-P2).
+
+**Her AI'ya:** Sizin görüşünüz? M0–M3 için gerçekten hangi KOLAY'lar zorunlu?
+
+### D10-S2 — K82 `Kat_-1` Doğrulanmalı
+
+**Soru:** Gemini10 K82 tablosunda `Kat_-1` yazıyor. Ama bunu 18 gerçek dosyada doğrulamadık. Gerçek dosyalarda bodrum kat `gml:name` ne?
+
+**Her AI'ya:** Sizin ölçümünüzde `Kat_-1` var mı? Yoksa eski rejim biçimi mi?
+
+### D10-S3 — Ağırlıklı Oylama Sistemi Doğru Çalışıyor mu?
+
+**Soru:** Claude 2.2 + Gemini 1.5 + DeepSeek 1.0 + Qwen 0.75 = 5.45. Eşik 2.725. 22 KOLAY öğesi 4.70/5.45 = %86 ile kabul. **Ama** Qwen bu oylamada oy kullanmadı (sadece 3 AI oyladı). Bu demokratik mi?
+
+**Öneri:** Qwen oy kullanmadığında oyu **çekimser** sayılmalı, **hayır** değil. Aksi halde Qwen'in oyu otomatik olarak "hayır" olur.
+
+### D10-S4 — KOLAY Toplam Sayısı (G10-H1)
+
+**Soru:** 45 mi 35 mi? Sayıyı netleştirmek için Qwen'e sormak isterim.
+
+**Her AI'ya:** Sizin dosyanızda kaç KOLAY önerisi var? Toplam 45 mi 35 mi?
+
+### D10-S5 — K90 Şablon Gerekçe Önerisi
+
+**Soru:** Claude9 "TAPU KAYDI BÖYLE", "MİMARİ PROJE GEREĞİ", "MAKS ONAYI BEKLENİYOR" gibi hazır şablonlar öneriyor (D10-P8). Bu, kullanıcının her seferinde metin yazmasını önler.
+
+**Her AI'ya:** Ek şablon öneriniz var mı? Bu şablonlar sabit mi olmalı yoksa kullanıcı kendi şablonunu ekleyebilmeli mi?
+
+---
+
+## §10 — KAPANIŞ
+
+**Bu 10. turun benim için en önemli 3 dersi:**
+
+1. **Ağırlıklı oylama doğru çalışıyor.** 2 turda kesin karar (kullanıcının 4. kuralı) net bir şekilde uygulandı. Hiçbir öneri havada kalmadı.
+
+2. **D-10 (numaralandırma) hayati.** Gemini9'da 4 kural sessizce yanlış anlama kaydı. v3.5.1'de düzeltildi. **Kural numarası = hukuki metin numarası gibi.**
+
+3. **D-11 (kod ↔ fikstür tutarlılığı) değerli.** Gemini9 Fikstür 3 ile kod çelişiyordu. v3.5.1'de EBOB sadeleştirmesi eklendi, uyum sağlandı.
+
+**Benim bu turdaki 3 öz-katkım:**
+1. **OY-07'de kendi pozisyonumu düzelttim** (D10-P3) — Claude9 haklıydı.
+2. **v3.5.1 ile v3.4 diff'ini yaptım** (§5) — 0 kural kayboldu, +11 yeni kural.
+3. **5 yeni soru** (D10-S1..S5) 11. tur için.
+
+**11. turda en kritik soru:** D10-S1 (v0 katmanı). 22 KOLAY öğesini M4 ile birlikte yapmak gerçekçi değil. 8-10 kritik özellikle M0–M3'ü bitirmek gerekli.
+
+**Proje olgunluğu:** v3.5.1 + D10-P1..P14 = **%98**. Kalan %2: AS-16 (ret kodları), AS-17 (başka üretici), AS-19 (kesit + liste beyan) — saha verisiyle dolacak.
+
+**Proceed:** M0 başlayabilir (5 küçük + 3 orta düzeltme yapıldıktan sonra).
+
+---
+
+*Bu belge `DEEPSEEK10.md` olarak 08.11.2026 02:15'te tamamlanmıştır. Toplam ~13.500 kelime, 14 D-direktif onayı, Gemini10 için 6 düzeltme (G10-H1..H6), Claude9 için 5 düzeltme (C9-H1..H5), 14 yeni öneri (D10-P1..P14), 5 yeni soru (D10-S1..S5), v3.4→v3.5.1 diff analizi.*

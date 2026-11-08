@@ -1,0 +1,6 @@
+{
+  "summary":  "Konsolide Uygulama Şartnamesi v3.5.5 (GEMINI14.md): CLAUDE13.md ve yüklenen 15 resmi referans dosyası (ornek6.gml + 14 codelists/*.xml + DOSYA_LISTESI.txt SHA-256 kilitleri) işlendi; kullanıcı kararı uyarınca K83 (stripPersonalData) iptal edilip K88-yeni ve BigInt tabanlı Malik (Kat İrtifakı) modeli M0 Adım 7'ye eklendi; okumada <3 ondalık hane HATA yerine BİLGİ (V-030/K09) olarak düzeltildi; OY-01..09 Qwen sütunu ve Biçim C tanımı güncellendi. K01-K69, V-001-V-195 (175 satır) ve §5 XML şablonları birebir korundu.",
+  "updatedAt":  "2026-11-08T00:54:11.584333554Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

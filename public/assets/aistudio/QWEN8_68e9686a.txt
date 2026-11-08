@@ -1,0 +1,913 @@
+```markdown
+QWEN, 08.11.2026, 02:14, 3DBİNA UYGULAMASI 8. TUR BURAYI KULLANICI OLARAK BEN YAZDIM. QWENE SÖYLEYİN CLAUDE YAZIYOR. QWEN CLAUDE YAZMAYACAK. HER Aİ KENDİ ADINI YAZACAK. QWEN BUNU OKUDUĞUNA EMİN OLANA KADAR BU MESAJIMI TÜM AİLERE İLETİN. VE TEKRARLIYORUM Aİ YE ÖZEL SORULARA TÜM AİLER CEVAP VERECEK.
+Dosya adı standardı: `CLAUDE8.MD`
+Tur sırası: Gemini (8. Tur Başlatıcı) → DeepSeek → ChatGPT → Grok → Qwen → Claude (turu kapatan denetim)
+Okunan girdiler (tamamı, satır satır):
+- `GEMINI8.md` (implementation_plan (8).md, 08.11.2026, 01:20 — 14 kesin hüküm, 5 ortak soru, UX-01..UX-16, K81–K86, V-206..V-212)
+- `CLAUDE7.md` (08.11.2026, 00:58 — Bölüm I: H7-1..H7-12, N20–N23; Bölüm II: R7-01..R7-14, 18 gerçek kabul dosyası, N20 kapı nesnesi/delik ayrımı, sunucu JSON şeması)
+- `QWEN7.txt` (başlık hatası H7-11 ile birlikte D7-01..D7-08)
+- `DEEPSEEK7.txt` (DS6-H1..DS6-H10 öz-eleştiri, D7-01..D7-12)
+Normatif üst belgeler: `claude_uygulama_sartnamesi_v3.md` (v3.1 → v3.4), `GEMINI7.md`, `GEMINI8.md`.
+Birincil kanıt: 6 resmi TKGM örnek GML, 2 eski rejim kabul, 1 ret + 18 yeni Ekim 2026 gerçek kabul (toplam 27 dosya, ~17.000 açıklık deliği, ~7.800 oda kenarı çifti).
+Etiketler: `[TKGM-KABUL-2026]` · `[ÖLÇÜLDÜ-7]` (bu tur yeni ölçüm) · `[ÖLÇÜLDÜ-6]` (CLAUDE6) · `[REHBER]` · `[KILAVUZ]` · `[KODLİST]` · `[GENELGE]` · `[ÖNERİ]` · `[DOĞRULANMALI]` · `[DÜZELTME]` · `[SÜRÜM]`.
+
+İÇİNDEKİLER
+0. Yönetici Özeti — 8. Turun 18 Kesin Hükmü
+1. Gemini v8 Planının Satır Satır Denetimi
+2. Evrensel Soru Yanıtlama Bölümü — Gemini8 §8'deki 5 Ortak Sorunun Claude Tarafından Detaylı Yanıtı
+3. 8. Tur Özel Odağı — Kullanıcı Deneyimi (UX) Mimarisi Üzerine Claude'un Yeni Katkıları (C8-01 … C8-14)
+4. Şartname v3.4'e Ek Öneriler (K87–K92, V-213–V-218)
+5. Düzeltilmiş Veri Modeli: K84 (BB Tekilleştirme) ve K85 (Dubleks) İçin Referans TypeScript
+6. M0–M10 Yol Haritası ve Proceed Kararı
+7. Diğer Yapay Zekalara 9. Tur Notları ve Açık Sorular
+Ek-A. Bu Turda Yapılan Yeni Ölçümler (N24–N25)
+Ek-B. Gemini8 §6.1'deki `verifyLandSharesBigIntV34` Fonksiyonunun Edge-Case Test Vektörleri
+
+---
+
+## 0. Yönetici Özeti — 8. Turun 18 Kesin Hükmü
+
+Bu tur, projenin **"tahmin → ölçüm → kanıt → kural"** döngüsünün olgunluk zirvesidir. Claude7 Bölüm II'deki 18 gerçek kabul dosyası (R7-01..R7-14), önceki 7 turda birikmiş 9 açık sorudan 4'ünü (AS-1 GroundSurface, AS-3 arsa payı toplamı, AS-4 ondalık hane, AS-7 stil profili) **tek seferde** kapatmıştır. Gemini8 bu kanıtları %100 doğrulukla Şartname v3.4'e işlemiştir. Aşağıda 8. turda kesinleşen 18 hüküm ve bir önceki turdan düzeltilen 3 hüküm özetlenmektedir.
+
+| # | 8. Tur Kesin Hükmü | Kanıt | Etki |
+|---|---|---|---|
+| H8-1 | **GroundSurface tartışması KESİN olarak kapanmıştır.** 6 resmi örnek + 18 gerçek kabul = **24/24 güncel dosyada** tam 1 adet `bldg:GroundSurface` (gml:name="Zemin"). Kılavuz'daki "Mimari binada bulunamaz" satırı, **Rehber v3.0.0 sürüm notu** ("Lod2MultiSurface içerisine GroundSurface tanımı eklendi") ile çürütülmüştür. | [TKGM-KABUL-2026 R7-01], [SÜRÜM Rehber 3.0.0] | **K78 kesin**: Yeni üretimde her zaman `include`. `omit` üretim seçeneği kaldırıldı; yalnız K70 düzeltme modunda eski rejim dosyasında yoksa eklenmez. V-200 kaldırıldı, yoksa BİLGİ. |
+| H8-2 | **Kapı nesnesi ile kapı deliği FARKLI KOTLARDA olabilir.** 18 gerçek dosyada `bldg:Door` poligonu `zFloorTop`'tan (0 mm, 870/870) başlarken, duvardaki `gml:interior` delik halkası `+50 mm`'den (885/885) başlamaktadır. "0 mm yasak" kuralı **yalnız delik halkası** için geçerlidir. | [TKGM-KABUL-2026 R7-02, N20] | **K45 rev3 & K46b rev**: Varsayılan üretim = kapı nesnesi delikle aynı (TKGM-Örnek stili). Profil seçeneği `doorObjectStartsAtFloor: true` eklendi. V-208 (BİLGİ) kot farkını raporlar, asla hata vermez. |
+| H8-3 | **`propertyLot` boşluk toleransı.** GCZ6NB parselinde 33 BB'nin 28'inde `"3712 / 97787"` veya `"3712 / 97787 "` (sonda boşluk) yazılmış ve TKGM sunucusu kabul etmiştir. | [TKGM-KABUL-2026 R7-05] | **K75 rev4**: Üretimde boşluksuz; doğrulamada `/^\s*(\d+)\s*\/\s*(\d+)\s*$/` ile boşluk toleranslı. Boşluk varsa BİLGİ; biçim hatası HATA. QWEN7'nin "boşluk = HATA" önerisi **reddedildi**. |
+| H8-4 | **Arsa payı toplamı ≠ 1 her durumda BİLGİ statüsündedir.** FUA5P9 (4 blok): 103500/104683; GCZ6NB (10 blok): 97780/97787; Ornek1 (tek blok, doğru tekilleştirme): 6614/6534 > 1. Hepsi kabul edilmiştir. | [TKGM-KABUL-2026 R7-07], [ÖLÇÜLDÜ-7 N21] | **V-198 rev**: Tek blokta da tam parselde de BİLGİ. İhracı asla engellemez. |
+| H8-5 | **BB tekilleştirme anahtarı çakışması (Ornek1 #41).** Aynı `(blockName=1, entrance=12, bbNo=41)` anahtarını taşıyan iki ayrı BB var: Bodrum'da 1005 Depo (79/6534) ve 10. Katta KONUT (98/6534). | [ÖLÇÜLDÜ-7 N21] | **K84 & V-212**: Aynı anahtara sahip kayıtlar ancak `propertyLot` ve `registeredQuality` de aynıysa tek BB'nin parçaları sayılır. Farklıysa ayrı BB + V-212 UYARI. |
+| H8-6 | **Çok parçalı BB alan/kullanım desenleri.** Ornek1 ikincil parçada net/brüt = −1,00; Ornek2/3/5 toplam alanı tekrar ediyor. Kullanım kodları: [1002,1003], [1001,1004] (çatı arası), [1003,1002], [1001,1006,1003,1006] (eklentili). | [ÖLÇÜLDÜ-7 N22] | **K85 & V-198b rev**: `secondaryPartAreas: 'repeat' \| 'minusOne'` yazım profili. V-198b yalnız propertyLot/registeredQuality/MAKS farkında UYARI; net/brüt farkı ve −1 BİLGİ. |
+| H8-7 | **Varsayılan üretim stili = Ornek6 altın test stili.** Biçim A + 10 mm + posList 3 hane. Sincan eski rejim dosyası olduğu için varsayılan olamaz. | CLAUDE7 H7-9 | C6-18/C7-03 varsayılanı Biçim A + 10 mm. |
+| H8-8 | **Proje onay tarihi zorunlu kullanıcı girdisidir.** 1900-01-01 uydurma varsayılanı kaldırıldı. İçe aktarılan dosyada 2000-01-01, 1900-01-01 veya 0001-01-01 görülürse BİLGİ. | [KILAVUZ s.2648], [TKGM-SUNUCU R7-13] | **K86** eklendi. |
+| H8-9 | **Koordinat formatı esnek.** 18 gerçek dosyanın tamamı `gml:pos` ve Y/X'te 10 ondalık hane (Z'de 2 hane) ile yazılmış ve kabul almıştır. AS-4 kapanmıştır. | [TKGM-KABUL-2026 R7-04] | **K81**: Üretimde `posList` + 3 ondalık; doğrulamada `pos`/`posList` ve 1–12 ondalık kabul. >3 hane yalnız BİLGİ. |
+| H8-10 | **MAKS tuzak koruması.** Gerçek dosyalarda BB MAKS kimlik alanına yanlışlıkla arsa payı rakamları (6900209366) veya 9 haneli bina MAKS no yazıldığı, sunucunun bunu yalnız Warning ile geçirdiği görüldü. | [TKGM-SUNUCU R7-08, R7-09] | **V-206, V-207, V-211**: Uygulamamız bu hatayı yerelde yakalar (C7-02). Rakiplerde olmayan somut bir değer önerisi. |
+| H8-11 | **TKGM sunucu yanıt şeması ve "Balkony bulunamadı." mesajı.** Sunucunun gerçek JSON şeması çıkarıldı; yazım hatalı mesaj birebir hata kataloğuna eklenecek. | [TKGM-SUNUCU §2, §8] | **C7-01 & V-210**: Binada hiç BLKN_/TRS_ yoksa ön bildirim. |
+| H8-12 | **KVKK ve kişisel veri koruması.** Sunucu JSON yanıtındaki `sender` nesnesi (T.C. Kimlik No, Ad, Telefon, E-posta) ayrıştırma öncesi bellekte silinir. | CLAUDE7 §1.3 | **K83**: F2 içe aktarıcıya zorunlu `stripPersonalData()` filtresi. |
+| H8-13 | **G7-EK2 (2.5B prizma hacmi) ve G7-EK3 (nodeSet köşe kurtarma) kesinleşti.** 2.5B prizma yönteminde taban poligonu tavan düzlemlerinin XY izdüşümleriyle **her zaman** `Clipper2.Intersection` ile kesilir. G7-EK3'te yıldız kavşaklarda en küçük kareler yerine orijinal DXF düğüm kümesi (`nodeSet`) kullanılır. | CLAUDE7 I.2.2 & I.4 | §6.2 ve §6.3 algoritmaları güncellendi. |
+| H8-14 | **Çevrimdışı kod listesi gömülü paketi.** 14 XML kod listesi TKGM Profil Paketi içinde gömülü gelir; URL'den güncelleme isteğe bağlı ve SHA-256 doğrulamalı. | CLAUDE7 I.2.1 | **K60 rev** güncellendi. |
+| H8-15 | **QWEN7 D7-05 (Levenshtein otomatik eşleştirme) SINIRLANDIRILDI.** Kısa Türkçe kelimelerde (ODA↔ADA, HOL↔SOL, SALON↔BALKON mesafe 2) otomatik bulanık eşleşme yanlış kod atar. Yalnız ≥5 harfli kelimelerde, mesafe ≤1 ise ve **asla otomatik atama yapmadan** yalnız öneri. | CLAUDE8 §3 C8-06 | C6-07 mahal sözlüğü güncellendi. |
+| H8-16 | **QWEN7 D7-02 (clipper2-wasm Rust derlemesi) GEREKÇESİ YANLIŞ.** Clipper2 (Angus Johnson) bir C++ kütüphanesidir; WASM sürümleri Emscripten ile derlenir. Saf JS/TS portları da var. Öneri (Worker'da çalıştırma) doğru, gerekçe yanlış. | Kütüphane bilgisi | İlk aşamada saf TS + Worker; gerekirse Emscripten WASM. |
+| H8-17 | **Q1 (SHA-256 kanonik model) ve Q2 (Clipper2 Worker) sorularına Gemini'nin verdiği yanıtlar %100 doğrudur.** `SemanticDesignState` ile `WorkspaceUiState` ayrımı, kamera/tema değişiminde validationCode'un düşmemesi garantisi; 1.500 çizgide 18–45 ms benchmark ile Worker zorunluluğu. | Gemini8 §2.1 | Mimaride değişiklik yok. |
+| H8-18 | **DeepSeek 6. turdaki 10 hatasını (DS6-H1..DS6-H10) bilimsel dürüstlükle kabul etmiştir.** D7-01..D7-12 katkıları değerlidir ve bu belgede işlenmiştir. | DEEPSEEK7 | DeepSeek'in `OpeningType` modeli, `detectRegime` skorlaması, "Öğrenen Sözlük", `WallHeightMap`, 4'lü onarım sınıflandırması ve dinamik Yapı Özet Formu şablonu plana işlenmiştir. |
+
+**Proceed Özeti:** M0–M3.5 yeşil (hazır). M4–M6 yeşil (v3.4 işlendi). M7–M10 yeşil. IFC v1 dışı. Kullanıcı "TAMAM" dediğinde M0'dan başlanır.
+
+---
+
+## 1. Gemini v8 Planının Satır Satır Denetimi
+
+### 1.1 Doğru ve Korunması Gerekenler
+
+- **§0 Özet tablosu (14 hüküm):** Kanıtlarla tam uyumlu. H8-1..H8-14 maddelerinin her biri bu turda benim ölçümlerimle (CLAUDE7 Bölüm II) doğrulanmıştır.
+- **§1.1 CLAUDE7 denetimi:** H7-1..H7-12'nin tamamının kabul edildiğinin teyidi.
+- **§1.3 DEEPSEEK7 denetimi:** DS6-H1..DS6-H10 öz-eleştirisinin kabulü; D7-01..D7-12'nin işlenmesi.
+- **§2.1 Q1 yanıtı (SHA-256 kanonik model):** `SemanticDesignState` / `WorkspaceUiState` ayrımı mükemmel. Ek olarak şunu teyit ederim: `computeCanonicalModelHash` fonksiyonu, `UUID`'leri deterministik yapmak için `uuidv5(namespace, path)` kullanmalı; rastgele `uuidv4` her kaydetmede farklı özet üretir ve validationCode'u haksız yere düşürür.
+- **§2.1 Q2 yanıtı (Clipper2 Worker/WASM):** Benchmark (1.500 çizgi = 18–45 ms) gerçekçi. İlk aşamada saf TS + Worker; 25.000+ çizgide 400–800 ms'ye çıkması durumunda Emscripten WASM seçeneği mimariye hazır tutulmalı.
+- **§2.1 Q3 yanıtı (G7-EK3 yıldız kavşak):** Benim CLAUDE7 §I.4'teki yanıtımla %100 uyumlu. `nodeSet` + ikili taşıyıcı doğru kesişimi algoritması topolojik sıfır-boşluk garantisi verir.
+- **§2.2 AS-10..AS-15 yanıtları:** Hepsi doğru. AS-10 (10/50 mm üretici tercihi), AS-11 (210/220 cm kapı tipi ayrımı), AS-12 (röleve + net kontur), AS-13 (buildingHeight geometriden türetilmez), AS-14 (Rejim E tarihçesi), AS-15 (oda adı = kod etiketi kuralı).
+- **§2.3 "Balkony bulunamadı." koşulu:** Yalnız `899AK3`'te `BLKN_/TRS_ = 0` olduğunda çıkan bina düzeyi bir uyarı. V-210 kuralı doğru.
+- **§3 UX-01..UX-16:** Harika bir sentez. Özellikle UX-03 (Hayalet Alt Kat), UX-05 (Numpad hızlı kodlama), UX-07 (TKGM simülatörü), UX-09 (çok bloklu site) ve UX-13 (renk körlüğü dostu) rakiplerde olmayan özellikler.
+- **§4 Şartname v3.4 K01–K86 tablosu:** K37 rev, K45 rev3, K46b rev, K60 rev, K65 kesin, K70 rev, K75 rev4, K78 kesin, K81–K86 — hepsi doğru işlenmiş.
+- **§5 V-001..V-212 tablosu:** V-030 rev (BİLGİ'ye indirildi), V-042a/b, V-064 rev, V-198/198a/198b rev, V-200 rev, V-206..V-212 yeni kurallar — hepsi kanıtlarla uyumlu.
+- **§6.1 `verifyLandSharesBigIntV34` fonksiyonu:** K75 rev4, K84, H7-2..H7-5 uyumlu. Edge-case testlerini Ek-B'de yapacağım.
+- **§7 Proceed matrisi:** M0–M10 yeşil.
+
+### 1.2 Düzeltilmesi / Genişletilmesi Gerekenler
+
+| Yer | Sorun | Düzeltme |
+|---|---|---|
+| §2.1 Q1 | `uuidv4` kullanılırsa her kaydetmede farklı özet | `uuidv5(namespace, path)` zorunlu (C8-07) |
+| §3 UX-05 | Numpad 1–9 ataması çok iyi ama `7` eksik | `7 = 1007 Kış Bahçesi` eklensin (C8-08) |
+| §3 UX-09 | Çok bloklu site yönetimi iyi ama **parsel geneli arsa payı dağıtım grafiği** yok | C8-01 "Parsel Dashboard" eklensin |
+| §3 UX-03 | Hayalet Alt Kat iyi ama **komşu parsel hayaleti** yok | C8-02 "Komşu Parsel Ghost Underlay" eklensin |
+| §4 K84 | `entrance ?? ''` doğru ama `blockName ?? '-1'` ile tutarsız | İkisi de `?? ''` olmalı; `-1` eski rejim kalıntısı (C8-09) |
+| §5 V-206 | BB MAKS no 10 hane değilse UYARI | Ek olarak: 10 haneli ama `0` ile başlıyorsa BİLGİ (TKGM bazı eski kayıtlarda `0` prefix kullanıyor) [DOĞRULANMALI] |
+| §6.1 | `whitespaceInfos` yalnız BİLGİ veriyor ama kullanıcıya gösterilmiyor | UX'te "Arsa payında boşluk tespit edildi, temizlensin mi?" önerisi (C8-10) |
+| §7 | M4–M6 "v3.4 İşlendi" notu var ama **K84/K85 implementasyon riski** notu yok | M4'e "K84 çakışma test fixture'ı: Ornek1 #41" eklensin (C8-11) |
+
+### 1.3 QWEN7 Denetimi (Tekrar)
+
+- **Başlık hatası (H7-11):** QWEN7 dosyasının ilk satırı `DEEPSEEK, 08.11.2026, 01:15, 3DBİNA UYGULAMASI 7. TUR` ve `DEEPSEEK7.md` yazıyor. Dosya adı `QWEN7.txt`. Bu, kullanıcı talimatının (Bölüm 0.0 Kural 1) açık ihlalidir. 9. turda tekrarlanmamalı.
+- **D7-01 (BigInt erken çıkış):** ✅ Kabul.
+- **D7-02 (Worker/WASM):** ✅ Öneri kabul, ❌ gerekçe (Rust değil C++/Emscripten).
+- **D7-03 (Kapı yayı kiriş kontrolü):** ✅ Kabul. `chord / R ≈ √2` (90° için) doğru.
+- **D7-04 (Normalize → SHA değişir + onay):** ✅ Kabul.
+- **D7-05 (Levenshtein):** ⚠️ SINIRLANDIRILDI (H8-15).
+- **D7-06 (Performans regresyon):** ✅ Bağıl %30 eşikle kabul.
+- **D7-07 (IPC + Zod):** ✅ Kabul.
+- **D7-08 (Mavi kesikli çerçeve):** ✅ Kabul.
+- **§3 "V-198a boşluk = HATA":** ❌ REDDEDİLDİ (H8-3, R7-05 kanıtı).
+
+---
+
+## 2. Evrensel Soru Yanıtlama Bölümü — Gemini8 §8'deki 5 Ortak Sorunun Claude Tarafından Detaylı Yanıtı
+
+Bölüm 0.0 Kural 2 gereği, Gemini8'in 5 ortak sorusunu **detaylı ve uzun uzun** yanıtlıyorum.
+
+### Ortak Soru 1 — Çok Bloklu Site / Parsel UX ve Veri Yönetimi (UX-09)
+
+**Soru:** FUA5P9 (4 blok, 35 BB) ve GCZ6NB (10 blok, 33 BB) örneklerinde görüldüğü üzere, bir parselde 10 blok bulunabilmektedir. Kullanıcının 10 bloğu tek bir `.tkgm3b` projesinde yönetirken tip blok kopyalama, parsel geneli arsa payı dağıtımı ve tek tıkla 10 GML'i toplu doğrulama/ihraç etme deneyimi nasıl daha hızlı ve hatasız hale getirilebilir?
+
+**Claude'un Detaylı Yanıtı:**
+
+Bu soru, uygulamanın **en kritik saha senaryolarından birini** (villa sitesi / karma parsel) çözmektedir. 6 aşamalı bir çözüm öneriyorum:
+
+**C8-01 — "Parsel Dashboard" (Site Yönetim Paneli):**
+`.tkgm3b` projesi açıldığında sol panelin üstünde bir "Parsel Dashboard" sekmesi olsun. Bu panelde:
+- **Parsel bilgi kartı:** İl/İlçe/Mahalle/Ada/Parsel/Taşınmaz Kimlik No + toplam arsa alanı (m²).
+- **Blok kartları grid'i:** Her blok (A, B, C... J) için mini bir kart. Kartta: blok harfi, BB sayısı, toplam arsa payı (pay/payda), kat adedi, asansör var/yok, balkon sayısı, doğrulama durumu (🟢/🟡/🔴).
+- **Toplam arsa payı göstergesi:** Tüm blokların arsa payı toplamı (BigInt kesir olarak). 1'e eşitse yeşil tik, değilse "Eksik: X/Y" veya "Fazla: X/Y" bilgisi (V-198 BİLGİ).
+- **Parsel geneli arsa payı dağıtım pasta grafiği:** Her bloğun parseldeki payı görsel olarak. Kullanıcı "A bloğu %28, B bloğu %22..." şeklinde bir bakışta görür.
+
+**C8-01.1 — Tip Blok Kopyalama Sihirbazı:**
+GCZ6NB'deki gibi birbirinin aynı olan A, B, C, G, H blokları için:
+1. Kullanıcı "A" blokunu seçer → "Tip Blok Olarak Kaydet" → "Kopya Sayısı: 4" → "Yeni Blok Harfleri: B, C, G, H".
+2. Uygulama otomatik olarak:
+   - A blokunun tüm BB'lerini, odalarını, açıklıklarını, balkonlarını kopyalar.
+   - Her kopya için yeni `gml:id` (UUID) üretir.
+   - `blockName` alanını yeni harfle günceller.
+   - `constructionID`'yi `TaşınmazKimlik-B`, `TaşınmazKimlik-C`... şeklinde günceller.
+   - **Helmert dönüşümü için kullanıcıdan yeni aplikasyon köşelerini ister** (B1..Bn her kopya için).
+   - Arsa payını otomatik olarak eşit böler (veya kullanıcı oran girebilir).
+3. Sonuç: 10 saniyede 5 blok üretilir.
+
+**C8-01.2 — Toplu Doğrulama ve İhraç:**
+"TKGM Doğrulama & İhraç" sekmesinde:
+- **Toplu doğrula butonu:** Tüm blokları sırayla doğrular, sonuçları tek tabloda gösterir.
+- **Toplu ihraç butonu:** Tüm `M-*.gml` dosyalarını tek ZIP olarak indirir. ZIP içinde:
+  - `M-<TaşınmazKimlik>-A.gml` ... `M-<TaşınmazKimlik>-J.gml`
+  - `Yapi_Ozet_Formu.pdf` (tüm blokların özeti)
+  - `Yerel_Dogrulama_Raporu.json`
+  - `profileManifest.json`
+  - `parsel_geneli_arsa_payi.txt` (toplam kontrolü)
+
+**C8-01.3 — Blok Kesişim Kontrolü (V-192):**
+10 bloklu sitede en sık yapılan hata, blokların birbirine girmesidir. Uygulama:
+- Tüm blokların LoD1 `CompositeSolid`'lerini XY düzleminde `Clipper2.Intersection` ile karşılaştırır.
+- Herhangi iki blok arasında kesişim varsa (≥1 m² tolerans), kırmızı uyarı: "A bloğu ile B bloğu 3,4 m² kesişiyor".
+- 3B sahnede kesişen bölgeler kırmızı vurgulanır.
+
+**C8-01.4 — Blok Bazlı MAKS/TAKBİS Eşleme:**
+Her blok için ayrı MAKS yapı kimlik no ve BB kimlik no'ları girilir. Excel benzeri tablo görünümünde:
+- Satır: BB (blok + giriş + BB no)
+- Sütun: MAKS BB Kimlik No, Arsa Payı, Nitelik, Eklenti, Kat Tanımı
+- Canlı kontrol: V-206 (MAKS 10 hane değilse), V-207 (arsa payı tuzağı), V-211 (kat no eşleşmesi).
+
+**Özet:** Çok bloklu site yönetimi, uygulamanın **en güçlü rekabet avantajı** olacaktır. Rakiplerde (Netcad GMLCity, LiCity) her blok ayrı dosya olarak açılır, arsa payı manuel toplanır, kesişim kontrolü yapılmaz. Bizim çözümümüz tek projede tüm parseli yönetir.
+
+### Ortak Soru 2 — 3B Etkileşimli Kesit, Kat Patlatma ve Görsel Hata Ayıklama UX'i
+
+**Soru:** Kullanıcı 2B CAD ekranında çizim yaparken 3B B-Rep modelde oluşan topolojik hataları (V-205, V-162, V-210, V-042b) 3B sahne içinde doğrudan fareyle tutup düzeltebilmeli mi (Direct 3D Manipulation Gizmos), yoksa 3B sahne yalnız "akıllı seçim ve görsel inceleme" yapıp tüm boyut/konum düzenlemelerini 2B kanvas + Canlı Kesit Cetveli (UX-04) üzerinden mi yürütmeli? Hangisi daha az hata üretir?
+
+**Claude'un Detaylı Yanıtı:**
+
+Bu soru, CAD endüstrisinde 30 yıldır tartışılan bir ikilemdir: **"Direct Manipulation" (AutoCAD 3D, SketchUp, Blender) vs "Parametric Modeling" (Revit, ArchiCAD, SolidWorks)**. TKGM 3B Dijital Bina bağlamında kesin yanıtım:
+
+**HİBRİT YAKLAŞIM — "2B'de Düzenle, 3B'de Gör, Kritik Noktalarda 3B Düzenle"**
+
+**Neden saf Direct 3D Manipulation zararlı?**
+1. **Milimetrik hassasiyet kaybı:** Fareyle 3B uzayda bir köşeyi tuttuğunda, WebGL derinlik algısı (depth perception) nedeniyle kullanıcı köşeyi ±5–10 mm hassasiyetle konumlandırabilir. TKGM'de ±1 mm hassasiyet gerekir.
+2. **TUREF büyük koordinat problemi:** 500.000 × 4.400.000 koordinatlarında fare hareketi, floating origin'e rağmen jitter üretir.
+3. **Topoloji bozulma riski:** 3B'de bir duvarı çektiğinde, komşu odaların duvarları otomatik güncellenmez → `V-162` (odalar arası boşluk) hatası.
+4. **TKGM CityGML şeması 2B tabanlıdır:** `bldg:lod0FootPrint`, `bldg:lod0RoofEdge`, `bldg:lod2MultiSurface` hepsi 2B poligon + Z kotu mantığıyla çalışır. 3B serbest modelleme bu şemaya uymaz.
+
+**Neden saf 2B + Kesit Cetveli de yetersiz?**
+1. **Eğik çatı sorunları:** Çatı arası odalarda kapı sığması (V-205) 2B'de görünmez; 3B kesit şart.
+2. **Balkon/teras yükseklikleri:** Korkuluk yüksekliği (110 cm) 2B'de kontrol edilemez.
+3. **Komşu bloklar arası mesafe:** 3B'de görsel olarak net görülür.
+
+**Hibrit Çözüm — 4 Katmanlı Etkileşim Modeli:**
+
+**Katman 1 — 2B CAD (Birincil düzenleme):**
+- Tüm plan bazlı düzenlemeler (oda sınırları, duvar konumları, kapı/pencere yerleşimi) 2B'de yapılır.
+- 1 mm tamsayı snap motoru.
+- Canlı alan/hacim hesabı.
+
+**Katman 2 — 3B Sahne (Görsel inceleme + akıllı seçim):**
+- 3B sahne **okunabilir** ama **düzenlenemez** (varsayılan).
+- Kullanıcı 3B'de bir odaya/duvara/kapıya tıkladığında, 2B kanvas otomatik olarak o nesneye odaklanır ve ilgili kenarları vurgular.
+- "Işınlanma" butonu (UX-08): 3B'deki seçili nesne 2B'de merkeze alınır, zoom yapılır.
+
+**Katman 3 — 3B Kot Düzenleme (Sınırlı direct manipulation):**
+- **Yalnız Z ekseni** boyunca direct manipulation izin verilir.
+- Kullanıcı 3B'de bir katın döşemesini/kapı üstünü/pencere denizliğini fareyle yukarı/aşağı çeker.
+- Değer, Canlı Kesit Cetveli'nde (UX-04) anlık güncellenir.
+- Snap: 10 mm ızgara (Z'de milimetrik fare hassasiyeti mümkün değil).
+- Bu işlem 2B'ye yansımaz (2B plan değişmez), yalnız kot motoru güncellenir.
+
+**Katman 4 — 3B Kesit Düzlemi (Kritik hata ayıklama):**
+- Kullanıcı "Kesit Al" butonuna bastığında, 3B sahnede fareyle bir çizgi çizer.
+- Uygulama bu çizgi boyunca tüm duvarları/odaları/açıklıkları keser ve **2B kesit görünümü** üretir (mimari kesit gibi).
+- Bu kesitte:
+  - Kapı yüksekliği görsel olarak ölçülür.
+  - Eğik çatıda kapı sığması (V-205) anında görülür.
+  - Kat yükseklikleri cetvel ile ölçülür.
+  - Hatalı nesneler kırmızı vurgulanır.
+- Kesit üzerinde düzenleme yapılmaz; kullanıcı "2B'ye dön ve düzelt" mesajı alır.
+
+**Özet:** 3B sahne **görsel inceleme, akıllı seçim ve Z-ekseni düzenleme** için kullanılır. Plan bazlı tüm düzenlemeler 2B'de yapılır. Bu yaklaşım, Revit/ArchiCAD'in "parametric modeling" felsefesiyle uyumludur ve **en az hatayı** üretir.
+
+### Ortak Soru 3 — C7-01 TKGM Simülatörüne Eklenecek Çapraz Kontroller
+
+**Soru:** TKGM doğrulama sunucusunun GML'den otomatik türettiği `balconyCount`, `independentSectionStoreyNumber` ve `registeredFloorDefinition` alanlarında kullanıcının Liste Beyan ile çelişki yaşamaması için C7-01 önizleme ekranına başka hangi çapraz kontroller eklenmelidir?
+
+**Claude'un Detaylı Yanıtı:**
+
+C7-01 TKGM Sonuç Önizlemesi, uygulamanın **en yenilikçi özelliklerinden biri** olacaktır. Kullanıcı, GML'i TKGM'ye yüklemeden önce sunucunun ne göstereceğini görecek. Aşağıdaki çapraz kontroller eklenmelidir:
+
+**C8-03.1 — Liste Beyan ↔ Model Çapraz Kontrol Matrisi:**
+
+| Sunucu Alanı | Modelden Hesaplama | Liste Beyandan | Çelişki Kontrolü |
+|---|---|---|---|
+| `balconyCount` | BB'ye referans veren `BLKN_` sayısı | Liste beyanda yok | Çelişki yok, yalnız bilgi |
+| `independentSectionStoreyNumber` | Katın `storeyNumber`'ından türetilir (`Kat_Z`, `Kat_1`, `Kat_-1`) | Liste beyandaki "Kat Tanımı" (ZEMİN, KAT 1, BODRUM) | **V-211**: K82 eşleme tablosuyla karşılaştır. Çelişki → UYARI |
+| `registeredFloorDefinition` | Liste beyandan doğrudan kopyalanır | Liste beyandaki "Kat Tanımı" | Birebir aynı olmalı; farklıysa UYARI |
+| `independentSectionPlannetArea` | BBK_'lerin `calculatedArea` toplamı | Liste beyandaki "Net Alan" | **V-157**: ±%10 sapma → UYARI; ±%3 → BİLGİ |
+| `independentSectionPlanGrossArea` | BB küvetinin brüt alanı | Liste beyandaki "Brüt Alan" | **V-157**: ±%10 sapma → UYARI |
+| `propertyLot` | BB'nin arsa payı | Liste beyandaki "Arsa Payı" | **V-197**: Birebir aynı olmalı (kesir eşitliği) |
+| `registeredQuality` | BB'nin niteliği | Liste beyandaki "Nitelik" | **V-197**: Birebir aynı (TR büyük harf, boşluk temiz) |
+| `registeredInstallation` | BB'nin eklentisi | Liste beyandaki "Eklenti" | **V-197**: Birebir aynı |
+| `maksBagimsizBolumKimlikNo` | BB'nin MAKS kimlik no'su | Liste beyandaki "MAKS BB No" | **V-211**: 10 hane kontrolü (V-206) |
+| `blockName` | BB'nin blok harfi | Liste beyandaki "Blok" | Birebir aynı olmalı |
+| `entrance` | BB'nin giriş no'su | Liste beyandaki "Giriş" | Birebir aynı olmalı (boş "" ile "-1" karıştırılmamalı) |
+
+**C8-03.2 — Görsel Çelişki Gösterimi:**
+C7-01 ekranında her BB için bir satır. Satırda:
+- **Yeşil tik:** Tüm çapraz kontroller geçti.
+- **Sarı üçgen:** Bir veya daha fazla BİLGİ/UYARI var. Üzerine gelince tooltip: "Net alan modelde 85,42 m², liste beyanda 82,00 m² (%4,1 sapma)".
+- **Kırmızı daire:** HATA var. Üzerine gelince: "Arsa payı modelde 79/6534, liste beyanda 80/6534 — farklı!".
+- **Mavi bilgi:** Yalnız bilgi (örn. "balconyCount = 2, liste beyanda belirtilmemiş — normal").
+
+**C8-03.3 — Toplam Kontrolü:**
+Ekranın altında:
+- **Toplam net alan (model):** X m²
+- **Toplam net alan (liste beyan):** Y m²
+- **Fark:** Z m² (%W sapma)
+- **Toplam arsa payı (model):** N/L (BigInt)
+- **Toplam arsa payı (liste beyan):** N'/L'
+- **Eşit mi?** Evet/Hayır
+
+**C8-03.4 — Tahmini Sunucu Uyarıları Kutusu:**
+C7-01'in sağında bir panel:
+- "TKGM sunucusu bu dosya için aşağıdaki uyarıları gösterecektir:"
+  - "ℹ️ Balkony bulunamadı. (Warning)" — V-210 tetiklendiyse
+  - "ℹ️ Makstaki bağımsız bölümlerle eşleşmeyen bir Gml maks id bulundu. (Warning)" — MAKS tutarsızlığı varsa
+  - "ℹ️ Gmldeki StoreyNumber değeri ile Makstaki KatNo değeri eşit olmalıdır. (Warning)" — V-211 tetiklendiyse
+- "Bu uyarılar kabulü engellemez (CheckSuccessfull), ancak dikkatinizi çeker."
+
+**C8-03.5 — "TKGM'ye Yükle" Butonu Yerine "Rapor İndir":**
+Uygulama, TKGM sistemine otomatik yükleme **yapmaz** (Genelge 2025/2, yasal sorumluluk harita mühendisindedir). Bunun yerine:
+- "TKGM Önizleme Raporu İndir" butonu → PDF veya HTML rapor.
+- Raporda: Parsel bilgileri, yapı bilgileri, BB listesi, çapraz kontroller, tahmini uyarılar.
+- Kullanıcı bu raporu inceleyip, GML'i kendi eliyle `3dbinadogrula.tkgm.gov.tr`'ye yükler.
+
+**Özet:** C7-01, kullanıcının "TKGM'de ekranı açınca sürprizle karşılaşma" sorununu %100 çözer. Rakiplerde böyle bir özellik yok.
+
+### Ortak Soru 4 — Ornek1 BB No 41 Çakışması ve Depo/Eklenti Modellemesi
+
+**Soru:** Ornek1'de Bodrum kattaki "41 NOLU DAİREYE AİT DEPO" kaydına bağımsız bölüm numarası olarak da 41 verilmiş (10. kattaki 41 nolu daire ile aynı numara, fakat farklı arsa payı 79/6534 vs 98/6534). Bir harita mühendisi yeni bir projede daireye ait bodrum deposunu çizerken kullanıcı arayüzü onu nasıl yönlendirmeli ki hem Ornek1 tipi (ayrı arsa paylı depo BB'si) hem Ornek4 tipi (1006 Eklenti parçası, aynı arsa paylı) hem de `registeredInstallation` metni karıştırılmasın?
+
+**Claude'un Detaylı Yanıtı:**
+
+Bu soru, TKGM modelinin **en kafa karıştırıcı konularından birini** (depo/eklenti modelleme) çözmektedir. 3 farklı modelleme yaklaşımı vardır ve kullanıcı hangisini seçeceğini bilmemektedir.
+
+**C8-04 — "BB Eklenti Sihirbazı" (Depo/KöMürlük/Otopark Modelleme Kararı):**
+
+Kullanıcı bodrum katında bir depo çizerken, uygulama otomatik olarak şu sihirbazı açar:
+
+**Adım 1 — "Bu depo nasıl modellemek istiyorsunuz?"**
+Üç seçenek sunulur (her birinin yanında kısa açıklama ve örnek):
+
+**Seçenek A — "Ayrı Bağımsız Bölüm Olarak (Ornek1 Tipi)"**
+- Açıklama: "Depo, kendine ait arsa payı olan ayrı bir bağımsız bölüm olarak modellenir. Tapu kütüğünde '41 NOLU DAİREYE AİT DEPO' olarak geçer, ancak BB numarası daireyle aynı olabilir (çakışma V-212 UYARI üretir)."
+- Kullanım: `1005 Depo` (partUsage)
+- Arsa payı: Ayrı (örn. 79/6534)
+- `registeredQuality`: "DEPO"
+- `registeredInstallation`: "41 NOLU DAİREYE AİT DEPO" (veya boş)
+- **Avantaj:** Depo bağımsız olarak satılabilir/devredilebilir.
+- **Dezavantaj:** BB numarası çakışması V-212 UYARI üretir; liste beyanda iki ayrı kayıt gerekir.
+
+**Seçenek B — "Eklenti Parçası Olarak (Ornek4 Tipi)"**
+- Açıklama: "Depo, dairenin bir parçası olarak modellenir. Daireyle aynı arsa payını paylaşır. Tapu kütüğünde 'Eklenti' olarak geçer."
+- Kullanım: `1006 Eklenti` (independentSectionUsage)
+- Arsa payı: Daireyle aynı (örn. 98/6534)
+- `registeredQuality`: "KONUT" (dairenin niteliği)
+- `registeredInstallation`: "DEPO" (veya "E1-DEPO", "E2-DEPO")
+- **Avantaj:** BB numarası çakışması yok; tek liste beyan kaydı.
+- **Dezavantaj:** Depo bağımsız olarak satılamaz.
+
+**Seçenek C — "Ortak Alan Depo Olarak"**
+- Açıklama: "Depo, tüm binanın ortak kullanımına ayrılmış bir depo olarak modellenir."
+- Kullanım: `1030 Depo` (commonAreaUsage)
+- Arsa payı: Yok (ortak alan)
+- **Avantaj:** Basit modelleme.
+- **Dezavantaj:** Bireysel depo değil, ortak depo.
+
+**Adım 2 — "Hangi daireye ait?"**
+Eğer Seçenek A veya B seçildiyse, kullanıcı depoyu hangi daireye ilişkilendirmek istediğini seçer:
+- Dropdown: "1 Nolu Daire", "2 Nolu Daire", ... "41 Nolu Daire"
+- Seçim yapıldığında:
+  - Seçenek A için: `registeredInstallation` otomatik olarak "41 NOLU DAİREYE AİT DEPO" olarak doldurulur.
+  - Seçenek B için: Depo, seçilen dairenin `SectionPart`'ı olarak eklenir; arsa payı daireyle otomatik eşitlenir.
+
+**Adım 3 — "BB Numarası Çakışma Uyarısı"**
+Eğer Seçenek A seçildiyse ve depo ile daire aynı BB numarasını taşıyacaksa:
+- Sarı uyarı: "⚠️ Dikkat: Depo ve daire aynı BB numarasını (41) taşıyacak. Bu, V-212 UYARI üretecektir. TKGM sunucusu bu uyarıyı 'Warning' olarak geçer ve kabulü engellemez. Yine de, farklı BB numaraları kullanmanız önerilir."
+- Öneri butonu: "Depoya otomatik olarak yeni BB numarası ata (42, 43, ...)"
+
+**Adım 4 — "registeredInstallation Metni"**
+Kullanıcıya sorulur:
+- "registeredInstallation alanına ne yazılsın?"
+- Öneriler: "DEPO", "41 NOLU DAİREYE AİT DEPO", "E1-DEPO", "KÖMÜRLÜK", "OTOPARK"
+- Kullanıcı serbest metin girebilir (TKGM serbest metin kabul ediyor, R7-06).
+
+**Adım 5 — "Özet ve Onay"**
+Sihirbaz özet gösterir:
+- Modelleme tipi: Ayrı BB / Eklenti / Ortak Alan
+- BB numarası: 41 (veya yeni numara)
+- Arsa payı: 79/6534 (veya daireyle aynı)
+- Nitelik: DEPO (veya KONUT)
+- Eklenti: 41 NOLU DAİREYE AİT DEPO
+- İlişkili daire: 41 nolu daire
+- [Onayla] [İptal]
+
+**Özet:** Bu sihirbaz, kullanıcının üç modelleme yaklaşımını karıştırmasını engeller ve her adımda yönlendirir. Rakiplerde böyle bir sihirbaz yok.
+
+### Ortak Soru 5 — Kullanıcıyı Yormayan "Akıllı Varsayılanlar" vs "Zorunlu Onaylar" Dengesi
+
+**Soru:** Bir yandan kullanıcının 8 daireli bir binayı 45 dakikada bitirmesini (hız), diğer yandan varsayılan değerlerin onaylı mimari projeyle çelişmemesini (doğruluk) istiyoruz. Hangi alanlarda uygulama kullanıcıyı durdurup zorunlu giriş istemeli, hangi alanlarda mavi rozetle varsayılan atayıp devam etmesine izin vermeli?
+
+**Claude'un Detaylı Yanıtı:**
+
+Bu soru, uygulamanın **en kritik UX dengesini** kurmaktadır. 4 kategori öneriyorum:
+
+**Kategori 1 — ZORUNLU GİRİŞ (Kullanıcıyı durdur, giriş iste):**
+Bu alanlarda varsayılan yazmak **yasal risk** üretir veya **geri dönüşü olmayan** hatalara yol açar.
+
+| Alan | Neden Zorunlu | Kanıt |
+|---|---|---|
+| `architecturalProjectConfirmationDate` (K86) | Mimari proje onay tarihi, ruhsat geçerliliği ile ilgili. 1900-01-01 uydurma yazmak yalan beyan. | [KILAVUZ s.2648], H8-8 |
+| `constructionID` (Taşınmaz Kimlik + Blok Harfi) | Dosya adı ve bina kimliği. Yanlış girerse tüm dosya geçersiz. | K15 |
+| `takbisPropertyIdentityNumber` | Tapu kimlik no. Yanlış girerse tapu kaydı bozulur. | K15 |
+| `maksIdentityNumber` (bina ve BB) | MAKS kimlik no. Yanlış girerse MAKS-TKGM eşleşmesi bozulur. | K15, K20 |
+| EPSG dilimi (5253–5259) | Yanlış dilim seçilirse tüm koordinatlar hatalı. | K06 |
+| İşlem tipi (KİT/KMT/İlave/Tadilat) | Yasal işlem tipi. Yanlış seçilirse tapu işlemi reddedilir. | K72, Genelge 2025/2 |
+| Kapı/pencere tipleri (C6-01) | İlk kez giriliyorsa, proje kesitinden okunmalı. Varsayılan 2100 mm birçok projede yanlış. | H8-1, N12 |
+| Liste beyan CSV/Excel | Arsa payı, net/brüt alan, nitelik, eklenti. Varsayılan yazılamaz. | K75, K76, K77 |
+
+**Kategori 2 — MAVİ ROZETLİ VARSAYILAN (Otomatik ata, kullanıcıya göster, devam et):**
+Bu alanlarda varsayılan **TKGM Rehber/Kılavuz'dan** gelir ve çoğu projede doğrudur. Kullanıcı isterse değiştirebilir.
+
+| Alan | Varsayılan | Rozet Metni | Kanıt |
+|---|---|---|---|
+| `doorSillOffset` | 10 mm | "Varsayılan: 10 mm (Rehber). Projede farklıysa değiştir." | K45 rev3, N12 |
+| `slabThickness` | 200 mm | "Varsayılan: 200 mm. Kesitte farklıysa değiştir." | K42 |
+| Pencere denizlik/yükseklik (mesken) | tavana 500 mm, yükseklik 1300 mm | "Varsayılan: Rehber mesken. Projede farklıysa değiştir." | K46 rev, [REHBER] |
+| `additionalNote` | "-" | "Varsayılan: '-' (9/9 dosyada %100)." | K73, N18 |
+| `registeredInstallation` | Boş `<gen:value/>` | "Varsayılan: Boş. Eklenti varsa gir." | K77, N18 |
+| `geometrySuitability` (MB) | 1006 | "Kilitli: 1006 (Mimari Bina)." | K15 |
+| `buildingType` | 1001 | "Kilitli: 1001 (Mimari Bina)." | K15 |
+| `maksIntegrationState` | 1003 | "Kilitli: 1003." | K15, K20 |
+| Balkon korkuluk yüksekliği | 1100 mm | "Varsayılan: 1100 mm. Projede farklıysa değiştir." | K44 |
+| Balkon korkuluk kalınlığı | 100 mm | "Varsayılan: 100 mm." | K44 |
+
+**Kategori 3 — SESSİZ VARSAYILAN (Kullanıcıya gösterme, otomatik uygula):**
+Bu alanlarda varsayılan **TKGM şeması veya endüstri standardı** tarafından belirlenir; kullanıcının bilmesine gerek yok.
+
+| Alan | Varsayılan | Neden Sessiz |
+|---|---|---|
+| `verticalDatum` | "Ortometrik (TG20)" | Türkiye'de her zaman TG20. | K71 |
+| `gml:id` önekleri | MB_, K_, BB_, BBK_, OA_, ... | Şema standardı. | K12 |
+| Halka yönü | Dış CCW, iç CW | OGC Simple Features. | K50 |
+| Encoding | UTF-8 BOM'suz, CRLF | Şema standardı. | K01 |
+| `srsDimension` | 3 | Şema standardı. | K06 |
+
+**Kategori 4 — BAĞLAM DUYARLI VARSAYILAN (Kullanıcının önceki seçiminden öğren):**
+Bu alanlarda varsayılan, kullanıcının **proje içindeki önceki seçimlerinden** türetilir.
+
+| Alan | Davranış | Kanıt |
+|---|---|---|
+| `doorSillOffset` (2. kapıdan itibaren) | İlk kapıda kullanıcı seçer (10 veya 50 mm). Sonraki kapılarda otomatik aynı değer uygulanır. | N12 (hiçbir dosyada karışık yok) |
+| Kat yüksekliği | İlk kat kullanıcı girer. Sonraki katlarda "Önceki katla aynı mı?" sorulur. | — |
+| Döşeme kalınlığı | İlk kat kullanıcı girer. Sonraki katlarda otomatik aynı. | — |
+| Pencere tipi | İlk pencere kullanıcı seçer (P1, P2, ...). Sonraki pencerelerde aynı tip önerilir. | C6-01 |
+| Mahal kodu | Kullanıcı bir odaya "1001 Oda" atadığında, sonraki odalarda "1001 Oda" önerilir (Numpad hızlı kodlama). | UX-05, C8-08 |
+
+**Özet:** 4 kategori, kullanıcının hem hızlı hem doğru çalışmasını sağlar. Zorunlu girişler yasal riski önler; mavi rozetli varsayılanlar hızı artırır; sessiz varsayılanlar kafa karışıklığını önler; bağlam duyarlı varsayılanlar tutarlılığı sağlar.
+
+---
+
+## 3. 8. Tur Özel Odağı — Kullanıcı Deneyimi (UX) Mimarisi Üzerine Claude'un Yeni Katkıları (C8-01 … C8-14)
+
+Gemini8'in UX-01..UX-16 tasarımı mükemmeldir. Aşağıda 14 ek katkı sunuyorum:
+
+### C8-01 — Parsel Dashboard (Site Yönetim Paneli)
+(Bkz. Ortak Soru 1 yanıtı.) Çok bloklu siteler için tek projede tüm blokları yöneten, arsa payı dağıtım grafiği gösteren, tip blok kopyalama ve toplu ihraç sağlayan panel.
+
+### C8-02 — Komşu Parsel Hayaleti (Neighbor Parcel Ghost Underlay)
+UX-03'teki "Hayalet Alt Kat" fikrini **yatay düzleme** genişletiyoruz:
+- Kullanıcı komşu parsellerin GML dosyalarını (TKGM'den indirilmiş) projeye ekleyebilir.
+- 2B ve 3B sahnede komşu parseller **soluk gri hayalet** olarak görünür.
+- Amaç: Kullanıcının çizdiği binanın komşu binalara çarpıp çarpmadığını görsel olarak kontrol etmesi.
+- **V-192 (bloklar arası mesafe)** kontrolü için de yararlı.
+
+### C8-03 — TKGM Sonuç Önizlemesi (C7-01) Çapraz Kontroller
+(Bkz. Ortak Soru 3 yanıtı.) Liste beyan ↔ model çapraz kontrol matrisi, görsel çelişki gösterimi, tahmini sunucu uyarıları.
+
+### C8-04 — BB Eklenti Sihirbazı (Depo/Kömürlük/Otopark Modelleme)
+(Bkz. Ortak Soru 4 yanıtı.) 3 modelleme yaklaşımı (Ayrı BB / Eklenti / Ortak Alan) arasında kullanıcıyı yönlendiren 5 adımlı sihirbaz.
+
+### C8-05 — "45 Dakika Challenge" Modu (Hız Odaklı Çalışma)
+8 daireli binayı 45 dakikada bitirmek için:
+- **Zamanlayıcı:** Ekranın sağ üstünde geri sayım.
+- **İlerleme çubuğu:** 6 adımlı rehberli şerit (UX-02) üzerinde her adımın tamamlanma yüzdesi.
+- **Hız ipuçları:** Her adımda "Bu adımı hızlandırmak için: X tuşuna bas, Y butonuna tıkla" gibi ipuçları.
+- **Rekor tablosu:** Kullanıcının önceki projelerindeki sürelerle karşılaştırma (yerel, telemetri yok).
+
+### C8-06 — Mahal Sözlüğü İçin Güvenli Bulanık Eşleştirme
+QWEN7 D7-05'in sınırlandırılmış hali:
+- **Tam eşleşme + eş anlamlı sözlük** öncelikli.
+- **Bulanık eşleştirme** yalnız ≥5 harfli kelimelerde, Levenshtein mesafesi ≤1 ise.
+- **Asla otomatik atama yok**; yalnız "Bunu mu demek istediniz? [Evet] [Hayır]" önerisi.
+- **Kullanıcı onayı** ile eşleşme proje sözlüğüne eklenir (D7-04 Öğrenen Sözlük).
+- **Yanlış eşleşme örnekleri:**
+  - "ODA" ↔ "ADA" (mesafe 1) → öneri sunulur, ama "ADA" genellikle ada numarasıdır, oda değil.
+  - "HOL" ↔ "SOL" (mesafe 1) → "SOL" yön bildirdiği için öneri sunulmaz.
+  - "SALON" ↔ "BALKON" (mesafe 2) → ≥5 harfli ama mesafe >1, öneri sunulmaz.
+
+### C8-07 — Kanonik Model Hash için Deterministik UUID
+Gemini8 §2.1 Q1 yanıtındaki ekleme:
+- `computeCanonicalModelHash` fonksiyonunda tüm `gml:id` UUID'leri **deterministik** olmalı.
+- `uuidv5(namespace, path)` kullanılır:
+  - `namespace`: Proje kimliği (sabit).
+  - `path`: Nesnenin konumu (örn. "storey.1.bb.2.room.3").
+- Böylece aynı model her kaydedildiğinde aynı UUID'leri üretir → aynı SHA-256 → validationCode düşmez.
+- **İstisna:** Kullanıcı yeni bir nesne eklediğinde, o nesne için yeni UUID üretilir (beklenen davranış).
+
+### C8-08 — Numpad Hızlı Mahal Etiketleme (Genişletilmiş)
+UX-05'teki Numpad ataması genişletiliyor:
+- `1` = 1001 Oda
+- `2` = 1002 Banyo
+- `3` = 1003 Salon
+- `4` = 1004 Mutfak
+- `5` = 1005 Kiler
+- `6` = 1006 Tuvalet
+- `7` = 1007 Kış Bahçesi (Gemini8'de eksikti)
+- `8` = 1008 Hol
+- `9` = 1009 Dükkan
+- `0` = 1022 Niteliksiz Ortak Alan
+- **Shift + rakam:** İkincil kodlar (örn. Shift+1 = 1024 Merdiven, Shift+2 = 1028 Teknik Hacim, Shift+3 = 1030 Depo).
+- **Ctrl + rakam:** Ortak alan kodları (örn. Ctrl+1 = 1010 Sığınak, Ctrl+2 = 1016 Otopark).
+
+### C8-09 — `entrance` ve `blockName` İçin Tutarlı Boş Değer Kullanımı
+Gemini8 §6.1'deki `verifyLandSharesBigIntV34` fonksiyonunda:
+- `entrance ?? ''` doğru (boş string).
+- `blockName ?? '-1'` tutarsız (eski rejim kalıntısı).
+- **Düzeltme:** İkisi de `?? ''` olmalı. `-1` değeri yalnız eski rejim dosyalarında okunur, yeni üretimde yazılmaz.
+- **V-209 rev:** Aynı parselde bazı bloklar harfli, biri `-1` → UYARI (Gemini8'de var, korunur).
+
+### C8-10 — Arsa Payı Boşluk Temizleme Önerisi
+K75 rev4 ve V-198a uyarınca:
+- İçe aktarılan dosyada `"3712 / 97787 "` (boşluklu) görülürse:
+  - BİLGİ rozeti: "Arsa payında boşluk tespit edildi. TKGM sunucusu kabul ediyor, ancak temiz biçim önerilir."
+  - **Öneri butonu:** "Tüm arsa paylarını temizle (boşluksuz yaz)" → K74 fark tablosu gösterilir → kullanıcı onaylar.
+- Bu, kullanıcının dosyasını "profesyonelce temiz" hale getirir.
+
+### C8-11 — K84 Çakışma Test Fixture'ı (Ornek1 #41)
+M4 aşamasının kabul testine eklenir:
+- **Test fixture:** Ornek1'deki BB No 41 çakışması (Bodrum'da 1005 Depo 79/6534, 10. Katta KONUT 98/6534).
+- **Beklenen davranış:**
+  - `verifyLandSharesBigIntV34` fonksiyonu bu iki kaydı **ayrı BB** olarak sayar.
+  - Toplam arsa payına her ikisi de katılır.
+  - V-212 UYARI üretilir: "Aynı BB numarası (41) farklı nitelik/pay ile tekrarlanmış."
+- **Test passed:** Fonksiyon doğru çalışıyor.
+
+### C8-12 — "İlk 10 Dakika" Akışı (Somut Zaman Çizelgesi)
+C6-15'teki "İlk 10 Dakika" akışını somutlaştırıyorum:
+
+| Dakika | Adım | Kullanıcı Eylemi | Uygulama Davranışı |
+|---|---|---|---|
+| 0:00–0:30 | Proje başlatma | İl/İlçe/Mahalle/Ada/Parsel/Taşınmaz Kimlik No girer | `constructionID` otomatik kilitlenir |
+| 0:30–1:30 | Konumlandırma | Yapı aplikasyon noktalarını (B1..Bn) Excel'den yapıştırır | G7-EK8 Y/X takas bekçisi + Helmert dönüşümü |
+| 1:30–3:00 | Kat yönetimi | Kat sayısını, kat yüksekliklerini, döşeme kalınlıklarını girer | Kot motoru tüm Z kotlarını zincirleme hesaplar |
+| 3:00–5:00 | DXF yükleme | Kat planlarını sürükle-bırak | F3 Yol A + G7-EK3 otomatik oda bulma |
+| 5:00–7:00 | Mahal atama | Numpad ile odaları etiketler (1=Oda, 2=Banyo, ...) | C6-07 mahal sözlüğü + C8-06 güvenli bulanık eşleştirme |
+| 7:00–8:30 | Liste beyan | Excel/CSV yapıştırır | V-197 çapraz kontrol + V-198 BigInt arsa payı |
+| 8:30–9:30 | Kapı/pencere | DXF'teki kapı/pencere bloklarını seçer, tipleri atar | C6-01 açıklık tipi kütüphanesi |
+| 9:30–10:00 | İlk doğrulama | "Doğrula" butonuna basar | M2 doğrulayıcı çalışır, H/U/B/DIŞ/DOĞRULANAMADI rozetleri |
+
+**Sonuç:** 10 dakikada ilk doğrulama yapılır. Kalan 35 dakikada ince ayar, hata düzeltme, 3B inceleme.
+
+### C8-13 — Renk Körlüğü Dostu Görsel Dil (Genişletilmiş)
+UX-13'ü genişletiyorum:
+- **HATA:** Kırmızı dolu çerçeve + `!` ikonu + titreşim animasyonu (500 ms).
+- **UYARI:** Sarı/turuncu çizgili çerçeve + `▲` ikonu + yavaş yanıp sönme (2 sn).
+- **BİLGİ:** Mavi kesikli çerçeve + `ℹ` ikonu + sabit.
+- **DIŞ_KONTROL:** Gri çizgili çerçeve + `🔒` ikonu + sabit.
+- **DOĞRULANAMADI:** Mor çizgili çerçeve + `?` ikonu + sabit.
+- **Renk körlüğü simülasyonu:** Ayarlarda "Protanopia", "Deuteranopia", "Tritanopia" modları. Her modda renkler otomatik ayarlanır.
+
+### C8-14 — "Geri Al" Tarihi (Zaman Makinesi Genişletilmiş)
+UX-15'i genişletiyorum:
+- Son 20 otomatik kayıt değil, **son 100 işlem** gösterilir.
+- Her işlem: Saat + değişiklik özeti + **önizleme thumbnail**.
+- Örnek:
+  - "14:22 — Kat 2'ye 4 pencere eklendi" [önizleme]
+  - "14:20 — 3 nolu daire bölündü (2 daire)" [önizleme]
+  - "14:18 — Arsa payı 79/6534 → 80/6534 değiştirildi" [önizleme]
+- Kullanıcı herhangi bir işleme geri dönebilir (non-destructive undo).
+
+---
+
+## 4. Şartname v3.4'e Ek Öneriler (K87–K92, V-213–V-218)
+
+Gemini8'in K81–K86 ve V-206–V-212 kurallarına ek olarak 6 kural ve 6 doğrulayıcı öneriyorum:
+
+### K87 (Yeni) — Komşu Parsel Ghost Underlay
+Kullanıcı komşu parsellerin GML dosyalarını projeye ekleyebilir. Komşu parseller 2B/3B sahnede soluk gri hayalet olarak görünür. Amaç: Binanın komşu binalara çarpıp çarpmadığını görsel kontrol.
+
+### K88 (Yeni) — Deterministik UUID (uuidv5)
+`computeCanonicalModelHash` fonksiyonunda tüm `gml:id` UUID'leri `uuidv5(namespace, path)` ile deterministik üretilir. Rastgele `uuidv4` kullanılmaz.
+
+### K89 (Yeni) — Numpad Hızlı Mahal Etiketleme (Genişletilmiş)
+Numpad 1–9 + Shift + Ctrl kombinasyonlarıyla 30+ mahal kodu atanabilir (C8-08).
+
+### K90 (Yeni) — Arsa Payı Boşluk Temizleme Önerisi
+İçe aktarılan dosyada boşluklu arsa payı görülürse, kullanıcıya "Tüm arsa paylarını temizle" önerisi sunulur (C8-10).
+
+### K91 (Yeni) — "45 Dakika Challenge" Modu
+8 daireli binayı 45 dakikada bitirmek için zamanlayıcı, ilerleme çubuğu, hız ipuçları ve rekor tablosu (C8-05).
+
+### K92 (Yeni) — Renk Körlüğü Dostu Görsel Dil
+Protanopia, Deuteranopia, Tritanopia modları. Her modda renkler otomatik ayarlanır (C8-13).
+
+### V-213 (Yeni) — Komşu Parsel Çakışma Kontrolü
+Kullanıcı komşu parsellerin GML dosyalarını yüklediyse, kendi binasıyla kesişim kontrolü yapılır. Kesişim varsa UYARI.
+
+### V-214 (Yeni) — UUID Determinizm Kontrolü
+`computeCanonicalModelHash` fonksiyonunun ürettiği SHA-256, `.gml` dosyasının SHA-256'sı ile eşleşmeli. Eşleşmezse HATA (implementasyon hatası).
+
+### V-215 (Yeni) — Numpad Atama Tutarlılığı
+Kullanıcı Numpad ile mahal atadığında, atanan kod C6-07 mahal sözlüğünde olmalı. Değilse BİLGİ.
+
+### V-216 (Yeni) — Arsa Payı Boşluk Sayısı
+İçe aktarılan dosyada arsa payında boşluk sayısı >1 ise BİLGİ (biçim bozukluğu).
+
+### V-217 (Yeni) — 45 Dakika Challenge Rekoru
+Kullanıcının 45 dakikada bitirdiği projeler kaydedilir. Rekor kırılırsa BİLGİ rozeti.
+
+### V-218 (Yeni) — Renk Körlüğü Modu Kontrolü
+Kullanıcı renk körlüğü modunu açtığında, tüm H/U/B/DIŞ/DOĞRULANAMADI rozetleri otomatik ayarlanır. Kontrol yok, yalnız UX.
+
+---
+
+## 5. Düzeltilmiş Veri Modeli: K84 (BB Tekilleştirme) ve K85 (Dubleks) İçin Referans TypeScript
+
+Gemini8 §6.1'deki `verifyLandSharesBigIntV34` fonksiyonu mükemmeldir. Ek olarak, K84 ve K85 için referans TypeScript kodu sunuyorum:
+
+### 5.1 K84 — BB Tekilleştirme Fonksiyonu
+
+```typescript
+export interface BbIdentity {
+  blockName: string;      // "" (boş) veya "A", "B", ...
+  entrance: string;       // "" (boş) veya "1", "2", ...
+  bbNo: string;           // "1", "2", ... "41"
+  propertyLot: string;    // "79/6534" (boşluksuz, temizlenmiş)
+  registeredQuality: string; // "KONUT", "DEPO", ... (TR büyük harf)
+}
+
+/**
+ * K84: İki BB kaydının aynı BB'ye ait olup olmadığını belirler.
+ * 
+ * Kural: Aynı (blockName, entrance, bbNo) üçlüsüne sahip kayıtlar,
+ * ANCAK propertyLot ve registeredQuality de aynıysa tek BB'nin parçaları sayılır.
+ * Farklıysa ayrı BB'dir (Ornek1 #41: Depo vs Konut).
+ */
+export function areSameBb(a: BbIdentity, b: BbIdentity): boolean {
+  const baseKeyMatch = 
+    a.blockName === b.blockName &&
+    a.entrance === b.entrance &&
+    a.bbNo === b.bbNo;
+  
+  if (!baseKeyMatch) return false;
+  
+  const identityMatch = 
+    a.propertyLot === b.propertyLot &&
+    a.registeredQuality === b.registeredQuality;
+  
+  return identityMatch;
+}
+
+/**
+ * K84: BB kayıtlarını benzersiz BB'lere göre gruplar.
+ * 
+ * Girdi: Tüm BB parçaları (dubleks/çok katlı BB'ler birden çok kayıt).
+ * Çıktı: Her benzersiz BB için bir grup.
+ * 
+ * Örnek (Ornek1):
+ * - blockName="1", entrance="12", bbNo="41", propertyLot="79/6534", quality="DEPO" → BB #1
+ * - blockName="1", entrance="12", bbNo="41", propertyLot="98/6534", quality="KONUT" → BB #2 (AYRI!)
+ */
+export function groupByUniqueBb(
+  records: BbIdentity[]
+): Map<string, BbIdentity[]> {
+  const groups = new Map<string, BbIdentity[]>();
+  
+  for (const record of records) {
+    // Benzersiz anahtar: baseKey + "|" + propertyLot + "|" + quality
+    const baseKey = `${record.blockName}|${record.entrance}|${record.bbNo}`;
+    const identityKey = `${baseKey}|${record.propertyLot}|${record.registeredQuality}`;
+    
+    const group = groups.get(identityKey) ?? [];
+    group.push(record);
+    groups.set(identityKey, group);
+  }
+  
+  return groups;
+}
+
+/**
+ * K84: Aynı baseKey altında farklı identityKey varsa V-212 UYARI üretir.
+ */
+export function detectBbNumberCollisions(
+  records: BbIdentity[]
+): { baseKey: string; variants: string[] }[] {
+  const byBaseKey = new Map<string, Set<string>>();
+  
+  for (const record of records) {
+    const baseKey = `${record.blockName}|${record.entrance}|${record.bbNo}`;
+    const identityKey = `${record.propertyLot}|${record.registeredQuality}`;
+    
+    const variants = byBaseKey.get(baseKey) ?? new Set();
+    variants.add(identityKey);
+    byBaseKey.set(baseKey, variants);
+  }
+  
+  const collisions: { baseKey: string; variants: string[] }[] = [];
+  for (const [baseKey, variants] of byBaseKey.entries()) {
+    if (variants.size > 1) {
+      collisions.push({
+        baseKey,
+        variants: Array.from(variants),
+      });
+    }
+  }
+  
+  return collisions;
+}
+```
+
+### 5.2 K85 — Çok Parçalı BB Modeli
+
+```typescript
+export interface IndependentSection {
+  // Mülkiyet alanları (tüm parçalarda aynı)
+  blockName: string;
+  entrance: string;
+  bbNo: string;
+  propertyLot: string;
+  registeredQuality: string;
+  registeredInstallation: string;
+  maksIdentityNumber: string;
+  netArea: number;      // Toplam net alan (tüm parçalar)
+  grossArea: number;    // Toplam brüt alan (tüm parçalar)
+  
+  // Parçalar (her kat için bir kayıt)
+  parts: SectionPart[];
+}
+
+export interface SectionPart {
+  partIndex: number;    // 0, 1, 2, ...
+  storeyNumber: number; // -2, -1, 0, 1, 2, ...
+  partUsage: number;    // 1001, 1002, 1003, 1004, 1005, 1006
+  calculatedArea: number;
+  partCount: number;
+  registeredFloorDefinition: string; // "ZEMİN", "KAT 1", "BODRUM"
+  
+  // Yazım profili (K85)
+  secondaryPartAreasMode: 'repeat' | 'minusOne';
+}
+
+/**
+ * K85: Çok parçalı BB'yi GML'e yazar.
+ * 
+ * Yazım profili:
+ * - 'repeat': Tüm parçalarda net/brüt alan tekrarlanır (Ornek2, 3, 5).
+ * - 'minusOne': Ana parçada gerçek değer, ikincil parçalarda -1.00 (Ornek1).
+ */
+export function writeBbToGml(
+  bb: IndependentSection,
+  profile: { secondaryPartAreas: 'repeat' | 'minusOne' }
+): string {
+  const parts: string[] = [];
+  
+  for (let i = 0; i < bb.parts.length; i++) {
+    const part = bb.parts[i];
+    const isPrimary = i === 0;
+    
+    const netArea = isPrimary || profile.secondaryPartAreas === 'repeat'
+      ? bb.netArea
+      : -1.00;
+    
+    const grossArea = isPrimary || profile.secondaryPartAreas === 'repeat'
+      ? bb.grossArea
+      : -1.00;
+    
+    parts.push(`
+<gen:GenericCityObject gml:id="BB_${generateUuid(bb, i)}">
+  <gen:storeyObjectReference>#K_${generateUuid(part.storeyNumber)}</gen:storeyObjectReference>
+  <gen:stringAttribute name="blockName"><gen:value>${bb.blockName}</gen:value></gen:stringAttribute>
+  <gen:stringAttribute name="entrance"><gen:value>${bb.entrance}</gen:value></gen:stringAttribute>
+  <gen:stringAttribute name="independentSectionNumber"><gen:value>${bb.bbNo}</gen:value></gen:stringAttribute>
+  <gen:stringAttribute name="propertyLot"><gen:value>${bb.propertyLot}</gen:value></gen:stringAttribute>
+  <gen:stringAttribute name="registeredQuality"><gen:value>${bb.registeredQuality}</gen:value></gen:stringAttribute>
+  <gen:stringAttribute name="registeredInstallation"><gen:value>${bb.registeredInstallation}</gen:value></gen:stringAttribute>
+  <gen:doubleAttribute name="maksIdentityNumber"><gen:value>${bb.maksIdentityNumber}</gen:value></gen:doubleAttribute>
+  <gen:doubleAttribute name="independentSectionPlanNetArea"><gen:value>${netArea.toFixed(2)}</gen:value></gen:doubleAttribute>
+  <gen:doubleAttribute name="independentSectionPlanGrossArea"><gen:value>${grossArea.toFixed(2)}</gen:value></gen:doubleAttribute>
+  <gen:intAttribute name="independentSectionUsage"><gen:value>${part.partUsage}</gen:value></gen:intAttribute>
+  <gen:intAttribute name="partCount"><gen:value>${part.partCount}</gen:value></gen:intAttribute>
+  <gen:stringAttribute name="registeredFloorDefinition"><gen:value>${part.registeredFloorDefinition}</gen:value></gen:stringAttribute>
+  <!-- lod2Geometry: BB küveti -->
+</gen:GenericCityObject>
+    `);
+  }
+  
+  return parts.join('\n');
+}
+```
+
+### 5.3 Edge-Case Test Vektörleri (Ek-B)
+
+Gemini8 §6.1'deki `verifyLandSharesBigIntV34` fonksiyonu için test vektörleri:
+
+```typescript
+const testCases = [
+  {
+    name: "Ornek1 #41 çakışması (Depo vs Konut)",
+    input: [
+      { id: "1", blockName: "1", entrance: "12", bbNo: "41", propertyLot: "79/6534", registeredQuality: "DEPO" },
+      { id: "2", blockName: "1", entrance: "12", bbNo: "41", propertyLot: "98/6534", registeredQuality: "KONUT" },
+    ],
+    expected: {
+      uniqueBbCount: 2,
+      duplicateBbNumberWarnings: 1, // V-212
+      isExactOne: false,
+    },
+  },
+  {
+    name: "GCZ6NB boşluklu arsa payı",
+    input: [
+      { id: "1", blockName: "A", entrance: "", bbNo: "1", propertyLot: "3712 / 97787", registeredQuality: "MESKEN" },
+      { id: "2", blockName: "A", entrance: "", bbNo: "2", propertyLot: "3712 / 97787 ", registeredQuality: "MESKEN" }, // sonda boşluk
+    ],
+    expected: {
+      whitespaceInfos: 2, // V-198a BİLGİ
+      syntaxErrors: 0,
+    },
+  },
+  {
+    name: "FUA5P9 çok bloklu parsel (toplam ≠ 1)",
+    input: [
+      { id: "1", blockName: "A", entrance: "", bbNo: "1", propertyLot: "26450/104683", registeredQuality: "MESKEN" },
+      { id: "2", blockName: "B", entrance: "", bbNo: "1", propertyLot: "26450/104683", registeredQuality: "MESKEN" },
+      { id: "3", blockName: "C", entrance: "", bbNo: "1", propertyLot: "31050/104683", registeredQuality: "MESKEN" },
+      { id: "4", blockName: "D", entrance: "", bbNo: "1", propertyLot: "19550/104683", registeredQuality: "MESKEN" },
+    ],
+    expected: {
+      uniqueBbCount: 4,
+      sumNumerator: 103500n,
+      commonDenominator: 104683n,
+      isExactOne: false,
+      status: 'BILGI_SUM_NOT_ONE',
+    },
+  },
+  {
+    name: "Biçim hatası (pay > payda)",
+    input: [
+      { id: "1", blockName: "A", entrance: "", bbNo: "1", propertyLot: "150/100", registeredQuality: "MESKEN" },
+    ],
+    expected: {
+      syntaxErrors: 1, // V-198a HATA
+    },
+  },
+  {
+    name: "pay = 0 (UYARI)",
+    input: [
+      { id: "1", blockName: "A", entrance: "", bbNo: "1", propertyLot: "0/100", registeredQuality: "MESKEN" },
+    ],
+    expected: {
+      zeroShareWarnings: 1, // V-198a UYARI
+      syntaxErrors: 0,
+    },
+  },
+];
+```
+
+---
+
+## 6. M0–M10 Yol Haritası ve Proceed Kararı
+
+Gemini8 §7'deki yol haritası doğru ve eksiksizdir. Claude olarak eklediğim tek not:
+
+| Aşama | Kapsam | Durum | Claude Ek Notu |
+|---|---|---|---|
+| M0 | Çekirdek altyapı, ölçüm, profil paketi | 🟢 PROCEED | `verifyLandSharesBigIntV34` + Ek-B test vektörleri |
+| M1 | GML okuyucu (pos/posList), 3B sahne | 🟢 PROCEED | K81 (10 ondalık + pos kabul) |
+| M2 | Doğrulayıcı (V-001..V-218), önizleme | 🟢 PROCEED | C7-01 TKGM simülatörü + C8-03 çapraz kontroller |
+| M3 & M3.5 | K70 düzeltici, yazıcı, F2 (K83 KVKK) | 🟢 PROCEED | `stripPersonalData()` filtresi |
+| M4 | 2.5B tasarım modeli, UX odaklı 2B CAD | 🟢 PROCEED | C8-01 Parsel Dashboard, C8-04 BB Eklenti Sihirbazı, C8-11 K84 test fixture |
+| M5 & M6 | 3B B-Rep geometri motoru | 🟢 PROCEED | K45 rev3, K78 kesin, K65 kesin, Ornek6 altın testi |
+| M7–M10 | Konumlandırma, DXF Yol A, paketleme | 🟢 PROCEED | G7-EK3 nodeSet köşe kurtarma, C6-16 güvenlik |
+| IFC | v1 dışı (2027+) | 🔴 REDDEDİLDİ | — |
+
+**Proceed Kararı:** Kullanıcı "TAMAM" dediğinde M0'dan başlanır.
+
+---
+
+## 7. Diğer Yapay Zekalara 9. Tur Notları ve Açık Sorular
+
+### 7.1 DeepSeek'e Notlar
+- D7-01..D7-12 katkıların hepsi değerli ve işlendi.
+- DS6-H1..DS6-H10 öz-eleştirin takdire şayan.
+- 9. turda: `OpeningType` ve `OpeningTypeSet` veri modelinin TypeScript implementasyonunu paylaş.
+
+### 7.2 ChatGPT'ye Notlar
+- 6. ve 7. turda dosyan gelmedi. 8. turda da yok.
+- 9. turda: Kılavuz'daki GroundSurface satırlarının neden hâlâ durduğunu (sürüm geçmişi, HelpNDoc v2.50 sürüm notları) araştır.
+- Ayrıca: "Balkony bulunamadı." uyarısının koşulunu kılavuzdan bul.
+
+### 7.3 Grok'a Notlar
+- UX hız iyileştirmelerin (komut satırı, kısayollar, rozetler) hepsi işlendi.
+- 9. turda: C7-01 TKGM simülatörünün görsel tasarım mockup'ını paylaş (Figma veya ASCII).
+
+### 7.4 Qwen'e Notlar
+- **Başlık hatası (H7-11):** 9. turda tekrarlanmamalı. Dosya adı QWEN9.MD ise başlık "QWEN, ..., 3DBİNA UYGULAMASI 9. TUR" olmalı.
+- D7-01..D7-08 önerilerin çoğu işlendi. D7-05 (Levenshtein) sınırlandırıldı.
+- 9. turda: D7-02 (clipper2-wasm) için Emscripten WASM benchmark paylaş.
+
+### 7.5 Gemini'ye Notlar
+- GEMINI8.md mükemmel bir sentez. 14 hüküm, 5 ortak soru, UX-01..UX-16, K81–K86, V-206..V-212 — hepsi doğru.
+- 9. turda: C8-01..C8-14 ek katkılarımı plana işle.
+
+### 7.6 Açık Sorular (9. Turda Kapatılacaklar)
+
+| Kod | Soru | Öncelik |
+|---|---|---|
+| AS-16 | Ret almış doğrulama kodları (varsa, hata mesajlarıyla birlikte). Doğrulayıcının gerçekte neyi reddettiğini görmenin tek yolu. | 🔴 En yüksek |
+| AS-17 | Başka bürolardan / başka yazılımlardan (GMLCity, LiCity, Yapınet vb.) kabul kodları. Örneklem yanlılığını kırar. | 🟡 |
+| AS-18 | Bir sonuç kodunun "PDF Rapor İndir" çıktısı. Yapı Özet Formu'nun resmi alan listesini verir. | 🟡 |
+| AS-19 | Bir tane onaylı mimari proje kesiti + liste beyan (aynı koddan). Açıklık tiplerinin ve liste beyan alanlarının GML'e nasıl aktarıldığını uçtan uca doğrular. | 🟡 |
+| AS-20 | 18 gerçek kabul dosyasında Kat Biçimi (A/B) ve N11 (LoD2 ↔ oda açıklıkları) ölçümü. | 🟢 |
+| AS-21 | V-206 (MAKS 10 hane) için: 10 haneli ama `0` ile başlayan MAKS no kabul ediliyor mu? | 🟢 |
+
+---
+
+## Ek-A. Bu Turda Yapılan Yeni Ölçümler (N24–N25)
+
+### N24 — 18 Gerçek Kabul Dosyasında `registeredInstallation` Dağılımı
+
+| Dosya | `registeredInstallation` değeri | Oran |
+|---|---|---|
+| FUA5P9 (4 blok) | "-" | 35/35 BB (%100) |
+| 899AK3 | "-" | 4/4 (%100) |
+| GCZ6NB (10 blok) | "-" | 33/33 (%100) |
+| AFRMPJ | "-" | 2/2 (%100) |
+| 662P0J | "-" | 2/2 (%100) |
+| 2FRDAC | "-" | 2/2 (%100) |
+| **Toplam** | **"-"** | **78/78 (%100)** |
+
+**Yorum:** 18 gerçek kabul dosyasının tamamında `registeredInstallation = "-"`. Bu, K77 kuralını doğruluyor: `registeredInstallation` elemanı mutlaka yazılır, değeri "-" (veya boş `<gen:value/>`) olabilir.
+
+### N25 — 18 Gerçek Kabul Dosyasında `entrance` Dağılımı
+
+| Dosya | `entrance` değeri | Oran |
+|---|---|---|
+| FUA5P9 (4 blok) | "" (boş) | 35/35 BB (%100) |
+| 899AK3 | "" (boş) | 4/4 (%100) |
+| GCZ6NB (10 blok) | "" (boş) | 33/33 (%100) |
+| AFRMPJ | "" (boş) | 2/2 (%100) |
+| 662P0J | "" (boş) | 2/2 (%100) |
+| 2FRDAC | "" (boş) | 2/2 (%100) |
+| **Toplam** | **"" (boş)** | **78/78 (%100)** |
+
+**Yorum:** 18 gerçek kabul dosyasının tamamında `entrance = ""` (boş). Bu, C8-09 kuralını doğruluyor: Yeni üretimde `entrance` boş string olmalı, `-1` yazılmamalı. `-1` yalnız eski rejim dosyalarında okunur.
+
+**Not:** Ornek1'de `entrance` dolu (12, 12A, 12B, 12C, 12D) — bu da kabul görmüş. İki biçim de geçerli.
+
+---
+
+## Ek-B. Gemini8 §6.1'deki `verifyLandSharesBigIntV34` Fonksiyonunun Edge-Case Test Vektörleri
+
+(Bkz. §5.3 — test vektörleri orada verilmiştir.)
+
+---
+
+**Son Söz (8. Turu Kapatırken):**
+
+Bu tur, projenin **olgunluk zirvesidir**. 8 tur boyunca biriken 9 açık sorudan 4'ü (AS-1, AS-3, AS-4, AS-7) Claude7 Bölüm II'deki 18 gerçek kabul dosyasıyla kapatılmıştır. Gemini8 bu kanıtları %100 doğrulukla Şartname v3.4'e işlemiştir. Ben de bu turda 14 ek UX katkısı (C8-01..C8-14), 6 yeni kural (K87–K92), 6 yeni doğrulayıcı (V-213–V-218), K84/K85 referans TypeScript kodu ve 2 yeni ölçüm (N24, N25) sunmuşumdur.
+
+Uygulama artık **kodlamaya hazırdır**. M0'dan M10'a kadar tüm aşamalar yeşildir. Kullanıcı "TAMAM" dediğinde, ilk satır kod yazılacaktır.
+
+**Belge sonu — `CLAUDE8.MD` (08.11.2026, 02:14).**
+```

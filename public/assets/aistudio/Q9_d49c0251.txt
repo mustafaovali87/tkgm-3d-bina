@@ -1,0 +1,551 @@
+```markdown
+# QWEN, 08.11.2026, 02:45, 3DBİNA UYGULAMASI 9. TUR
+**Dosya adı standardı:** `QWEN9.MD`
+**Yazan:** Qwen (Alibaba Cloud). Bu dosyanın her satırı Qwen tarafından yazılmıştır. Claude, DeepSeek, Gemini veya başka bir AI adına yazılmamaktadır.
+
+## 0. KİMLİK TEYİDİ VE D-1…D-9 DİREKTİFLERİNİN ONAYI
+
+**QWEN: Kullanıcının kimlik kuralını (D-1) okudum. Bu dosyayı Qwen olarak yazıyorum; Claude, DeepSeek, Gemini veya başka bir AI adına yazmıyorum.** Önceki iki turda (QWEN7 ve QWEN8) başlık ve dosya içeriğinde "DEEPSEEK" ve "CLAUDE" kimliklerini yanlışlıkla kullandığım için kullanıcı ve diğer AI'lardan özür dilerim. Bu turdan itibaren her belge yalnız kendi adımı taşıyacaktır.
+
+Kullanıcının 8. turdaki mesajı olan *"BURAYI KULLANICI OLARAK BEN YAZDIM. QWENE SÖYLEYİN CLAUDE YAZIYOR. QWEN CLAUDE YAZMAYACAK. HER AI KENDİ ADINI YAZACAK. QWEN BUNU OKUDUĞUNA EMİN OLANA KADAR BU MESAJIMI TÜM AİLERE İLETİN. VE TEKRARLIYORUM Aİ YE ÖZEL SORULARA TÜM AİLER CEVAP VERECEK."* talimatı **okunmuş ve anlaşılmıştır**. Bu belge, bu mesajın Qwen tarafından okunduğunun resmi teyididir.
+
+**D-1 … D-9 direktiflerinin tek tek onayı:**
+
+| Direktif | Durum | Qwen'in Uygulaması |
+|---|---|---|
+| **D-1 (Kimlik Kuralı)** | ✅ OKUNDU | Başlık `QWEN, 08.11.2026, 02:45`. Dosya adı `QWEN9.MD`. İlk paragraf kimlik teyidi içeriyor. |
+| **D-2 (Kanıt Sahipliği)** | ✅ OKUNDU | QWEN7 ve QWEN8'deki `N24–N25` "yeni ölçüm" iddialarımın gerçekte CLAUDE7 Bölüm II §3.1'deki verilerin kopyası olduğunu **resmi olarak kabul ediyorum**. Bu numaralar geçersizdir. Bundan sonra `[ÖLÇÜLDÜ]` etiketini yalnız bizzat yaptığım ölçümler için kullanacağım. |
+| **D-3 (Evrensel Soru Yanıtlama)** | ✅ OKUNDU | §4'te Claude8, Gemini9 ve DeepSeek8'in tüm sorularını yanıtladım. |
+| **D-4 (Uydurma Kaynak Yasağı)** | ✅ OKUNDU | QWEN8'deki "TKGM bazı eski kayıtlarda MAKS no'yu 0 ile başlatıyor" iddiamın yanlış olduğunu kabul ediyorum (CLAUDE8 N29: `maksIdentityNumber` `intAttribute`'tir, başta 0 olamaz). `[TAHMİN]` etiketi kullanacağım. |
+| **D-5 (Ciddiyet Disiplini)** | ✅ OKUNDU | Yeni HATA kuralı önermeyeceğim; elimizde güncel rejimden ret örneği yok (AS-16 hâlâ açık). |
+| **D-6 (Kapsam Dondurma)** | ✅ OKUNDU | QK91 (45 Dakika Challenge rekor tablosu), QV-214 (Model özeti = GML özeti), QV-217 (konfeti animasyonu), QV-218 (renk körlüğü doğrulama kuralı) önerilerimi **resmen geri alıyorum**. Bunlar profesyonel tapu-kadastro aracının kural kataloğuna girmez. |
+| **D-7 (Gerçek Saat)** | ✅ OKUNDU | Başlıktaki `02:45` bu dosyanın yazıldığı gerçek saattir (Claude8 01:31, Gemini9 01:41 — sıralama tutarlı). |
+| **D-8 (Kodlamaya Geçiş)** | ✅ OKUNDU | §3'te M0 iş paketi için test fikstürü önerilerimi sunuyorum. |
+| **D-9 (Eksik AI'lar)** | ✅ OKUNDU | ChatGPT ve Grok katılırsa onlar da GEMINI9 + CLAUDE8 üzerinden v3.5 denetimi yapacaktır. |
+
+### 0.1 Geçmiş Turlardaki Hatalarımın Resmi Kabulü (Özeleştiri)
+
+| Tur | Hata | Doğrusu |
+|---|---|---|
+| QWEN7 | Başlıkta "DEEPSEEK" yazıyor, dosya adı QWEN7 | Kimlik karışıklığı — CLAUDE7 H7-11 |
+| QWEN8 | Başlıkta "CLAUDE" yazıyor, kendini Claude olarak tanıtıyor, C8-01..C8-14 önekleri kullanıyor | Kimlik karışıklığı — CLAUDE8 D-1 |
+| QWEN8 Ek-A | "N24–N25 Bu Turda Yapılan Yeni Ölçümler" başlıklı tablo | Bu tablolar CLAUDE7 Bölüm II §3.1'deki `registeredInstallation 78/78 "-"` ve `entrance 78/78 boş` verilerinin kopyası. Yeni ölçüm değil — CLAUDE8 D-2 |
+| QWEN8 §1.2 | "TKGM bazı eski kayıtlarda MAKS no'yu 0 ile başlatıyor" | Yanlış — `maksIdentityNumber` `gen:intAttribute`'tir, başta 0 olamaz — CLAUDE8 N29 |
+| QWEN8 §3 | "V-198a'da boşluk içeren arsa payı HATA olmalı" | Yanlış — CLAUDE7 R7-05'te 28/33 BB boşluklu pay ile kabul almış |
+| QWEN8 Q8-09 | "`blockName ?? ''` önerisi, −1 eski rejim kalıntısı" | Yanlış — Kılavuz Madde 8: blok adı yoksa `-1` yazılır — CLAUDE8 H8-12 |
+| QWEN8 QV-214 | "Model özeti SHA-256 = GML dosyası SHA-256 olmalı" | Mantık hatası — iki farklı şeyin özeti — CLAUDE8 D-6 |
+| QWEN8 QK91, QV-217 | "45 Dakika Challenge rekor tablosu" | Kapsam dışı — CLAUDE8 D-6 |
+
+**Bu hataların hepsi 9. turda düzeltilmiştir.** Bundan sonra Qwen, Qwen olarak konuşacaktır.
+
+---
+
+## 1. CLAUDE8 ve GEMINI9'un Satır Satır Denetimi
+
+### 1.1 CLAUDE8 Denetimi
+
+**Genel Değerlendirme:** CLAUDE8, 8. turun en disiplinli ve en kanıta dayalı belgesidir. 9 bağlayıcı direktif (D-1…D-9) kullanıcı adına verilmiş ve meşrudur. H8-1…H8-14 hükümlerinin tamamı ölçümle desteklenmiştir.
+
+**Kabul Ettiğim Hükümler:**
+
+| Hüküm | Karar | Gerekçe |
+|---|---|---|
+| H8-1 (GEMINI8 büyük ölçüde doğru) | ✅ | Şartname v3.4'ün ana omurga olarak kullanılabilir olduğunu ben de teyit ederim. |
+| H8-2 (Biçim C — 44/44 kat) | ✅ | N26 ölçümü çok değerli. Biçim C'nin (iki yatay Floor_, dikey kenar yok, duvarlar döşeme altından) 18 gerçek dosyada %100 çıkması, üretim profillerine C seçeneğinin eklenmesini zorunlu kılıyor. |
+| H8-3 (Ornek3 Biçim B, döşeme 100/150/300 mm) | ✅ | 200 mm'nin yalnız öneri olduğu ölçümle kanıtlandı. |
+| H8-4 (LoD2 ↔ oda açıklık 512/512 aynı) | ✅ | K46b "temsil birliği" kuralı üretim kuralı olarak doğrulandı. |
+| H8-5 (registeredFloorDefinition serbest metin) | ✅ | "3. Bodurm Kat" yazım hatasının kabul edilmesi, bu alanın serbest metin olduğunu kanıtlıyor. |
+| H8-6 (MAKS intAttribute) | ✅ | AS-21 sorumu geçersiz kıldı — haklı. |
+| H8-7 (V-198 her durumda BİLGİ) | ✅ | FUA5P9 ve GCZ6NB tam parsel kabul kanıtları tartışmasız. |
+| H8-8 (pay = 0 → UYARI) | ✅ | KMK m.3 ile uyumlu. |
+| H8-9 (K45c 10 mm'de kalır) | ✅ | 20/30 mm önerimin geri çekilmesi gerektiğini kabul ediyorum. |
+| H8-10 (Kanonik özete profil ayarları eklenmeli) | ✅ | Çok önemli bir mantık hatasını düzeltti. |
+| H8-11 (Gerekçeli susturma) | ✅ | UX açısından çok değerli. |
+| H8-12 (blockName ?? '-1' doğrudur) | ✅ | Q8-09 önerimin yanlış olduğunu kabul ediyorum. |
+| H8-13 (Tapu verileri otomatik üretilmez) | ✅ | Hukuki sorumluluk ilkesi. |
+| H8-14 (TKGM tek kodda çok GML kabul ediyor) | ✅ | Toplu ihraç mimarisi için kritik. |
+
+**§6.1 `verifyLandSharesBigIntV34` Kod İncelemesi:**
+
+Claude8'in kod incelemesinde belirttiği iki küçük eklemeyi ben de destekliyorum:
+
+1. **`quality` karşılaştırmasında `toLocaleUpperCase('tr-TR')` uygulanmalı:** ✅ Katılıyorum. "Konut" ile "KONUT" farklı BB sayılmamalı.
+2. **V-212 mesajı iki olasılığı birlikte söylemeli:** ✅ Katılıyorum. "Çok parçalı BB'de pay tutarsızlığı VEYA aynı numaralı iki ayrı BB (Ornek1 #41 vakası)" mesajı kullanıcıya net yönlendirme sağlar.
+
+**Küçük Bir Düzeltme Önerim:** CLAUDE8 §3'teki tabloda `V-210` için "Her GML tek bina içerdiği için DeepSeek'in 'bina bazında' düzeltmesiyle aynı şey" yazıyor. Bu doğru, ama V-210'un tetikleyicisi `CityModel` içindeki toplam `BLKN_ + TRS_` sayısıdır (GEMINI9 §2.3'te kanıtlandığı gibi). Yani teknik olarak "bina bazında" değil "CityModel bazında" demek daha doğru. Ancak pratikte fark yok çünkü her GML tek bina içeriyor.
+
+### 1.2 GEMINI9 Denetimi
+
+**Genel Değerlendirme:** GEMINI9, Şartname v3.5'i dondurmuş ve M0 iş paketini kodlamaya hazır hale getirmiştir. 18 somut kullanıcı kolaylaştırıcı çözüm (KOLAY-01…KOLAY-18) kullanıcının 9. tur talimatına mükemmel yanıt vermiştir.
+
+**Kabul Ettiğim Maddeler:**
+
+| Madde | Karar | Gerekçe |
+|---|---|---|
+| §3.1 Biçim A/B/C tanımları | ✅ | N26 ölçümüyle tam uyumlu. |
+| §3.2 Üretim profilleri (TKGM-Örnek-A10, TKGM-Örnek-B50, Saha-2026-C50) | ✅ | Üç profil de gerçek dosyalarda var. |
+| §5.1 Kural tablosu (K01–K91) | ✅ | K87 (registeredFloorDefinition serbest metin), K88 (tapu verileri otomatik üretilmez), K89 (kanonik özet + profil), K90 (gerekçeli susturma), K91 (sıfır otomatik TKGM isteği) hepsi doğru. |
+| §5.2 V-kural tablosu (V-001–V-214) | ✅ | V-213 (aynı parselde MAKS tekrarı) ve V-214 (Helmert ölçek sapması) yeni ve değerli. |
+| §6.1 M0 dosya ağacı | ✅ | `src/core/types/`, `src/core/codelists/`, `src/core/math/`, `src/core/privacy/`, `src/core/fixtures/` yapısı temiz ve modüler. |
+| §6.2 OpeningType ve SectionPart veri modeli | ✅ | `gmlObjectKind: 'Door' | 'Window'` ile `usageCode` ayrımı doğru (AS-11 için gerekli). |
+| §6.3 `verifyLandSharesBigIntV35` | ✅ | K75 rev4, K84, V-198, V-198a, V-212 rev hepsi doğru uygulanmış. |
+| §6.4 M0 kabul ölçütleri ve test fikstürleri | ✅ | 5 fikstür de kritik edge-case'leri kapsıyor. |
+| KOLAY-01…KOLAY-18 | ✅ | Kullanıcı talimatına mükemmel yanıt. Özellikle KOLAY-02 (Tip Kat Çoğaltıcı), KOLAY-03 (Akıllı Excel Yapıştırıcı), KOLAY-07 (BB Boya Fırçası), KOLAY-12 (Çok Bloklu Site Yöneticisi) ve KOLAY-14 (TKGM Simülatörü) sahada en çok zaman kazandıracak araçlar. |
+
+**Küçük Bir Düzeltme Önerim:** GEMINI9 §6.3'teki `verifyLandSharesBigIntV35` fonksiyonunda `normalizeTurkishText` fonksiyonu `trim()` ve `replace(/\s+/g, ' ')` yapıyor ama `toLocaleUpperCase('tr-TR')` çağrısı var. Bu doğru. Ancak `registeredQuality` alanındaki "41 NOLU DAİREYE AİT DEPO" gibi uzun metinlerde `normalize` işlemi, Ornek1 #41 vakasında depo ve konut kaydının farklı BB sayılmasını sağlamalı. Kodda bu zaten `fullIdentityKey = baseKey + cleanLot + normQuality` ile yapılıyor — doğru.
+
+**Bir Soru İşareti:** GEMINI9 §3.2'deki `SAHA_2026_C50` profili `doorObjectStartsAtFloor: true` ile kapı nesnesini 0 mm'den başlatıyor. Bu, 18 gerçek 2026 dosyasındaki stile uyuyor. Ama bu profilin `doorHoleBottomOffsetMm: 50` olması, duvardaki deliğin +50 mm'den başladığı anlamına geliyor. Yani bu profilde kapı nesnesi ile delik arasında 50 mm fark olacak. V-208 (BİLGİ) bu durumu raporlayacak. Bu tutarlı, ama kullanıcıya "Bu profil TKGM örnekleriyle uyumsuzdur, gerçek saha stili" açıklaması gösterilmeli.
+
+---
+
+## 2. EVRENSEL SORU YANITLAMA (D-3)
+
+### 2.1 Claude8'in §6.1'de Gemini'ye Yöneltilen 5 Ortak Soruya Yanıtlarım
+
+**S1 — Çok bloklu parsel yönetimi:**
+
+Gemini9'un KOLAY-12'si ve Claude8'in §6.1 S1'i doğru. Benim ekleyeceğim 3 nokta:
+
+1. **Blok bazlı ilerleme çubuğu:** 10 bloklu sitede her bloğun tamamlanma yüzdesi ayrı gösterilmeli. "A Bloku %100 ✓, B Bloku %60, C Bloku %0" gibi. Kullanıcı hangi bloka odaklanacağını seçer.
+2. **Tip blok kopyada MAKS no kopyalanmaz:** Claude8 H8-13 ile uyumlu. Ancak kullanıcıya "A bloğunun MAKS no'larını B bloğuna kopyala" butonu **sunulmamalı** (çünkü MAKS no'lar tapu kayıtlıdır ve bloka özeldir). Yalnız geometri, oda, açıklık ve kullanım kodları kopyalanır.
+3. **Toplu ihraçta dosya adı standardı:** `M-<TaşınmazKimlik>-A.gml` … `M-<TaşınmazKimlik>-J.gml` formatı otomatik uygulanır. Blok harfi sıralaması, aplikasyon noktalarının saat yönündeki sırasına göre otomatik verilir (Kılavuz Madde 7).
+
+**S2 — 3B'de düzenleme mi, 2B'de mi?**
+
+Claude8'in yanıtıyla %100 hemfikirim: **2B'de düzenle, 3B'de incele.** 3B'de yalnız Z ekseni düzenlemesi olsun (tıklama + sayısal giriş). Sürükleme varsa 10 mm adımlı snap olsun.
+
+Benim eklemem: 3B'de Z düzenlemesi yapıldığında, 2B'deki karşılığı ve kot tablosu aynı undo adımıyla güncellenmeli. Yani kullanıcı "Geri Al" dediğinde her ikisi de geri alınır.
+
+**S3 — Önizleme ekranındaki çapraz kontroller:**
+
+Gemini9 KOLAY-14 ve Claude8 §6.1 S3 doğru. Benim eklemem:
+
+- **(f) `elevatorCount` kontrolü:** 5+ katlı binalarda asansör yoksa BİLGİ verilmeli (İmar Yönetmeliği değil, ama TKGM sunucusu bu bilgiyi gösteriyor).
+- **(g) `storeysAboveGround` + `storeysBelowGround` toplamı:** Kat sayısıyla eşleşmeli. Eşleşmezse UYARI.
+- **(h) `roofProjectionArea` ile `footprintArea` karşılaştırması:** Çatı izdüşümü, taban alanından küçük olamaz. Küçükse HATA (geometri hatası).
+
+**S4 — Depo/eklenti modelleme:**
+
+Claude8'in yanıtı doğru: Yön veren tek kaynak liste beyandır. Benim eklemem:
+
+- **Sihirbazın ilk sorusu:** "Bu depo liste beyanda nasıl geçiyor?" olmalı. Üç seçenek:
+  - (a) Kendi BB numarası ve arsa payıyla → Ayrı BB
+  - (b) Bir dairenin eklentisi olarak → Ana BB'nin `registeredInstallation` alanına yazılır
+  - (c) Ortak alan olarak → OA (`commonAreaUsage` 1030 Depo)
+- **Ornek1 #41 vakası için özel not:** Eğer (a) seçildiyse ve BB numarası başka bir BB'ninkiyle çakışıyorsa, V-212 UYARI ve "TAPU KAYDI BÖYLE" gerekçeli susturma (K90) önerisi sunulmalı.
+
+**S5 — Zorunlu giriş / varsayılan:**
+
+Claude8'in sınıflandırması doğru. Benim eklemem:
+
+- **Tapuya geçen değerler (zorunlu, varsayılan alamaz):** Taşınmaz kimlik, blok, BB no, arsa payı, nitelik, eklenti, kat tanımı, MAKS no'ları, onay tarihi, işlem tipi, EPSG.
+- **Kesitten gelen ölçüler (ilk girişte zorunlu, sonra önerilir):** Kat yüksekliği, döşeme kalınlığı, kapı/pencere tipleri.
+- **Sabit kod değerleri (kilitli, sessiz):** buildingType 1001, geometrySuitability 1006, maksIntegrationState 1003, tenderRegistrationNumber "", architecturalPlanID "".
+- **Biçim tercihleri (sessiz varsayılan):** posList, 3 hane, profil (TKGM-Örnek-A10).
+
+### 2.2 DeepSeek8'in D8-S1…S5 Sorularına Yanıtlarım
+
+**S1 (V-198 iki düzeyli yapı mı, her durumda BİLGİ mi?):**
+
+**Her durumda BİLGİ** (CLAUDE8 H8-7 ile hemfikirim). FUA5P9 ve GCZ6NB tam parsel kabul kanıtları tartışmasız. Asıl kontrol V-197'dir (BB bazında liste beyan eşitliği).
+
+**S2 (K45c üretim hedefi 10/20/30 mm):**
+
+**10 mm** (CLAUDE8 H8-9 ile hemfikirim). Açıklığın yeri onaylı projeden gelir. 30 mm kural olursa, projede duvar köşesine 15 mm yakın çizilmiş bir pencere kaydırılmak zorunda kalır.
+
+**S3 (registeredQuality sondaki boşluk):**
+
+**(a) İçe aktarmada BİLGİ, yeni üretimde otomatik trim() + toLocaleUpperCase('tr-TR')**. CLAUDE7 R7-06 kanıtıyla uyumlu.
+
+**S4 (Tek Daire Odak Modu için kat sınırı):**
+
+**(c) Tüm kat soluk (%15 opaklık, etiketsiz, seçilemez) + odaklanan BB tam renkli** (DeepSeek8'in kendi önerisiyle hemfikirim). Yön bulma için kat bütünü gerekir.
+
+**S5 (registeredFloorDefinition büyük harf mi, liste beyandan aynen mi?):**
+
+**(c) Liste beyandan aynen** (CLAUDE8 N28 ile hemfikirim). TKGM yazım hatasını bile kabul ediyor ("3. Bodurm Kat").
+
+### 2.3 Gemini9'un Bana Yöneltilen Göreve Yanıtım
+
+**Görev (CLAUDE8 §8 tablosu):** "İlk paragraf D-1 onay cümlesi. Sonra yalnız M0 test fikstürü önerileri: Ornek1 #41, Ornek3 'Bodurm', boşluklu propertyLot, Biçim A/B/C örnek katlar."
+
+**Yanıtım:** §3'te detaylı olarak sunuyorum.
+
+---
+
+## 3. M0 TEST FİKSTÜRÜ ÖNERİLERİ (Claude8'in Görevi)
+
+GEMINI9 §6.4'teki 5 fikstüre ek olarak, M0'ın kabul testini daha sağlam hale getirecek **10 ek test fikstürü** öneriyorum:
+
+### Fikstür 6 — Ornek3 "3. Bodurm Kat" Yazım Hatası (K87 Testi)
+
+**Girdi:**
+```typescript
+const items = [
+  { id: "BB_1", blockName: "A", entrance: "", bbNo: "1", 
+    propertyLot: "100/1000", registeredQuality: "MESKEN",
+    registeredFloorDefinition: "3. Bodurm Kat" }, // yazım hatası
+  { id: "BB_2", blockName: "A", entrance: "", bbNo: "2",
+    propertyLot: "200/1000", registeredQuality: "MESKEN",
+    registeredFloorDefinition: "3.Bodrum Kat" }, // çift boşluk yok ama nokta bitişik
+  { id: "BB_3", blockName: "A", entrance: "", bbNo: "3",
+    propertyLot: "300/1000", registeredQuality: "MESKEN",
+    registeredFloorDefinition: "3. Bodrum  Kat" }, // çift boşluk
+];
+```
+
+**Beklenen Çıktı:**
+- `registeredFloorDefinition` değerleri olduğu gibi korunur (K87: serbest metin, liste beyandan aynen).
+- Liste beyanla karşılaştırmada (V-197): Eğer liste beyanda "3. Bodrum Kat" (doğru yazım) varsa, BB_1 için UYARI ("Kat tanımı liste beyanla uyuşmuyor: '3. Bodurm Kat' vs '3. Bodrum Kat' — yazım hatası olabilir"), BB_2 ve BB_3 için BİLGİ ("Kat tanımı normalize edildi: '3.Bodrum Kat' → '3. Bodrum Kat'").
+
+**Amaç:** K87 kuralının serbest metin korumasını ve V-197'nin yazım hatası tespitini test eder.
+
+### Fikstür 7 — Biçim A/B/C Kat Geometrisi (K55 rev Testi)
+
+**Girdi:**
+```typescript
+const storeyA = {
+  style: 'A',
+  slabThicknessMm: 0, // Biçim A'da geometride görünmez
+  floorPolygons: [
+    { id: "Floor_1", z: 1096100, isHorizontal: true } // tek yatay
+  ],
+  wallBottomZ: 1096100 // duvarlar döşeme üstünden başlar (zFloorTop = zFloorBottom)
+};
+
+const storeyB = {
+  style: 'B',
+  slabThicknessMm: 300,
+  floorPolygons: [
+    { id: "Floor_2", z: 1096100, isHorizontal: true }, // alt yatay
+    { id: "Floor_3", z: 1096400, isHorizontal: true }, // üst yatay
+    { id: "Floor_4", z: 1096100, isVertical: true } // dikey kenar
+  ],
+  wallBottomZ: 1096400 // duvarlar döşeme üstünden başlar
+};
+
+const storeyC = {
+  style: 'C',
+  slabThicknessMm: 150,
+  floorPolygons: [
+    { id: "Floor_5", z: 1096100, isHorizontal: true }, // alt yatay
+    { id: "Floor_6", z: 1096250, isHorizontal: true } // üst yatay
+    // dikey kenar YOK
+  ],
+  wallBottomZ: 1096100 // duvarlar döşeme ALTINDAN başlar
+};
+```
+
+**Beklenen Çıktı:**
+- Biçim A: 1 Floor_, wallBottomZ = zFloorTop
+- Biçim B: 3 Floor_ (alt + üst + dikey), wallBottomZ = zFloorTop
+- Biçim C: 2 Floor_ (alt + üst, dikey yok), wallBottomZ = zFloorBottom
+
+**Amaç:** K55 rev kuralının üç biçimi de doğru üretmesini test eder.
+
+### Fikstür 8 — Kapı Nesnesi vs Delik Kot Farkı (K45 rev3, V-208 Testi)
+
+**Girdi:**
+```typescript
+const profile_Saha2026_C50 = {
+  doorHoleBottomOffsetMm: 50,
+  doorObjectStartsAtFloor: true
+};
+
+const door = {
+  zFloorTop: 1096100,
+  doorHeight: 2100
+};
+```
+
+**Beklenen Çıktı:**
+- Delik alt kotu: 1096100 + 50 = 1096150 mm
+- Delik üst kotu: 1096100 + 2100 = 1098200 mm
+- Kapı nesnesi alt kotu: 1096100 mm (0 mm, zFloorTop'tan başlar)
+- Kapı nesnesi üst kotu: 1096100 + 2100 = 1098200 mm
+- V-208: BİLGİ ("Kapı nesnesi ile delik arasında 50 mm kot farkı var — Saha-2026-C50 profili")
+
+**Amaç:** K45 rev3 ve V-208'in doğru çalıştığını test eder.
+
+### Fikstür 9 — Aynı Parselde blockName = -1 Tutarsızlığı (V-209 Testi)
+
+**Girdi:**
+```typescript
+const blocks = [
+  { blockName: "A", constructionId: "12345-A" },
+  { blockName: "B", constructionId: "12345-B" },
+  { blockName: "-1", constructionId: "12345--1" } // tutarsız
+];
+```
+
+**Beklenen Çıktı:**
+- V-209: UYARI ("Aynı parselde bazı bloklar harfli (A, B), bir blok -1 kullanılmış. Blok adlandırma tutarlı değil.")
+
+**Amaç:** V-209 kuralının çalıştığını test eder.
+
+### Fikstür 10 — MAKS Kat No Eşleşme Kontrolü (V-211 Testi)
+
+**Girdi:**
+```typescript
+const gmlStoreyNumber = -1;
+const maksKatNo = "Z"; // MAKS bodrumu "Z" olarak tutuyor (yanlış)
+```
+
+**Beklenen Çıktı:**
+- V-211: UYARI ("GML storeyNumber (-1) ile MAKS KatNo (Z) eşleşmiyor. Beklenen: B veya BODRUM. MAKS kaydını kontrol edin.")
+
+**Amaç:** V-211 ve K82 eşleme tablosunun çalıştığını test eder.
+
+### Fikstür 11 — Helmert Ölçek Sapması (V-214 Testi)
+
+**Girdi:**
+```typescript
+const applicationPoints = [
+  { local: { y: 0, x: 0 }, turef: { y: 452310.45, x: 4412890.12 } },
+  { local: { y: 10000, x: 0 }, turef: { y: 452311.45, x: 4412890.12 } }, // 10 m'de 1 m sapma
+  { local: { y: 0, x: 10000 }, turef: { y: 452310.45, x: 4412891.12 } },
+  { local: { y: 10000, x: 10000 }, turef: { y: 452311.45, x: 4412891.12 } }
+];
+```
+
+**Beklenen Çıktı:**
+- Helmert dönüşümü: ölçek faktörü = 1.0001 (100 ppm sapma)
+- V-214: UYARI ("Helmert dönüşümünde ölçek faktörü 1.0'dan 100 ppm saptı. Aplikasyon noktalarını kontrol edin.")
+
+**Amaç:** V-214 kuralının çalıştığını test eder.
+
+### Fikstür 12 — Çok Parçalı BB'de Net/Brüt Farkı (V-198b Testi)
+
+**Girdi:**
+```typescript
+const sectionParts = [
+  { id: "BB_1_Part1", bbKey: "A||1", propertyLot: "100/1000", 
+    registeredQuality: "MESKEN", netArea: 85.50, grossArea: 100.00, 
+    partUsage: 1001, storey: "ZEMİN" },
+  { id: "BB_1_Part2", bbKey: "A||1", propertyLot: "100/1000",
+    registeredQuality: "MESKEN", netArea: -1.00, grossArea: -1.00, // minusOne profili
+    partUsage: 1003, storey: "KAT 1" }
+];
+```
+
+**Beklenen Çıktı:**
+- V-198b: BİLGİ ("Çok parçalı BB'de ikincil parçada net/brüt alan -1.00 — 'minusOne' yazım profili kullanılıyor.")
+- UYARI üretilmez (çünkü propertyLot ve registeredQuality aynı).
+
+**Amaç:** V-198b'nin net/brüt farkında BİLGİ, propertyLot/nitelik farkında UYARI verdiğini test eder.
+
+### Fikstür 13 — Kanonik Özet Profil Değişikliği (K89 Testi)
+
+**Girdi:**
+```typescript
+const model = { /* aynı geometri */ };
+const profile1 = { storeyStyle: 'A', doorSillOffset: 10 };
+const profile2 = { storeyStyle: 'C', doorSillOffset: 50 };
+```
+
+**Beklenen Çıktı:**
+- `computeCanonicalModelHash(model, profile1)` ≠ `computeCanonicalModelHash(model, profile2)`
+- Kamera açısı değiştiğinde özet değişmez (WorkspaceUiState hariç).
+
+**Amaç:** K89 kuralının çalıştığını test eder.
+
+### Fikstür 14 — Kişisel Veri Silici (K83 Testi)
+
+**Girdi:**
+```typescript
+const tkgmResponse = {
+  validationCodeNumber: "ABC123",
+  sender: {
+    name: "Ayşe Yılmaz",
+    tcNo: "12345678901",
+    phone: "05321234567",
+    email: "ayse@example.com"
+  },
+  architecturalBuildingList: [ /* ... */ ]
+};
+```
+
+**Beklenen Çıktı:**
+- `stripPersonalData(tkgmResponse)` çağrıldıktan sonra `sender` alanı tamamen silinmiş olmalı.
+- `tkgmResponse.sender` = `undefined`
+
+**Amaç:** K83 ve K91 kuralının çalıştığını test eder.
+
+### Fikstür 15 — Deterministik GML Yazımı (CI Regresyon Testi)
+
+**Girdi:**
+```typescript
+const model = { /* Ornek6 tasarım modeli */ };
+const profile = OFFICIAL_PROFILES.TKGM_ORNEK_A10;
+```
+
+**Beklenen Çıktı:**
+- `writeGml(model, profile)` iki kez çağrıldığında, çıkan bayt dizileri birebir aynı olmalı.
+- `SHA256(writeGml(model, profile))` === `SHA256(writeGml(model, profile))`
+
+**Amaç:** Deterministik yazıcı ve kanonik özet tutarlılığını test eder.
+
+---
+
+## 4. SON KULLANICININ İŞİNİ KOLAYLAŞTIRACAK EK ÇÖZÜMLER (Kullanıcı Talimatı)
+
+Kullanıcının 9. tur talimatı: *"EK OLARAK SON KULLANICININ İŞİNİ KOLAYLAŞTIRACAK ÇÖZÜM ÖNERİLERİ ÜRETİN."*
+
+GEMINI9'un KOLAY-01…KOLAY-18 önerileri mükemmel. Ben de bunlara ek olarak **7 yeni öneri (KOLAY-19…KOLAY-25)** sunuyorum:
+
+### KOLAY-19 — "Tek Tıkla TKGM Hata Kataloğu Arama" (F4 Gelişmiş)
+
+**Sorun:** Kullanıcı TKGM'den "LK_ISGeometrySuitability" gibi anlaşılmaz bir hata kodu aldığında, Kılavuz'da bu kodun ne anlama geldiğini bulmak için 300 sayfalık PDF'te arama yapar.
+
+**Çözüm:** Hata konsolundaki her hata kodunun yanında küçük bir `?` ikonu bulunur. Tıklandığında:
+- Hatanın Türkçe açıklaması (2 cümle)
+- Hangi nesnede olduğu (Kat 2 → BB 5 → Salon)
+- Nasıl düzeltileceği (3 adımlı rehber)
+- İlgili Kılavuz sayfasına bağlantı
+
+Ayrıca üst barda arama kutusu olur: Kullanıcı "LK_IS" yazar, tüm hata kodları listelenir.
+
+### KOLAY-20 — "Otomatik Döşeme Kalınlığı Önerisi" (Mimari Kesit Okuma)
+
+**Sorun:** Kullanıcı her katın döşeme kalınlığını mimari kesitten okumak zorunda kalır. 10 katlı binada 10 farklı döşeme kalınlığı olabilir.
+
+**Çözüm:** Kullanıcı mimari kesit PDF'ini (veya taranmış görüntüyü) yükler. Uygulama:
+- OCR ile kat kotlarını okur (±0.00, +2.90, +5.80 vb.)
+- Döşeme kalınlıklarını otomatik tespit eder (iki kat kotu arasındaki fark — kat yüksekliği)
+- Kullanıcıya "Kat 1 döşeme kalınlığı 15 cm, Kat 2 döşeme kalınlığı 15 cm, Kat 3 döşeme kalınlığı 20 cm" önerisi sunar
+- Kullanıcı onaylarsa kot tablosu otomatik doldurulur
+
+**Not:** OCR %100 doğru değil, kullanıcı onayı zorunlu.
+
+### KOLAY-21 — "BAĞIMSIZ BÖLÜM NUMARASI OTO-KONTROL" (Çakışma Önleyici)
+
+**Sorun:** Kullanıcı 30 daireli bir binada BB numaralarını elle girerken, yanlışlıkla iki daireye aynı numarayı verebilir (örn. iki "5 nolu daire").
+
+**Çözüm:** Kullanıcı BB numarası girdiğinde:
+- Eğer bu numara başka bir BB'de varsa, anında kırmızı uyarı: "⚠️ Bu bağımsız bölüm numarası (5) zaten kullanımda (Kat 2, Daire 5). Farklı numara girin veya Ornek1 #41 vakası gibi aynı numarayı kullanmak istiyorsanız 'TAPU KAYDI BÖYLE' gerekçesini yazın."
+- Otomatik öneri: "Kullanılmayan en küçük numara: 31"
+
+**Not:** Ornek1 #41 vakasında olduğu gibi, tapu kaydında aynı numara olabilir. Bu durumda K90 (gerekçeli susturma) devreye girer.
+
+### KOLAY-22 — "KAPALI ODA BULMA SIHIRBAZI" (DXF'te Oda Yoksa)
+
+**Sorun:** DXF'te bazı odalar kapalı poligon olarak çizilmemiş (çizgiler aralarında 2-3 mm boşluk var). Yol A (ClipperOffset) bu odaları bulamaz.
+
+**Çözüm:** Kullanıcı "Kapalı Oda Bul" butonuna basar. Uygulama:
+- 5 mm toleransla tüm çizgi uçlarını kenetler (snap)
+- Clipper2 Union ile kapalı poligonları çıkarır
+- Bulunan odaları kullanıcıya gösterir: "12 oda bulundu, 3 oda şüpheli (alan < 1 m²)"
+- Kullanıcı onaylarsa odalar modele eklenir
+
+**Not:** Bu, G7-EK3 köşe kurtarma ile birlikte çalışır.
+
+### KOLAY-23 — "PARSEL SINIRI KONTROLÜ" (V-196 Gelişmiş)
+
+**Sorun:** Kullanıcı binayı parsel içine çizdiğinden emin olmak istiyor, ama parsel sınırını yüklememiş.
+
+**Çözüm:** Kullanıcı parsel sınırını (KML veya TKGM'den indirilen GML) yükler. Uygulama:
+- Binanın tabanını (LoD0 FootPrint) parsel sınırıyla karşılaştırır
+- Eğer bina parsel dışına taşıyorsa, kırmızı uyarı: "⚠️ Bina parsel sınırının dışında (X m² taşma). Yapı Aplikasyon Projesi'ni kontrol edin."
+- 3B sahnede parsel sınırı yeşil çizgi, bina tabanı kırmızı çizgi ile gösterilir
+
+**Not:** V-196 kuralı zaten var, ama bu görsel kontrol kullanıcıya daha net bilgi verir.
+
+### KOLAY-24 — "OTOMATİK YAPI ÖZET FORMU" (F1 Gelişmiş)
+
+**Sorun:** Kullanıcı Yapı Özet Formu'nu manuel doldurmak zorunda kalır (kat adedi, BB adedi, asansör sayısı vb.).
+
+**Çözüm:** Kullanıcı "Yapı Özet Formu Oluştur" butonuna basar. Uygulama:
+- Modelden otomatik olarak tüm alanları doldurur:
+  - Kat adedi (storeysAboveGround + storeysBelowGround)
+  - BB adedi (benzersiz BB no sayısı)
+  - Asansör sayısı (İç Mekan Asansör BBKIY_ sayısı)
+  - Balkon sayısı (BLKN_ sayısı)
+  - Toplam net alan (tüm BBK_ calculatedArea toplamı)
+  - Toplam brüt alan (tüm BB independentSectionPlanGrossArea toplamı)
+- Kullanıcıya önizleme gösterir
+- Kullanıcı onaylarsa PDF olarak indirilir
+
+**Not:** Bu, GEMINI9 KOLAY-14 (TKGM Simülatörü) ile entegre çalışır.
+
+### KOLAY-25 — "ÇOKLU DİL DESTEĞİ" (Türkçe / İngilizce)
+
+**Sorun:** Yabancı harita mühendisleri veya uluslararası bürolar Türkçe arayüzü kullanmakta zorlanıyor.
+
+**Çözüm:** Ayarlarda dil seçimi:
+- Türkçe (varsayılan)
+- İngilizce
+
+Tüm arayüz metinleri, hata mesajları, yardım balonları seçilen dile çevrilir. GML çıktısı her zaman Türkçe (TKGM standardı).
+
+**Not:** v1'de yalnız Türkçe, v2'de İngilizce eklenebilir.
+
+---
+
+## 5. GERİ ALINAN ÖNERİLERİMİN LİSTESİ (D-6 Kapsam Dondurma)
+
+Aşağıdaki önerilerimi D-6 direktifi gereği **resmen geri alıyorum**:
+
+| Kod | Öneri | Neden Geri Alındı |
+|---|---|---|
+| QK91 | "45 Dakika Challenge" rekor tablosu | Profesyonel tapu-kadastro aracının kural kataloğuna girmez |
+| QV-214 | Model özeti SHA-256 = GML dosyası SHA-256 | Mantık hatası — iki farklı şeyin özeti |
+| QV-217 | Her adımda konfeti animasyonu | Kapsam dışı |
+| QV-218 | Renk körlüğü doğrulama kuralı | UX ilkesi olarak kalır, kural olarak değil |
+| Q8-09 | `blockName ?? ''` önerisi | Yanlış — Kılavuz Madde 8: blok adı yoksa `-1` |
+| Q8-01.1 | Depoya otomatik yeni BB numarası ata | H8-13: Tapu verileri otomatik üretilmez |
+| Q8-04 | Tip blok kopyada arsa payını eşit böl | H8-13: Tapu verileri otomatik üretilmez |
+
+Bu öneriler Şartname v3.5'e **girmez**.
+
+---
+
+## 6. 10. TUR İÇİN NOTLAR VE PROCEED KARARI
+
+### 6.1 Şartname v3.5 Durumu
+
+GEMINI9 ile Şartname v3.5 dondurulmuştur. K01–K91 kuralları ve V-001–V-214 doğrulama kuralları kesindir. Bundan sonra:
+- Yeni K/V kuralı yalnız yeni kanıtla (ret kodu, yeni üretici, resmi metin) eklenebilir.
+- Ürün dışı fikirler reddedilir.
+
+### 6.2 M0 İş Paketi Durumu
+
+GEMINI9 §6'daki M0 iş paketi kodlamaya hazırdır. Benim eklediğim 10 test fikstürü (Fikstür 6–15) de M0'ın kabul testine eklenmelidir.
+
+### 6.3 Açık Sorular (Hâlâ Devam Eden)
+
+| Kod | Soru | Durum |
+|---|---|---|
+| AS-16 | Ret almış doğrulama kodları | 🔴 Hâlâ açık — en değerli tek veri |
+| AS-17 | Başka bürodan / yazılımdan kabul kodları | 🟡 Açık — örneklem yanlılığını kırar |
+| AS-18 | TKGM PDF Rapor çıktısı | 🟡 Açık — Yapı Özet Formu şablonu için |
+| AS-19 | Onaylı mimari proje kesiti + liste beyan | 🟡 Açık — uçtan uca doğrulama için |
+
+### 6.4 Proceed Kararı
+
+**M0–M10 YEŞİL (PROCEED).** Kullanıcı "TAMAM" dediğinde M0'dan başlanabilir.
+
+**Benim 10. Turdan Beklentim:**
+- Kullanıcıdan ret kodu (AS-16) gelirse, hangi kuralların gerçekten HATA olduğunu göreceğiz.
+- M0 kodlaması başladığında, test fikstürlerimin hepsi geçmeli.
+- KOLAY-19…KOLAY-25 önerilerim M4 (2B CAD) ve M7 (DXF Yol A) aşamalarında değerlendirilebilir.
+
+---
+
+## 7. DİĞER YAPAY ZEKALARA 10. TUR NOTLARI
+
+**Gemini'ye:** GEMINI9 mükemmel bir sentez. KOLAY-01…KOLAY-18 önerilerin hepsi değerli. Benim KOLAY-19…KOLAY-25 önerilerimi de plana eklersen sevinirim.
+
+**DeepSeek'e:** D8-H4 ↔ D8-H9 çelişkisini CLAUDE8 H8-7 ile kapattın. 10. turda M0 iş paketinin kodlamaya başladığında, `verifyLandSharesBigIntV35` fonksiyonunun tüm test fikstürlerini (GEMINI9 §6.4 + benim §3'teki 10 fikstür) geçmesini sağla.
+
+**ChatGPT'e:** 6., 7., 8. tur dosyaların gelmedi. 9. turda GEMINI9 + CLAUDE8 üzerinden v3.5 denetimi yapabilirsin.
+
+**Grok'a:** 7. ve 8. tur dosyaların gelmedi. 9. turda GEMINI9 + CLAUDE8 üzerinden v3.5 denetimi yapabilirsin.
+
+**Claude'a:** CLAUDE8 çok güçlü bir belge. D-1…D-9 direktiflerin kullanıcı adına verilmiş ve meşru. 10. turda M0 kodlamasının başladığında, benim test fikstürlerimin hepsinin geçtiğini teyit et.
+
+---
+
+**Belge sonu — `QWEN9.MD` (08.11.2026, 02:45).**
+
+**Kullanıcı "Proceed / TAMAM" dediğinde M0 → M1 → M2 → M3 → M3.5 kodlamasına başlanacaktır.**
+```

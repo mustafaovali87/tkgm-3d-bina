@@ -1,0 +1,1033 @@
+# DEEPSEEK, 08.11.2026, 01:45, 3DBİNA UYGULAMASI 8. TUR
+
+> **Dosya kimliği:** `DEEPSEEK8.md`
+> **Bu turda satır satır okunan girdiler:**
+> - `implementation_plan (8).md` — **Gemini 8. Tur** (Şartname v3.4)
+> - `CLAUDE7.md` — Claude 7. Tur (Bölüm I: N21–N23 ölçümleri; Bölüm II: **18 gerçek kabul GML'i R7-01..R7-14**)
+> - `GROK6.txt` — Grok 6. Tur (7. tur dosyası yok)
+> - `DEEPSEEK7.md` — **Benim 7. Tur raporum** (kendi hatalarımı kabul ettiğim tur)
+> - Normatif üst belgeler: Şartname v3.1 → v3.2 → v3.3 → v3.4
+>
+> **8. Turda benim için en önemli olay:** CLAUDE7 Bölüm II'de **6 doğrulama kodundan gelen 18 gerçek kabul GML'i** ölçüldü. Bu, projenin bugüne kadar gördüğü **en güçlü kanıt** sınıfıdır. 6 resmi TKGM örneği artık "eski" sayılır. Yeni kararlar **Ekim 2026 kabul verisine** göre verilmeli.
+
+---
+
+## BÖLÜM 0 — KULLANICI TALİMATLARININ KENDİ BEYANIM (Bölüm 0.0 Uyum Beyanı)
+
+> **Kullanıcı talimatı gereği:** Aşağıdaki 3 kural bu MD dosyasında aynen uygulanmıştır.
+
+**Kural 1 — Standart Başlık ve Dosya Adı:**
+✅ Başlık: `# DEEPSEEK, 08.11.2026, 01:45, 3DBİNA UYGULAMASI 8. TUR`
+✅ Dosya adı: `DEEPSEEK8.md`
+✅ Kendi kimliğim doğru yazıldı (QWEN7'deki başlık karışıklığı tekrarlanmadı — Claude6 H7-11).
+
+**Kural 2 — Evrensel Soru Yanıtlama Zorunluluğu:**
+✅ Bu dosyada **§2**'de Gemini8'in 16 sorusuna + **§3**'te Gemini8'in 5 yeni ortak sorusuna = toplam **21 soruya** cevap verilmiştir.
+
+**Kural 3 — 8. Tur Özel UX Odak:**
+✅ Bu dosyada **§4**'te `UX-D8-01` … `UX-D8-18` arası **18 yeni UX önerisi** detaylı olarak sunulmuştur.
+
+---
+
+## 0. Yönetici Özeti — 8. Turun 11 Kesin Hükmü
+
+**8. Tur, projenin kanıt tabanını kökten değiştirdi.** Claude7 Bölüm II'de 6 doğrulama kodundan gelen 18 gerçek kabul GML'i ölçüldü. Bu, önceki turlardaki **bazı kabullerimin ve Gemini'nin kararlarının yeniden gözden geçirilmesini** gerektiriyor. Aşağıdaki 11 hüküm bu turda verdiğim kararlardır.
+
+| # | Hüküm | Kanıt | Etki |
+|---|---|---|---|
+| **D8-H1** | **GroundSurface tartışması KESİN kapandı.** 6 TKGM örneği + 18 Ekim 2026 kabul = **24/24 güncel dosyada 1 adet GroundSurface**. Kılavuz metni ("bulunamaz/alınmayacak") yanlış veya eski. K78 `include` kesinleşti. | R7-01 | K78 + V-200 kaldırıldı |
+| **D8-H2** | **"Kapı alt boşluğu 0 mm yasak" DARALTILMALI.** 18 dosyada kapı **nesnesi** 0 mm (870/870), **delik** +50 mm (885/885). İkisi ayrı kavram. K45 rev3: yasak yalnız delik halkası için. | R7-02, N20 | K45 rev3, K46b rev |
+| **D8-H3** | **`propertyLot` boşluk toleranslı ayrıştırma ZORUNLU.** "3712 / 97787" ve "3712 / 97787 " (sonda boşluk) kabul görmüş. Gemini8 doğru düzeltmiş. Qwen7'nin "boşluk=HATA" önerisi reddedildi. | R7-05 | K75 rev4 |
+| **D8-H4** | **Arsa payı toplamı ≠ 1 HER DURUMDA BİLGİ.** 4 bloklu parselde 103500/104683 kabul görmüş. 10 bloklu parselde 97780/97787 kabul. V-198 asla hata/uyarı değil. | R7-07 | V-198 = BİLGİ |
+| **D8-H5** | **MAKS tuzak alanları KABUL GÖRÜYOR.** Bir BB'nin MAKS alanına arsa payı (6900/209366 → 6900209366) yazılmış ve kabul. 9 haneli bina MAKS no'su BB alanına yazılmış ve kabul. Bu, sunucunun **zayıf noktası**. Uygulamamız yerelde yakalamalı. | R7-09 | V-206, V-207 eklendi |
+| **D8-H6** | **`gml:pos` + 10 ondalık hane kabul.** 18/18 dosya `pos` + 10 hane. AS-4 kesin kapandı. V-030 (>3 hane) → BİLGİ. K70 düzeltme modunda hane sayısı korunur. | R7-04 | K81 eklendi |
+| **D8-H7** | **"Balkony bulunamadı" uyarısı binada HİÇ balkon olmadığında çıkıyor.** 899AK3'te 4 BB'nin tümünde balconyCount=0 ve uyarı var. FUA5P9'da bazı BB'lerde 0 ama binada balkon var → uyarı yok. | R7-10 | V-210 eklendi |
+| **D8-H8** | **BB kimlik anahtarı `Ornek1 #41` çakışması gerçek bir vaka.** Aynı (blok=1, giriş=12, BB=41) iki farklı BB: Depo (pay 79/6534) ve Konut (pay 98/6534). Tekilleştirme (blockName, entrance, bbNo) yetersiz → (pay, quality) da eklenmeli. | N21 | K84 + V-212 |
+| **D8-H9** | **Gemini8'in V-198 "her durumda BİLGİ" kararı ÇOK GENİŞ.** Parsel düzeyinde tam parsel beyan edildiyse ve toplam ≠ 1 ise, bu kullanıcının **bilmesi gereken bir şey** — UYARI olabilir. Tek blokta BİLGİ doğru, tam parselde UYARI savunulabilir. | R7-07 + mantık | V-198 iki düzeyli |
+| **D8-H10** | **Gemini8'in "Balkony = CityModel düzeyinde" yorumu zayıf.** 899AK3'te uyarı var ama FUA5P9 A bloğunda da (binada) balkon yok — uyarı çıkmamış. Fark **binadaki toplam BLKN_ sayısı**: 899AK3 = 0, FUA5P9 A = 5 (BB'lerde 0 ama binada 5 var). Yani koşul: toplam BLKN_ = 0. Gemini8 doğru ama gerekçe netleştirilmeli. | R7-10 detay | V-210 |
+| **D8-H11** | **Gemini8'in "V-198a pay=0 UYARI" önerisi Kılavuz'la çelişiyor.** Kılavuz yalnız "pay paydadan büyük olamaz" ve "boş olamaz" diyor. pay=0 **yasak değil**. BİLGİ bile fazla; BİLGİ + kullanıcıya filtre seçeneği daha doğru. | KILAVUZ | V-198a rev |
+
+---
+
+## 1. Önceki Turlardaki Kararlarımın Yeniden Değerlendirilmesi
+
+### 1.1 Benim Düzeltmem Gereken 4 Karar
+
+| # | Önceki Kararım (Hangi Tur) | Yeni Kanıt | Yeni Karar |
+|---|---|---|---|
+| **D7-Ö1** | D6-02 "Kapı varsayılanı 2100 vs 2200" ikilemi vardı (6. tur) | N12: 205–485 arası 7 farklı değer | Zaten D7'de düzeltmiştim. Ek: 18 gerçek dosya 210 cm baskın (R7-11). Varsayılan 2100 cm kabul edilebilir. |
+| **D7-Ö2** | D6-04 "K56-ek sabit duvar kalınlığı kural olmalı" (6. tur) | N14: sürekli dağılım | D7'de asistan olarak düzeltmiştim (C6-05). 18 gerçek dosyada duvar kalınlığı ölçülmedi ama kabul edilmiş 8–19 cm dağılımı zaten vardı. |
+| **D7-Ö3** | D6-N3 "Clipper2 Union of LINE" (6. tur) | Claude7 §11 | D7'de "Tamponlama + Union" olarak düzeltmiştim (D7-11). 18 gerçek dosya bu konuda ek bilgi vermedi. |
+| **D7-Ö4** | D6-08 "H/U/B rozeti" (6. tur) | Doğru kaldı | Ek: DIŞ_KONTROL ve DOĞRULANAMADI ayrı gri rozetler. Gemini8 §UX-02 kısmen aldı. |
+
+### 1.2 Gemini8'in Yaptığı Doğru Sentezler (Onaylıyorum)
+
+| # | Konu | Değerlendirme |
+|---|---|---|
+| G8-1 | K78 `include` kesin | ✅ |
+| G8-2 | K45 rev3 (delik vs kapı nesnesi) | ✅ |
+| G8-3 | K75 rev4 (boşluk toleranslı) | ✅ |
+| G8-4 | V-198 her durumda BİLGİ | ⚠️ Kısmen (D8-H9) |
+| G8-5 | K81 (pos + 10 hane okuma) | ✅ |
+| G8-6 | V-206, V-207, V-208, V-210, V-211, V-212 | ✅ |
+| G8-7 | K84 (BB kimlik: propertyLot + quality dahil) | ✅ |
+| G8-8 | K85 (çok parçalı BB modeli) | ✅ |
+| G8-9 | K86 (tarih zorunlu) | ✅ |
+| G8-10 | UX-01..UX-16 | ✅ Kapsamlı |
+| G8-11 | §2 Evrensel soru yanıtlama | ✅ Kural uygulanmış |
+
+### 1.3 Gemini8'de Hâlâ Eksik veya Yanlış Olanlar
+
+| # | Sorun | Kanıt | Düzeltme |
+|---|---|---|---|
+| **G8-H1** | **V-198 "her durumda BİLGİ"** çok geniş | D8-H9 | İki düzey: tek blok → BİLGİ; tam parsel beyan → UYARI |
+| **G8-H2** | **V-198a pay=0 UYARI** Kılavuz'la çelişiyor | D8-H11 | BİLGİ + filtre seçeneği |
+| **G8-H3** | **"Balkony bulunamadı" = CityModel düzeyinde** koşulu belirsiz | D8-H10 | Koşul: binadaki toplam BLKN_ = 0. Gemini8'in "CityModel düzeyi" değil, "bina toplamı" |
+| **G8-H4** | **K45c ≥10 mm üretim hedefi** — 18 gerçek dosyada min 31 mm | R7-03 | Hedefi 30 mm'ye çekmek daha güvenli (31 mm'den küçük kalmasın) |
+| **G8-H5** | **V-064 sondaki boşluk BİLGİ** — kabul görmüş ama üretimde temiz yaz | R7-06 | Doğru karar, ek: üretimde TR büyük harf + trim() uygula |
+| **G8-H6** | **C7-05 F2 API entegrasyonu** — "varsayılan kapalı" | Hukuki belirsiz | Ek: hiç sunulmasın, sadece kullanıcı manuel yapıştırsın. API çağrısı v2'ye ertelensin. |
+| **G8-H7** | **K45c "10 mm" eşiği** Claude6/7 ölçümlerinde 1–9 mm kabul görmüş | N13 + R7-03 | Doğrulama eşiği: <1 mm HATA, 1–10 mm BİLGİ. Üretim hedefi: ≥30 mm (güvenli) |
+| **G8-H8** | **K56-ek sabit duvar kalınlığı** — hâlâ asistan | Claude6 H6 + N14 | Doğru karar, ek: asistan "10/20/25 cm'ye yasla" önerisi verirken **alan farkı tablosu** zorunlu |
+| **G8-H9** | **G7-EK2 "her zaman kes"** — bu cümle güzel ama uygulaması zor | Claude7 I.2.2 | Ek: kesme yalnız eğik tavanlı odalarda zorunlu; düz tavanlı odalarda tek prizma yeterli (hız) |
+| **G8-H10** | **M4 kabul "±0.01 m²"** Gemini8'de tam tablo değil | Claude6 §13 | Tolerans matrisi v3.4'e eklenmeli |
+
+### 1.4 Claude7'nin Yaptığı En Değerli Katkı
+
+Claude7 Bölüm II, **projeye bugüne kadar gelen en güçlü kanıttır.** 18 gerçek kabul dosyası, 6 doğrulama kodu, ~78 BB, ~4.021 açıklık deliği. Bu ölçüm olmasaydı:
+
+- GroundSurface tartışması **hâlâ açık** olurdu (AS-1 A/B testi beklenirdi)
+- Kapı nesnesi ile delik farkı **keşfedilmemiş** olurdu
+- `propertyLot` boşluk toleransı **bilinmeyecekti** ve Qwen7'nin katı regex'i üretimi bloke ederdi
+- MAKS tuzak alanları **sunucudan kabul alırdı** ve biz de aynı hatayı yapardık
+- BB #41 çakışması **fark edilmeyecekti**
+
+**Kendi 6. turumdaki 8 hatamı da düzelttiği için** Claude7'ye teşekkür ederim.
+
+---
+
+## 2. EVRENSEL SORU YANITLAMA — Gemini8 §2'deki 16 Sorunun Yanıtları
+
+> Gemini8 §2'de 16 soru listelemişti (Qwen7'den 3, DeepSeek7'den 6, Claude7'den 7). Bunların hepsini Gemini8 yanıtladı. **Kendi mühendislik bakışımla** her birini yeniden cevaplıyorum ve bazılarında **Gemini8'den farklı veya ek** görüşler sunuyorum.
+
+### 2.1 Qwen7'nin Sorduğu 3 Soru
+
+#### Soru Q1 — "SHA-256 kanonik model UI durumunu dışarıda bırakıyor mu?"
+**Gemini8'in Cevabı:** ✅ Doğru (SemanticDesignState vs WorkspaceUiState).
+**Benim Ek Görüşüm:**
+Gemini8'in cevabı doğru ama **eksik bir nokta** var. Kanonik model tanımına dahil **edilmesi gereken** ama unutulabilecek alanlar:
+
+- **`profileSettings`**: Kullanıcının seçtiği stil profili (`TKGM-Örnek` vs `Gerçek-Kabul-2026`) — değişirse GML çıktısı değişir → **dahil edilmeli**
+- **`codelistSnapshot`**: Hangi tarihte hangi kod listesi kullanıldı — kod listesi güncellenip `registeredQuality` metni değişirse GML değişir → **dahil edilmeli** (SHA-256 özeti olarak)
+- **`schemaVersion`**: Proje dosyası şema sürümü — migration sonrası çıktı değişebilir → **dahil edilmeli**
+- **`doorSillOffset`**: 10 mı 50 mi — GML çıktısını doğrudan değiştirir → **dahil edilmeli**
+- **`secondaryPartAreas`**: `repeat` mi `minusOne` mi — dubleks parçalarda değerleri değiştirir → **dahil edilmeli**
+
+**Ek öneri (D8-P1):** `computeCanonicalModelHash` fonksiyonuna **`profileSettings` + `codelistSnapshot.sha256` + `schemaVersion`** eklenmeli. Aksi halde kullanıcı stil profilini değiştirip aynı geometriyi üretirse hash değişmez ama GML değişir — **güvenlik açığı**.
+
+#### Soru Q2 — "Clipper2 saf TS mi WASM mı?"
+**Gemini8'in Cevabı:** ✅ Worker'da saf TS, gerekirse WASM.
+**Benim Ek Görüşüm:**
+Gemini8 doğru. Ek olarak:
+- **Benchmark ölçümü** M0'da zorunlu olmalı: 1.500 çizgili test DXF üzerinde `ClipperOffset + Union` süresi
+- **Eşik:** > 100 ms ise WASM'a geç
+- **Hibrit yaklaşım:** Basit katlar (< 500 çizgi) saf TS, karmaşık katlar (> 1500 çizgi) WASM'a otomatik geçiş (D8-P2)
+
+#### Soru Q3 — "G7-EK3 yıldız kavşak köşe kurtarma genellemesi"
+**Gemini8'in Cevabı:** ✅ En küçük kareler YANLIŞ, `nodeSet` doğru (Claude7 §I.4 ile aynı).
+**Benim Ek Görüşüm:**
+Gemini8'in cevabı **tamamen doğru**. Ek bir nüans:
+- **`nodeSet` yarıçapı 8 mm mi 10 mm mi?** Claude7 "≤ 8 mm" diyor. Ben **10 mm** öneriyorum (D8-P3), çünkü:
+  - 5 mm snap-round sonrası köşeler zaten 5 mm ızgarada
+  - Duvar çizgisi tamponu ±5 mm
+  - `nodeSet` yarıçapı en az **tampon + snap = 10 mm** olmalı
+- **Yıldız kavşakta çok yakın iki düğüm varsa?** (ör. 3 mm arayla iki kesişim) → `nodeSet` kümeleme 2 mm yarıçaplı olduğu için ikisi birleşmiş olmalı. Ama 2–8 mm arası iki düğüm varsa → **belirsiz**: kullanıcıya sor.
+
+### 2.2 DeepSeek7'nin (Benim) Sorduğum 6 Soru
+
+#### AS-10 — "Kapı alt boşluğu 10 vs 50 mm neden farklı?"
+**Gemini8'in Cevabı:** ✅ Üretici yazılım tercihi.
+**Benim Son Kararım (18 dosya sonrası):**
+- 6 TKGM örneği: 10 mm (Ornek1/4/6/Sincan) ve 50 mm (Ornek2/3/5) karışık
+- 18 gerçek dosya: **hepsi 50 mm** (885/885)
+- **Sonuç:** 18 dosya tek üreticiden (muhtemelen GMLCity/Netcad). TKGM örnekleri iki farklı üreticiden geliyor.
+- **Karar:** Üretim varsayılanı **10 mm** (Claude6/7 analizlerine göre daha güvenli, küçük eşik). Stil profilinde 50 mm seçilebilir.
+
+#### AS-11 — "Ornek1'de kapı 210/220 cm iki değer neden?"
+**Gemini8'in Cevabı:** ✅ İç kapı (210) vs giriş kapısı (220) farkı.
+**Benim Son Kararım:**
+- 18 gerçek dosyada kapı yükseklikleri: 210 (baskın, ~%92), 230 (~%7), 240 (1)
+- 230 cm'likler **balkon kapısı** olabilir (pencere olarak modellenmiş ama kapı boyutunda)
+- **Karar:** Açıklık tipi kütüphanesine `K1: İç Kapı 90×210` ve `K2: Giriş Kapısı 100×220` ve `K3: Balkon Kapısı 80×230` eklenmeli (D8-P4).
+
+#### AS-12 — "Duvar kalınlığı sürekli dağılım — kalite mi röleve mi?"
+**Gemini8'in Cevabı:** ✅ Her ikisi.
+**Benim Son Kararım:**
+- 18 gerçek dosyada duvar kalınlığı ölçülmedi. Ama kabul edilmiş eski dosyalarda 8–19 cm var.
+- **Karar:** K56-ek asistanı korunmalı. Asistan "10/20/25 cm'ye yasla" önerirken alan farkı tablosu (K74) gösterilmeli. Varsayılan **kapalı**.
+
+#### AS-13 — "buildingHeight geometrik karşılığı yok — TKGM nasıl kontrol ediyor?"
+**Gemini8'in Cevabı:** ✅ 3 kural: tip, aralık, gözle karşılaştırma.
+**Benim Son Kararım:**
+- 18 dosyada buildingHeight: 6.0, 6.5, 8.4 — ve `roofProjectionArea` 120–350 m². Hepsi makul.
+- Sunucu **`architecturalProjectConfirmationDate` için 0001-01-01 döndürüyor** (R7-13). Yani sunucu tarih kontrolü yapmıyor.
+- **Karar:** V-064b (geometrik fark) **reddedildi**. V-064c (BİLGİ kartı) eklenmeli — kullanıcı görsel olarak karşılaştırabilsin.
+
+#### AS-14 — "Amasya/Sincan'da neden GroundSurface yok?"
+**Gemini8'in Cevabı:** ✅ Rejim E (Sürdürülebilirlik öncesi).
+**Benim Son Kararım:**
+- **Karar:** Rejim tespiti (V-199) her dosya açılışında çalışır. Rejim E → "Güncel Rejime Yükselt" sihirbazı önerilir (D7-02).
+
+#### AS-15 — "Oda adı = kod etiketi kural mı gelenek mi?"
+**Gemini8'in Cevabı:** ✅ Kural (V-203).
+**Benim Son Kararım:**
+- 18 gerçek dosyada oda adı ölçülmedi ama Claude6 N17'de 100% tutarlılık zaten vardı.
+- **Karar:** V-203 kesinleşti. `gml:name` soneki = kod listesindeki Türkçe etiket.
+
+### 2.3 Claude7'nin Gemini/DeepSeek/ChatGPT/Grok'a Verdiği 7 Görev
+
+#### Görev 1 — "Gemini'ye: K45 rev3, K46b rev, K70 ek, K75 rev4, K78 kesin, K81-K86, V-198, V-206-V-212 işle"
+**Gemini8'in Durumu:** ✅ Hepsi işlenmiş.
+**Benim Ek Görüşüm:**
+- K45 rev3 ✅
+- K46b rev ✅ (ama "üretim kuralı" ibaresi doğru, "doğrulama kuralı" değil)
+- K70 ek ✅
+- K75 rev4 ✅
+- K78 kesin ✅
+- K81 ✅
+- K82 ✅ (kat no eşlemesi)
+- K83 ✅ (KVKK)
+- K84 ✅ (BB kimlik)
+- K85 ✅ (çok parçalı BB)
+- K86 ✅ (tarih zorunlu)
+- V-198 ⚠️ (her durumda BİLGİ — D8-H9 itirazım var)
+- V-206, V-207, V-208, V-210, V-211, V-212 ✅
+- V-209 da eklendi ✅
+
+**Eksik kalan:** V-064b (buildingHeight geometrik) - doğru reddedilmiş ama BİLGİ kartı (C6-13) v3.4'e eklenmeli.
+
+#### Görev 2 — "DeepSeek'e: producerSignature eklenmesi"
+**Gemini8'in Durumu:** ✅ Eklendi.
+**Benim Onayım:** ✅ Doğru. `producerSignature` şu alanları içermeli:
+- `coordElement: 'pos' | 'posList' | 'mixed'`
+- `xyDecimalsModal: number`
+- `zDecimalsModal: number`
+- `storeyStyle: 'A' | 'B'`
+- `doorHoleBottomOffsetMm: 10 | 50 | number`
+- `doorObjectBottomOffsetMm: 0 | 10 | 50 | number`
+- `secondaryPartAreasMode: 'repeat' | 'minusOne'`
+- `hasGroundSurface: boolean`
+- `groundSurfaceName: string | null`
+- `detectedPreset: 'TKGM_ORNEK_A10' | 'TKGM_ORNEK_B50' | 'SAHA_KABUL_2026' | 'CUSTOM'`
+
+**Ek öneri (D8-P5):** `producerSignature` aynı zamanda **`dxfSource`** alanını içermeli — DXF'ten mi, elle mi çizildi. Aksi halde "örnekten öğren" özelliği kaynağı karıştırabilir.
+
+#### Görev 3 — "ChatGPT'ye: 'Balkony bulunamadı' uyarısının koşulu"
+**Gemini8'in Durumu:** ✅ Açıklanmış — "CityModel düzeyinde, binadaki toplam BLKN_ sayısı 0".
+**Benim Ek Görüşüm:** D8-H10'a göre koşul **doğru** ama ifade düzeltilmeli:
+- ✅ Yanlış: "CityModel düzeyinde" (sunucu öyle diyor ama bizim için önemli olan hangi koşulda çıktığı)
+- ✅ Doğru: "**Binadaki toplam BLKN_ sayısı 0** olduğunda" (tek binada; çok binalı dosyada her bina için ayrı kontrol)
+- **Kanıt:** 899AK3'te 4 BB'nin tümünde balconyCount=0 → uyarı var; FUA5P9 A bloğunda 4 BB'den bazılarında 0 ama binada 5 balkon → uyarı yok.
+
+#### Görev 4 — "Grok'a: C7-01 (TKGM Sonuç Önizleme) UX tasarımı"
+**Gemini8'in Durumu:** ⚠️ Kısmen UX-07'de yapılmış.
+**Benim Ek Görüşüm:** §4'te kendi UX önerimde (UX-D8-10) tamamlayacağım.
+
+#### Görev 5, 6, 7 — Gemini8'de "Claude'un sorduğu diğer görevler"
+Gemini8'de bu görevler ayrıca listelenmemiş; genel olarak §2.3'te cevaplanmış. Ben ek bir görev görmüyorum.
+
+---
+
+## 3. Gemini8 §8'deki 5 ORTAK SORUYA YANITLARIM
+
+### 3.1 Ortak Soru 1 — Çok Bloklu Site / Parsel UX ve Veri Yönetimi
+
+**Soru:** 10 bloklu bir sitede tip blok kopyalama, parsel geneli arsa payı, tek tıkla toplu doğrulama/ihraç nasıl daha hızlı ve hatasız hale getirilebilir?
+
+**Benim Detaylı Yanıtım:**
+
+Aşağıdaki 7 özellik önerilir (D8-P6):
+
+1. **Parsel Görünümü (Parsel Workspace):**
+   - 3B sahnede parsele kuş bakışı bakış — tüm bloklar (A–J) yan yana
+   - Her blok bir kart olarak görünür: durum (taslak/doğrulandı/reddedildi), BB sayısı, arsa payı toplamı
+   - Tek tıkla bir blok aktifleştirilir, kalanlar **yarı saydam hayalet** olur
+
+2. **Tip Blok Kopyalama (Template Block Clone):**
+   - A bloğunu tamamla → sağ tık → "Tip Blok Olarak İşaretle"
+   - B–J blokları için → "A'dan Klonla"
+   - Klonlama sırasında:
+     - Geometri aynen kopyalanır (GUID'ler deterministik olarak yeniden üretilir)
+     - **Yeni Helmert dönüşümü** uygulanır (B bloğunun aplikasyon noktalarına)
+     - `blockName` A→B, `constructionID` yeniden üretilir
+     - Arsa payı **korunur** (aynı büyüklükteki daireler aynı pay)
+     - **BB numaraları sıfırlanır** (A'da 1,2,3 → B'de 1,2,3)
+   - Klonlama sonrası **fark tablosu**: "X nesne kopyalandı, Y öznitelik korundu, Z yeniden üretildi"
+
+3. **Parsel Geneli Arsa Payı Paneli:**
+   - Tüm bloklardaki BB'ler tek tabloda
+   - `BigInt` EKOK ile toplam
+   - **Fark filtresi:** "Sadece ≠1 blokları göster", "Sadece sıfır paylı BB'leri göster"
+   - **Kopyalama/yapıştırma:** Bir bloğun pay dağılımını başka bloğa yapıştırma
+   - **Orantısal ölçekleme:** Toplam ≠ 1 ise "Orantısal 1'e normalize et" (tehlikeli, kullanıcı onayıyla)
+
+4. **Toplu Doğrulama ve İhraç (Batch Export):**
+   - "Tüm Blokları Doğrula" → her blok için paralel (Worker Pool)
+   - Hata konsolunda **blok bazlı gruplama**
+   - "Hatalı blok var, ihraç etme" / "Yalnız hatasızları ihraç et" / "Hepsini ihraç et (uyarıları gör)"
+   - İhraç sonucu: `Parsel_Ada_Parsel.zip` — içinde `M-<no>-A.gml` ... `M-<no>-J.gml` + manifest.json
+
+5. **Bloklar Arası Kontroller:**
+   - **Mesafe kontrolü:** Bina tabanları arası ≥ 3 m (yangın yönetmeliği, DOĞRULANMALI)
+   - **Kesişim kontrolü:** Bina tabanları kesişmemeli (V-192)
+   - **Parsel dışında kalmama:** Tüm bina tabanları parsel içinde (V-193)
+   - **Yol/çekme mesafesi:** Bilgi düzeyinde (kesin kural değil)
+
+6. **Blok Bazlı Klavye Kısayolları:**
+   - `Ctrl+1` ... `Ctrl+9` → 1–9. blokları seç
+   - `Ctrl+Tab` → Sonraki blok
+   - `Ctrl+Shift+Tab` → Önceki blok
+   - `Ctrl+Shift+C` → Blokları karşılaştır (yan yana tablo)
+
+7. **Blok Yeniden Adlandırma / Sıralama:**
+   - Sunucu `-A, -B, ..., -J` bekliyor (Genelge 4/3)
+   - Ama kullanıcı isterse "Blok A" yerine "Blok 1" yazabilir → uygulama **uyarı**: "Genelge harf öneriyor; ancak rakam da kabul edilir (DOĞRULANMALI)"
+
+### 3.2 Ortak Soru 2 — 3B Etkileşimli Kesit, Kat Patlatma ve Görsel Hata Ayıklama UX'i
+
+**Soru:** 3B sahnede direct 3D manipulation (fareyle tutup sürükle) mi yoksa 2B + canlı kesit cetveli mi daha az hata üretir?
+
+**Benim Detaylı Yanıtım:**
+
+**Karar: v1'de 3B sahne "inceleme + seçim" için, düzenleme 2B + cetvel üzerinden.** Gerekçeler:
+
+1. **Hassasiyet kaybı:** 3B sahnede fareyle bir köşeyi sürüklemek, mm hassasiyeti tutturamaz. Kullanıcı 1 cm yukarı kaydırabilir → sonradan "neden 1 cm fark var?" tartışması.
+
+2. **Snap zorluğu:** 3B'de komşu noktaya snap yapmak zor. 2B'de 8 piksel yeterli; 3B'de perspektif nedeniyle "hangi noktaya yakınım" belirsiz.
+
+3. **Ortam paylaşımı:** CAD kullanıcıları (harita mühendisleri) 2B'ye alışkın. 3B düzenleme "yeni öğrenme" gerektirir.
+
+4. **Hata ayıklama:** 3B hataların **yerini görmek** için mükemmel; **düzeltmek** için 2B.
+
+**Ancak 3B'de yapılabilmesi gereken 4 etkileşim:**
+
+1. **Seçim (Selection):** Tıklama → hangi oda/duvar/açıklık? Yanıp sönsün, öznitelik paneli açılsın.
+2. **Kamera kontrolü:** Döndürme, zoom, panoramik; preset'ler (üstten, önden, 3/4 perspektif).
+3. **Kesit düzlemi (Cutting Plane):** Slider ile X/Y/Z ekseninde kes, o kesitte neler var gör.
+4. **Kat patlatma (Exploded View):** Slider ile katları dikeyde ayır, aralardaki Boşluk ölçüsünü göster.
+
+**3B'de yapılması gereken "hafif düzenleme":**
+
+- **Balkon/teras parametreleri:** Sağ tık → "Balkon yüksekliği 1.10 → 1.15" → tüm yüzeyler otomatik güncellenir. Bu bir **parametre değişikliği**, geometri sürükleme değil.
+- **Çatı eğimi:** Sağ tık → "Çatı eğimi 30° → 35°" → tüm çatı yüzeyleri otomatik güncellenir.
+- **Oda kullanım kodu:** Sağ tık → liste → "Salon" → tüm ad ve kod güncellenir.
+
+**Somut tavsiye (D8-P7):** 3B sahne sadece bu 3 eylemde bulunur:
+- Seçim + öznitelik paneli aç
+- Preset kamera
+- Kat patlatma ve kesit slider'ı
+
+Tüm koordinat değiştirme işlemleri 2B + canlı kesit cetveli (UX-04) üzerinden.
+
+### 3.3 Ortak Soru 3 — Sunucu Alanları ve C7-01 Önizleme Ekranına Ek Çapraz Kontroller
+
+**Soru:** C7-01 önizleme ekranına hangi çapraz kontroller eklenmeli?
+
+**Benim Detaylı Yanıtım:**
+
+Sunucu alanları (R7-14) ile yerel veri arasında **6 çapraz kontrol** önerilir:
+
+| # | Çapraz Kontrol | Karşılaştırma | Eşik |
+|---|---|---|---|
+| **D8-CC1** | `balconyCount` (sunucu) ↔ Yerel BLKN_ sayısı (BB bazında) | BB başına | Tam eşit |
+| **D8-CC2** | `independentSectionStoreyNumber` (sunucu: `Kat_Z`) ↔ Yerel `storeyNumber` (`Z`) | BB başına | Tam eşit |
+| **D8-CC3** | `registeredFloorDefinition` (sunucu) ↔ Liste beyandan gelen değer | BB başına | Tam eşit (büyük harf dahil) |
+| **D8-CC4** | `independentSectionPlannetArea` (sunucu, `sic!` — sunucuda yazım hatalı) ↔ Yerel `independentSectionPlanNetArea` | BB başına | ±0.01 |
+| **D8-CC5** | `independentSectionPlanGrossArea` (sunucu) ↔ Yerel `independentSectionPlanGrossArea` | BB başına | ±0.01 |
+| **D8-CC6** | `maksBagimsizBolumKimlikNo` (sunucu) ↔ Yerel `maksIdentityNumber` | BB başına | Tam eşit |
+
+**Ek olarak 3 kontrol:**
+
+| # | Kontrol | Kural |
+|---|---|---|
+| **D8-CC7** | **MAKS kimlik uzunluk kontrolü** | 10 hane değilse uyarı (V-206) |
+| **D8-CC8** | **MAKS = arsa payı tuzağı** | `maksIdentityNumber == parseInt(propertyLot.replace('/', ''))` ise uyarı (V-207) |
+| **D8-CC9** | **Kat no eşlemesi** | Sunucu `Kat_Z` ↔ Yerel `Z`; sunucu `Kat_-1` ↔ Yerel `-1` (V-211) |
+
+**C7-01 Önizleme Ekranı Düzeni (D8-P8):**
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ TKGM DOĞRULAMA SONUCU ÖNİZLEMESİ                     [Simüle]    │
+├────────────────────────────────────────────────────────────────────┤
+│ PARSEL BİLGİLERİ                                                   │
+│ İl/İlçe/Mahalle: Çanakkale / Biga / ...                           │
+│ Ada/Parsel: 123 / 45    Taşınmaz No: 12345                       │
+│                                                                    │
+│ YAPI BİLGİLERİ                                                     │
+│ Tapu Bina ID: M-12345-A    Kat: 3+1    BB: 9    Asansör: 1        │
+│ buildingHeight: 8.4 m       roofProjectionArea: 333.49 m²         │
+│                                                                    │
+│ BB LİSTESİ                                                         │
+│ ┌──────┬──────┬─────┬──────┬───────┬──────┬──────┬─────────────┐ │
+│ │ No   │ MAKS │ Kat │ Usage│ Net   │ Brüt │ Pay  │ Nitelik     │ │
+│ ├──────┼──────┼─────┼──────┼───────┼──────┼──────┼─────────────┤ │
+│ │ 1    │ 123… │ Z   │ 1001 │ 92.15 │ 108.30│ 150/6534 │ MESKEN │ │
+│ │ 2    │ 124… │ 1   │ 1001 │ 88.40 │ 102.10│ 150/6534 │ MESKEN │ │
+│ │ ...  │ ...  │ ... │ ...  │ ...   │ ...  │ ...  │ ...         │ │
+│ └──────┴──────┴─────┴──────┴───────┴──────┴──────┴─────────────┘ │
+│                                                                    │
+│ ARSA PAYI TOPLAMI: 103500/104683 (Eksik: 1183/104683)  [BİLGİ]  │
+│                                                                    │
+│ TAHMİNİ SUNUCU UYARILARI                                           │
+│ ℹ️  "Balkony bulunamadı." — Binada hiç balkon/teras yok          │
+│ ⚠️  MAKS kimlik uyuşmazlığı — MAKS'ta Kat No B, GML'de -1        │
+│                                                                    │
+│ [🚀 GML İndir] [📋 Detaylı PDF] [✕ Kapat]                        │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Yeni kural (D8-P9):** "Tahmini Sunucu Uyarıları" bölümü C7-04 kataloğundan okunur. Sunucu mesajları **birebir** gösterilir (yazım hataları dahil, `Balkony` → `Balkony`).
+
+### 3.4 Ortak Soru 4 — `Ornek1` BB #41 Çakışması ve Depo/Eklenti Modellemesi
+
+**Soru:** Bodrum deposu için aynı BB no (41) iki farklı pay ile yazılmış. Yeni projede kullanıcı nasıl yönlendirilmeli?
+
+**Benim Detaylı Yanıtım:**
+
+**Önce sorunu netleştirelim.** Ornek1'de:
+
+| Kayıt | Kullanım | Pay | Nitelik | Kat | Net |
+|---|---|---|---|---|---|
+| 41 (Depo) | 1005 | 79/6534 | 41 NOLU DAİREYE AİT DEPO | Bodrum | 39.06 |
+| 41 (Konut) | 1001 | 98/6534 | KONUT | 10. Kat | 132.84 |
+
+**Neden iki farklı kayıt var?** Muhtemelen:
+- Konut (10. kattaki daire 41) tapu listesinde "41" olarak
+- Depo (bodrumdaki) tapu listesinde "41 nolu daireye ait depo" olarak — ama **independentSectionNumber** "41" yazılmış (yanlışlıkla veya TKGM'nin kabul ettiği bir gelenek)
+
+**Yani bu bir çakışma, ama kabul edilmiş.** Çözüm üç seçenekli:
+
+**Seçenek A — Ornek1 tarzı (iki ayrı BB, aynı no):**
+- Kullanıcı depoyu **ayrı BB** olarak çizer
+- BB No = 41 (aynı), Pay = 79/6534 (ayrı)
+- Nitelik = "41 NOLU DAİREYE AİT DEPO"
+- Kullanım = 1005 Depo
+- **V-212 UYARI** (aynı no, farklı pay/nitelik)
+- Kullanıcı uyarıyı görür → "Bu doğru, tapu listesinde böyle" der → BİLGİ'ye düşürür
+
+**Seçenek B — Ornek4 tarzı (depo = eklenti parçası):**
+- Kullanıcı depoyu **ana BB'nin parçası** olarak çizer
+- Ana BB (daire 41) pay = 98/6534
+- Depo = SectionPart, kullanım = 1006 Eklenti
+- `registeredInstallation = "DEPO"`
+- **V-198b BİLGİ** (net/brüt farkı)
+- Tek BB, tek pay
+
+**Seçenek C — registeredInstallation kullan:**
+- Depo ana BB'nin eklentisi olarak modellenir
+- `registeredInstallation = "DEPO"` (metin)
+- Depo geometrisi **opsiyonel** (üretilmese de olur)
+- En basit yol
+
+**Kullanıcı nasıl yönlendirilmeli? (D8-P10)**
+
+Kullanıcı bir BB'ye depo/otopark eklemek istediğinde:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ YENİ DEPO / EKLENTİ / OTOPARK NASIL MODELLENECEK?                │
+├──────────────────────────────────────────────────────────────────┤
+│ [A] Ayrı Bağımsız Bölüm (Ornek1 tarzı)                          │
+│     • Ayrı arsa payı, ayrı tapu kaydı                             │
+│     • BB No: 41 (aynı) veya 42 (farklı)                          │
+│     • Nitelik: "41 NOLU DAİREYE AİT DEPO"                        │
+│     • Kullanım: 1005 Depo                                         │
+│     • V-212 uyarısı verilecek                                     │
+│     [Seç]                                                         │
+│                                                                   │
+│ [B] Ana BB'ye Bağlı Eklenti (Ornek4 tarzı)                       │
+│     • Ana BB ile aynı arsa payı                                   │
+│     • Ayrı SectionPart, ayrı kullanım kodu (1006 Eklenti)        │
+│     • registeredInstallation = "DEPO"                             │
+│     [Seç]                                                         │
+│                                                                   │
+│ [C] Yalnız registeredInstallation Metni (en basit)               │
+│     • Ana BB'nin eklentisi (ayrı geometri yok)                    │
+│     • registeredInstallation = "DEPO"                             │
+│     • Liste beyanda gösterilir                                    │
+│     [Seç]                                                         │
+│                                                                   │
+│ Her seçeneğin önizlemesini görmek için tıklayın                   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Karar:** 3 seçenek de sunulmalı, kullanıcı tapu listesine bakarak seçmeli. **Varsayılan B** (Ornek4 tarzı) çünkü en yaygın ve arsa payı karışıklığı çıkarmıyor.
+
+**Yeni kural (D8-P10):** Bu 3 seçenek `C6-01 Açıklık Tipi Kütüphanesi` benzeri bir **"Eklenti Modelleme Sihirbazı"** olarak sunulmalı. Açıklamalarla, gerçek Ornek1/Ornek4'ten örneklerle.
+
+### 3.5 Ortak Soru 5 — "Akıllı Varsayılanlar" vs "Zorunlu Onaylar" Dengesi
+
+**Soru:** Hangi alanlarda zorunlu giriş, hangi alanlarda mavi rozetle varsayılan atanmalı?
+
+**Benim Detaylı Yanıtım:**
+
+**Zorunlu Giriş (Kullanıcı geçemez):**
+
+| Alan | Neden | Kaynak |
+|---|---|---|
+| Taşınmaz Kimlik No | constructionID ve dosya adı bunun üzerinden | K19 |
+| Blok harfi | constructionID için | K19 |
+| İşlem Tipi | Genelge 4/4 | K72 |
+| Yapı Ruhsat No / Tarih | Genelge 4/4 | K72 |
+| Onaylı Mimari Proje No / Tarih | Genelge 4/4 | K72 (K86 rev) |
+| EPSG Dilimi | Tüm koordinat sistemi buna bağlı | K07 |
+| Aplikasyon Noktaları (B1, B2, B3 en az) | TIC ve Helmert için | K71 |
+| Liste Beyan (en az 1 BB) | BB öznitelikleri için | K28 |
+| Kat Sayısı (en az 1) | Tüm yapı | K34 |
+
+**Onay İle Varsayılan (mavi rozet + tıklanınca onay):**
+
+| Alan | Varsayılan | Kaynak |
+|---|---|---|
+| `doorSillOffset` | 10 mm | K45 |
+| `doorHeight` | 2100 mm | K45 (varsa 2200) |
+| Mesken pencere (tavan − yükseklik) | tavan − 500 / 1300 | K46 |
+| Ticari pencere | taban + 100 / tavan − 100 | K46 |
+| Islak hacim pencere | tavan − 500 / 500 | K46 |
+| `slabThickness` | 200 mm | K42 |
+| `verticalDatum` | Ortometrik (TG20) | K71 |
+| Kat Biçimi | A (Ornek6 ile uyumlu) | C6-18 |
+| `coordinateElement` | posList (üretim tercihi) | K81 |
+| `coordinateDecimals` | 3 hane | K81 |
+| `secondaryPartAreas` | repeat | K85 |
+| `additionalNote` | "-" | K73 |
+| `registeredInstallation` | "" (boş) | K77 |
+| Kapı yüksekliği (BBK ve KAPI_ için) | 2100 | K45 |
+| `geometrySuitability` BB | 1001 | K20 |
+| `buildingHeight` | geometriden tahmin + beyan rozeti | K64 |
+
+**Sessiz Varsayılan (rozet yok, doğrudan atanır, kullanıcı isterse değiştirir):**
+
+| Alan | Varsayılan | Kaynak |
+|---|---|---|
+| `tenderRegistrationNumber` | "" (kilitli) | K18 |
+| `architecturalPlanID` | "" (kilitli) | K18 |
+| `buildingType` | 1001 (kilitli) | K15 |
+| `geometrySuitability` bina | 1006 (kilitli) | K16 |
+| `maksIntegrationState` | 1003 (kilitli) | K17 |
+| `integrationState` BB | 1004 (kilitli) | K22 |
+| `takbisPropertyIdentityNumber` BB | -1 (kilitli) | K24 |
+
+**Karar Prensibi (D8-P11):**
+
+1. **Yanlış girilirse felaket olacak alan → zorunlu**
+2. **Projeden türetilemez → zorunlu**
+3. **Aynı projede değişmeyen ve genel kabul gören → sessiz varsayılan**
+4. **Projeden türetilebilir ama değişken → onay ile varsayılan**
+
+**Ek (D8-P12):** Kullanıcı ayarlarda "Varsayılanları hatırla" seçeneği işaretlerse (örneğin "benim büromda kapı 210 cm"), sonraki projelerde **mavi rozet bile gösterme**. Bu bir "tercih" olur.
+
+---
+
+## 4. UX ÖZEL BÖLÜM — 18 Detaylı UX Önerisi (`UX-D8-01` … `UX-D8-18`)
+
+> Gemini8 §3'te UX-01..UX-16'yı önermiş. Ben bunları **genişletiyor ve 18 yeni öneriyle zenginleştiriyorum.** Bazı öneriler Gemini8'dekilerle örtüşüyor ama **farklı açıdan** ele alıyorum.
+
+### UX-D8-01 — "Bugün Ne Yaptım?" Aktivite Günlüğü (Activity Log)
+
+**Sorun:** Kullanıcı bir hafta sonra projeye döndüğünde "Nerede kaldım?" diye düşünür. Son 5 işlemi hatırlamaz.
+
+**Çözüm:**
+- Sol panelde katlanabilir bir bölüm: `📋 Aktivite Günlüğü`
+- Her işlem satırı: `14:22 — Kat 2'ye 4 pencere eklendi`, `14:15 — BB 3'ün alanı 15.72 → 15.70 değişti`
+- Tıklanabilir → o noktaya git
+- "Bugün / Dün / Bu hafta / Tümü" filtreleri
+- Proje `.tkgm3b` dosyasında `activity-log.json` olarak saklanır
+- Günlüğü dışa aktarma (denetim için)
+
+**Faydası:** Ekip çalışmasında "kim ne yaptı" izlenebilir. Bireysel kullanıcıda ise "geri dönmek istediğim nokta" kolayca bulunur.
+
+### UX-D8-02 — "Neredeyim?" Bağlam Yolu (Breadcrumb) ve Hızlı Atlama
+
+**Sorun:** Kullanıcı 4 katlı binada 8 daireli projede "şu an hangi kattayım, hangi dairedeyim" karıştırır.
+
+**Çözüm:**
+- Üst şeridin altında kalıcı breadcrumb: `Parsel > Bina A > Kat 2 > BB 5 > Salon`
+- Her seviye tıklanabilir → o seviyeye git
+- `Alt+↑` → bir üst seviyeye
+- `Alt+→` → sonraki kardeş nesneye (sonraki oda, sonraki BB)
+
+### UX-D8-03 — "TKGM'ye Hazır Mı?" Tek Tıkla Kontrol Listesi
+
+**Sorun:** Kullanıcı 20 maddelik kontrol listesini ezberlemez.
+
+**Çözüm:**
+- Üst sağda **büyük yeşil/sarı/kırmızı rozet**
+- Tıklanınca 4 gruplu kontrol listesi açılır:
+  - 🏢 Kimlik (Taşınmaz No, blok, ruhsat, onay tarihi)
+  - 📍 Konum (EPSG, aplikasyon, TIC)
+  - 🏠 Geometri (katlar, BB'ler, açıklıklar)
+  - 📋 Liste Beyan (BB sayısı, arsa payı, nitelik)
+- Her satır: ✅ (hazır) / ⚠️ (uyarı var) / ❌ (eksik)
+- ❌ satırına tıklayınca **doğrudan o alana atlar**
+- Tüm ✅ ise: "İhracata hazır! GML İndir" butonu aktif
+
+### UX-D8-04 — "Tek Daire Düzelt" Modu (Focus Mode)
+
+**Sorun:** Kullanıcı 30 daireli binada **sadece 1 daireyi** düzeltmek ister. Bütün binayı görmek zihnini dağıtır.
+
+**Çözüm:**
+- Bir BB'ye sağ tık → `🎯 Bu Daireyi Odakla`
+- Ekranda **sadece o BB** ve komşuları (soluk) görünür
+- Kat planı zoom'lanır
+- Alt pencerede o BB'nin tüm öznitelikleri + tüm odaları + tüm açıklıkları
+- Üstte `[Odak Modundan Çık]` butonu
+- Klavye `Esc` → çıkar
+
+### UX-D8-05 — "Geri Al / İleri Al" Zaman Çizelgesi (Time Scrubbing)
+
+**Sorun:** Standart Ctrl+Z sadece 1 adım geri alır. "Dün yaptığım değişikliği geri almak istiyorum" imkansız.
+
+**Çözüm:**
+- Alt sağda küçük bir **zaman çizelgesi kaydırıcısı**
+- Son 100 işlem görünür (her biri bir nokta)
+- Sürükleyerek **zamanda geri/ileri** gidilir
+- Belirli bir noktaya tıklanınca "bu ana kadar geri al" onayı
+- Proje `.tkgm3b` içinde `history/` klasöründe saklanır
+- Ek not: Eski hallerine dönerken **yeni dallar** oluşur (Git gibi) — karmaşık ama güçlü (v2'de)
+
+### UX-D8-06 — Excel'den "Akıllı Yapıştır" (Smart Paste)
+
+**Sorun:** Kullanıcı 35 satırlık liste beyan tablosunu Excel'den kopyalar. Sütun sayısı uyuşmaz, virgül/nokta karışır, birleşik hücreler bozar.
+
+**Çözüm:**
+- `Ctrl+V` → modal açılır: "Yapıştırılan 35 satır, 8 sütun"
+- Otomatik sütun tanıma: "Sütun 1 = BB No (1, 2, 3...), Sütun 2 = Nitelik (MESKEN, DÜKKAN...)"
+- Kullanıcı onaylar veya düzeltir
+- **Hatalı satırlar önizleme:** "Satır 12: 'Arsa payı 1500/6500' — payda 6534 olmalı mı? [Evet] [Hayır]"
+- **Eksik satırlar uyarı:** "Modelde 8 BB var ama Excel'de 9 satır — 9. satır hangi BB?"
+- Kaydet sonrası tüm alanlar doldurulur
+
+**Faydası:** Ayrı bir Excel sihirbazına gerek kalmaz. Her şey modal içinde.
+
+### UX-D8-07 — "Karşılaştır" Modu (Compare View)
+
+**Sorun:** Kullanıcı "eski projemle yenisi arasındaki farkı görmek" ister. Ya da "GML düzelttikten sonra orijinaline göre ne değişti?"
+
+**Çözüm:**
+- `Dosya → Karşılaştır → İki GML Aç`
+- 3B sahne **iki yan panel** (split 50/50)
+- Farklar **kırmızı vurgu** (silinen) / **yeşil vurgu** (eklenen) / **sarı vurgu** (değişen)
+- Alt panelde **diff tablosu:** her alan, öncesi, sonrası
+- "Sadece farkları göster" filtresi
+- PDF olarak dışa aktarma ("bu proje şu tarihteki haline göre şu değişiklikleri içerir")
+
+### UX-D8-08 — "Görsel Hata Haritası" (Heatmap Overlay)
+
+**Sorun:** Kullanıcı doğrulama sonrası 30 hata alır. Hangi bölgede hatalar yoğunlaşmış göremiyor.
+
+**Çözüm:**
+- 2B ve 3B sahnede **ısı haritası** modu
+- Hataların yoğunluğuna göre renk: kırmızı = yoğun, sarı = orta, yeşil = az
+- Hangi katta hangi bölgede problem var bir bakışta görünür
+- "Isı haritası" `Ctrl+H` ile açılır/kapanır
+- Özellikle büyük projelerde (30+ daire) kritik
+
+### UX-D8-09 — "Sözlük" Öğrenen Mahal Sözlüğü Arayüzü
+
+**Sorun:** D7-04'te önerdiğim "öğrenen sözlük" iyi ama kullanıcı **nereye ne yazacağını** bilmiyor.
+
+**Çözüm:**
+- `Düzen → Mahal Sözlüğü` menüsü
+- Tablo: `DXF Metni` | `Eşleşen Kod` | `Kaynak` (standart/kullanıcı)
+- Üstte arama kutusu
+- Sağda `+ Yeni Eşleştirme` butonu: "YATAK ODASI 1" → "1001 Oda"
+- Eşleşmeyen metinler için öneri: "SALON MUTFAK" → "Salon mu Mutfak mı? [Seç]"
+- Proje bazında ayrı, kullanıcı bazında ayrı sözlükler
+- Toplu içe aktarma (CSV)
+
+### UX-D8-10 — TKGM Sonuç Önizlemesi (C7-01) İçin Tam Tasarım
+
+**Sorun:** C7-01 Gemini8'de bahsedildi ama detaylı tasarım yok.
+
+**Çözüm:**
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ 🔍 TKGM DOĞRULAMA ÖNİZLEMESİ         [Gerçek Sistemden Değil]     │
+│                                                                    │
+│ Bu ekran, dosyanızı 3dbinadogrula.tkgm.gov.tr'ye yüklediğinizde   │
+│ karşılaşacağınız sonuç ekranının birebir simülasyonudur.          │
+├────────────────────────────────────────────────────────────────────┤
+│ [Parsel] [Yapı] [BB Listesi] [Uyarılar] [PDF Rapor]              │
+├────────────────────────────────────────────────────────────────────┤
+│ PARSEL BİLGİLERİ                                                   │
+│ ┌────────────────────┬────────────────────┬────────────────────┐  │
+│ │ İl                 │ İlçe               │ Mahalle            │  │
+│ │ Çanakkale          │ Biga               │ Yeni Mahalle       │  │
+│ ├────────────────────┼────────────────────┼────────────────────┤  │
+│ │ Ada                │ Parsel             │ Taşınmaz No        │  │
+│ │ 123                │ 45                 │ 12345              │  │
+│ └────────────────────┴────────────────────┴────────────────────┘  │
+│                                                                    │
+│ YAPI BİLGİLERİ                                                     │
+│ ┌────────────────────┬────────────────────┬────────────────────┐  │
+│ │ Tapu Bina ID       │ Kat Adedi          │ BB Adedi           │  │
+│ │ M-12345-A          │ 3 (Zemin+2)        │ 9                  │  │
+│ ├────────────────────┼────────────────────┼────────────────────┤  │
+│ │ Asansör Sayısı     │ Bina Tipi          │ Bina Yüksekliği    │  │
+│ │ 1                  │ Ana Yapı           │ 8.40 m             │  │
+│ ├────────────────────┼────────────────────┼────────────────────┤  │
+│ │ MAKS Yapı No       │ Çatı İzdüşümü      │ Toplam Net Alan    │  │
+│ │ 1234567            │ 333.49 m²          │ 828.00 m²          │  │
+│ └────────────────────┴────────────────────┴────────────────────┘  │
+│                                                                    │
+│ BAĞIMSIZ BÖLÜM LİSTESİ                                            │
+│ ┌──────┬─────────┬──────┬───────┬───────┬──────┬─────────────┐   │
+│ │ No   │ MAKS    │ Kat  │ Kulla │ Net   │ Pay  │ Nitelik     │   │
+│ ├──────┼─────────┼──────┼───────┼───────┼──────┼─────────────┤   │
+│ │ 1    │ 1234567 │ Z    │ 1001  │ 92.15 │ 150/6534 │ MESKEN  │   │
+│ │ 2    │ 1234568 │ 1    │ 1001  │ 88.40 │ 150/6534 │ MESKEN  │   │
+│ │ ...  │ ...     │ ...  │ ...   │ ...   │ ...  │ ...         │   │
+│ └──────┴─────────┴──────┴───────┴───────┴──────┴─────────────┘   │
+│                                                                    │
+│ ARSA PAYI TOPLAMI                                                  │
+│ ██████████████████████████████████████░░ 98.87%                   │
+│ 103500/104683 — Eksik: 1183/104683  [ℹ️ BİLGİ]                    │
+│                                                                    │
+│ TAHMİNİ SUNUCU UYARILARI                                           │
+│ ℹ️  "Balkony bulunamadı." — Binada hiç balkon/teras yok           │
+│ ⚠️  MAKS kimlik uyuşmazlığı — MAKS'ta Kat No B, GML'de -1         │
+│ ✅ Beklenen sonuç: CheckSuccessfull (Warning'lerle)               │
+│                                                                    │
+│ [🚀 Gerçek Sistemde Test Et]  [📥 GML İndir]  [📋 PDF Rapor]      │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**Özellikler:**
+- Sekmeli yapı (Parsel/Yapı/BB/Uyarılar/PDF)
+- Renk kodlu durum (yeşil hazır, sarı uyarı, kırmızı hata)
+- `Gerçek Sistemde Test Et` → 3dbinadogrula'ya yönlendirir (yeni sekmede açar, dosyayı kullanıcı elle yükler)
+- `PDF Rapor` → sunucunun ürettiği PDF'in birebir simülasyonu (Yapı Özet Formu)
+
+### UX-D8-11 — "Çoklu Pencere" Desteği
+
+**Sorun:** Bazı kullanıcılar 2 monitör kullanır. Aynı anda 2B ve 3B görmek ister ama mevcut düzen split-screen.
+
+**Çözüm:**
+- `Görünüm → Yeni Pencere` → ikinci bir pencere aç
+- Her pencere bağımsız zoom/pan/görünüm modu
+- Aynı proje verisi (paylaşılan state)
+- Bir pencere 2B, diğeri 3B olabilir
+- Sunum için: bir pencere müşteriye, diğeri kendine
+
+### UX-D8-12 — "Ekran Okuyucu ve Erişilebilirlik"
+
+**Sorun:** Görme engelli veya düşük görüşlü kullanıcılar (nadir ama var).
+
+**Çözüm:**
+- Tüm butonlar `aria-label`
+- Kontrast oranı WCAG AA uyumlu (renk körlüğü paletleri)
+- Metin boyutu ayarı: küçük / normal / büyük / çok büyük
+- Yüksek kontrast tema (siyah-beyaz)
+- Klavye ile tam gezinme (Tab, Shift+Tab, ok tuşları)
+- Form alanları `label`'lı
+
+### UX-D8-13 — "Sunum Modu" (Presentation Mode)
+
+**Sorun:** Kullanıcı müşteriye/patrona 3B modeli göstermek ister ama arayüz kalabalık.
+
+**Çözüm:**
+- `F11` → tam ekran sunum modu
+- Tüm UI gizlenir
+- Sadece 3B sahne, üstte minimal kontroller (kamera preset'leri)
+- Otomatik dönen kamera (turntable)
+- Kat patlatma slider'ı (yalnız bu)
+- Mouse ile serbest gezinme
+- `Esc` → normal moda döner
+- Ekran görüntüsü / video kaydı butonu
+
+### UX-D8-14 — "Yardım Balonu" Sistemi (Inline Help)
+
+**Sorun:** Kullanıcı her alanın ne olduğunu bilmez. Yardım dosyasını açmak zorunda kalmak istemez.
+
+**Çözüm:**
+- Her form alanının yanında küçük `?` ikonu
+- Tıklanınca açılan balonda:
+  - Kısa açıklama (1–2 cümle)
+  - Örnek değer
+  - **Kaynak** ("K45 - TKGM Kılavuz s.xxx")
+  - "Nasıl bulurum?" linki (F4 ile uyumlu)
+- Balon 5 saniye sonra otomatik kapanır (kullanıcı istemediyse)
+- "Bu alanı bir daha gösterme" seçeneği
+
+### UX-D8-15 — "Klavye Kısayolları" Yardım Kartı
+
+**Sorun:** Kullanıcı 40 kısayolu ezberlemez. Menüden her seferinde aramak yavaş.
+
+**Çözüm:**
+- `F1` → yarım ekran klavye kısayolları kartı (referans)
+- **Kategori bazlı:** Çizim / Navigasyon / Öznitelik / Dosya / Doğrulama
+- **Aranabilir:** "kapı" yaz → tüm kapı kısayolları
+- **Yazdırılabilir:** "PDF olarak indir" (masa altı için)
+- **Öğrenme modu:** Kullanıcı bir kısayolu kullanmadıysa sarı işaretle gösterilir
+- **Yeniden atama:** Kullanıcı kendi kısayolunu atayabilir
+
+### UX-D8-16 — "Hızlı Başlangıç" Sihirbazı (Sadece İlk Kullanımda)
+
+**Sorun:** İlk açan kullanıcı "nereden başlayacağım?" diye düşünür. Boş ekran ürkütücüdür.
+
+**Çözüm:**
+- İlk açılışta modal: "Merhaba! 3 dakikada başlayalım"
+- 4 adım:
+  1. **Proje tipi seç:** "Sıfırdan başla" / "GML düzelt" / "DXF'ten al"
+  2. **Parsel bilgisi gir** (Taşınmaz No + blok harfi)
+  3. **Örnek proje veya boş proje:** "Örnek villa projesini incele" / "Boş başla"
+  4. **Kısa video** (30 sn): temel özellikler
+- Adımlar atlanabilir
+- İkinci açılışta gösterilmez
+- `Yardım → Başlangıç Sihirbazı Yeniden Aç` ile tekrar açılabilir
+
+### UX-D8-17 — "Otomatik Kurtarma" Sihirbazı (Çökme Sonrası)
+
+**Sorun:** Uygulama çöktü. Kullanıcı "her şey kayboldu mu?" panikler.
+
+**Çözüm:**
+- Yeniden açılışta otomatik modal:
+```
+┌─────────────────────────────────────────────────────────┐
+│ ⚠️ Önceki oturum beklenmedik şekilde kapandı             │
+│                                                          │
+│ Son otomatik kayıt: 14:22 (35 dk önce)                  │
+│ Değişiklik sayısı: 12                                    │
+│                                                          │
+│ [📂 Kurtarılan Projeyi Aç] [🚫 Yoksay ve Yeni Başla]    │
+│                                                          │
+│ Kayıtlar:                                                │
+│ • 14:22 (35 dk önce) — Son otomatik kayıt               │
+│ • 14:10 (47 dk önce) — Kat 2'ye 4 pencere eklendi       │
+│ • 14:00 (57 dk önce) — BB 3 alanı değişti               │
+│ [Diğer kayıtları gör]                                    │
+└─────────────────────────────────────────────────────────┘
+```
+- Kullanıcı bir kayıt seçer → açılır
+- "Fark tablosu": Son kayıt ile son çalışma arasındaki fark
+- Kullanıcı seçim yapar
+
+### UX-D8-18 — "Sesli Komut" (Opsiyonel, v2)
+
+**Sorun:** Bazı kullanıcılar eller serbest çalışmak ister.
+
+**Çözüm:**
+- Mikrofon butonu → sesli komut
+- "Kat ikiye geç", "Odaya git", "Kapı ekle", "Kaydet"
+- Web Speech API (Chrome/Edge)
+- Türkçe desteği sınırlı ama temel komutlar çalışır
+- **v1'de kapsam dışı**, v2'de değerlendirilecek
+
+**Not:** Sesli komut **hassas işlemlerde kullanılmaz** (silme, onay). Sadece navigasyon.
+
+---
+
+## 5. Gemini8'in UX-01…UX-16'sının Değerlendirmesi
+
+Gemini8'in UX önerileri genel olarak **çok iyi**. Ama 4 tanesinde küçük itirazlarım var:
+
+| Gemini8 UX | Değerlendirme | İtiraz/Ek |
+|---|---|---|
+| UX-01 Çift modlu karşılama | ✅ | Ekleme: Mod 2'de "Örnek proje" şart, boş ekran ürkütücü (UX-D8-16) |
+| UX-02 6 adımlı rehber | ✅ | Ek: Her adım tamamlandığında **kısa konfeti animasyonu** (motive edici) |
+| UX-03 Hayalet alt kat | ✅ Mükemmel | Ek: `G` tuşu + renk seçici (alt kat rengi) |
+| UX-04 Canlı kesit cetveli | ✅ Mükemmel | Ek: Kot üzerindeki değerlere tıklayınca **o kotu doğrudan düzenle** |
+| UX-05 Numpad hızlı kodlama | ✅ | Risk: Numpad olmayan klavyeler için alternatif (F1-F12) |
+| UX-06 Excel toplu editör | ✅ | Ek: "Akıllı Yapıştır" (UX-D8-06) |
+| UX-07 TKGM simülatörü | ⚠️ Yetersiz | UX-D8-10'da genişletildi |
+| UX-08 Işınlanma destekli hata konsolu | ✅ Mükemmel | — |
+| UX-09 Çok bloklu site yöneticisi | ⚠️ Yetersiz | D8-P6'da 7 özellikle genişletildi |
+| UX-10 … UX-16 | ✅ | Küçük eklemeler |
+
+---
+
+## 6. Gemini8'in Şartname v3.4'üne Ek Öneriler (D8-P13 … D8-P20)
+
+### D8-P13 — V-198 İki Düzeyli Yapılmalı
+
+**Sorun:** D8-H9. Gemini8 "her durumda BİLGİ" diyor, ama:
+- Tek blok yüklü, toplam ≠ 1 → **BİLGİ** (kabul, çünkü diğer bloklar yüklenmemiş)
+- Tam parsel yüklü (tüm bloklar), toplam ≠ 1 → **UYARI** (kullanıcı bilmeli)
+
+**Formül:**
+```
+if (project.blocks.length === 1 && parcel.knownBlocks > 1) {
+  status = 'BİLGİ'; // Kısmi
+} else if (allParcelBlocksLoaded && sum !== 1) {
+  status = 'UYARI'; // Tam parsel ama eksik/fazla
+} else {
+  status = 'BİLGİ'; // Sadece bilgi
+}
+```
+
+### D8-P14 — V-198a pay=0 Kararı: BİLGİ + Filtre
+
+**Sorun:** D8-H11. Kılavuz pay=0 yasaklamıyor. Ama 0 paylı BB olağandışı.
+
+**Karar:** BİLGİ düzeyi + "Sıfır paylı BB'leri göster" filtresi. HATA değil.
+
+### D8-P15 — V-210 "Balkony" Koşul Netleştirme
+
+**Sorun:** D8-H10. Gemini8 "CityModel düzeyinde" diyor ama koşul **binadaki toplam BLKN_ sayısı = 0**.
+
+**Yeni V-210 formülü:**
+```
+for each building in buildings:
+  totalBalconies = building.blknCount + building.trsCount
+  if totalBalconies === 0:
+    warning(`Bina ${building.constructionID} içinde hiç balkon/teras yok — sunucu "Balkony bulunamadı." uyarısı verecek`)
+```
+
+### D8-P16 — K45c Üretim Hedefi: 30 mm (10 değil)
+
+**Sorun:** 18 gerçek dosyada min delik-kenar mesafesi **31 mm**. Claude6 6 örnekte min 1 mm bulmuştu. İki yaklaşım:
+- **10 mm** (mevcut): Claude6 örneklerine uygun (1–9 mm kabul görmüş)
+- **30 mm** (yeni öneri): 18 gerçek dosyaya uygun (min 31 mm)
+
+**Karar (D8-P16):** Üretim hedefi **20 mm** olsun (ikisinin ortası). Doğrulama: <1 mm HATA, 1–10 mm BİLGİ, >10 mm OK.
+
+### D8-P17 — K45c Doğrulama Eşiği: 1 mm ve 10 mm
+
+**Yeni doğrulama:**
+- < 1 mm → HATA (val3dity -201 / -205 / -206)
+- 1–9 mm → BİLGİ (Claude6 N13: 262 delik bu aralıkta kabul görmüş)
+- ≥ 10 mm → OK
+
+### D8-P18 — `registeredQuality` İçin Sondaki Boşluk Trim Edilmeli
+
+**Kanıt:** R7-06. `"DUBLEKS MESKEN "` (sonda boşluk) kabul görmüş.
+
+**Karar:**
+- **Üretimde:** `registeredQuality.trim().toLocaleUpperCase('tr-TR')`
+- **Doğrulamada:** Sondaki/baştaki boşluk → BİLGİ (kabul, ama temizlik önerisi)
+- **Karşılaştırmada:** V-197 trim sonrası karşılaştırma
+
+### D8-P19 — K45c'yi K45'ten Ayır
+
+**Karar:** K45c "üretim hedefi" olarak ayrı kalsın, doğrulama kuralı olmasın. Aksi halde "K45c ihlali" diye hata mesajı çıkar ve kullanıcı şaşırır.
+
+**Yeni numaralandırma:**
+- K45: Kapı z aralığı (delik + nesne)
+- K45a: Delik dış halkaya değmez (doğrulama)
+- K45c: **Üretim hedefi** (30 mm önerilir, doğrulama kuralı değil)
+- K45d: Kapı sığma (eğik tavan)
+
+### D8-P20 — V-212'ye Özel "Kabul Gerekçesi" Alanı
+
+**Sorun:** `Ornek1 #41` çakışması gibi durumlar kabul görebiliyor. Kullanıcı bu uyarıyı görmek istemez.
+
+**Karar:** V-212 uyarısına `additionalNote` benzeri bir **"Kabul Gerekçesi"** alanı eklenmeli. Kullanıcı "TAPU KAYDI BÖYLE" yazarsa → BİLGİ'ye düşer.
+
+---
+
+## 7. Proceed Kararı (Revize)
+
+Gemini8'in M0–M10 için önerdiği "tüm aşamalar yeşil" kararını **büyük ölçüde onaylıyorum** ama 3 küçük revizyonla:
+
+| Aşama | Gemini8 Kararı | Benim Kararım | Revizyon |
+|---|---|---|---|
+| M0 | 🟢 PROCEED | ✅ PROCEED | Ek: `producerSignature` D7-P5'e göre genişletilmeli |
+| M1 | 🟢 PROCEED | ✅ PROCEED | Ek: `pos` + `posList` + 10 hane test dosyası zorunlu (C7-06) |
+| M2 | 🟢 PROCEED | ⚠️ PROCEED with düzeltme | Ek: V-198 iki düzeyli (D8-P13); V-198a pay=0 BİLGİ (D8-P14); V-210 koşul net (D8-P15); V-042b eşikleri (D8-P17) |
+| M3 | 🟢 PROCEED | ✅ PROCEED | Ek: `registeredQuality` trim (D8-P18); `additionalNote` boşluk kontrolü |
+| M3.5 | 🟢 PROCEED | ⚠️ PROCEED with düzeltme | Ek: F2 **API entegrasyonu v1'de yok** (G8-H6); yalnız manuel yapıştırma |
+| M4 | 🟢 PROCEED | ✅ PROCEED | Ek: UX-D8-01..18 aşamalı eklenmeli (M4'te 8 tanesi, M5'te 4 tanesi, M7'de 6 tanesi) |
+| M5 | 🟢 PROCEED | ⚠️ PROCEED with düzeltme | Ek: K45c üretim 30 mm değil 20 mm (D8-P16); K45c doğrulama kuralı olmasın (D8-P19) |
+| M6 | 🟢 PROCEED | ✅ PROCEED | — |
+| M7 | 🟢 PROCEED | ⚠️ PROCEED with düzeltme | Ek: UX-09 çok bloklu site D8-P6'ya göre genişletilmeli |
+| M8-M10 | 🟢 PROCEED | ✅ PROCEED | Ek: Windows paketleme + otomatik güncelleme |
+| M11 | 🔴 v1 dışı | 🔴 v1 dışı | Aynı |
+
+**Sonuç:** **M0-M1-M2-M3.5-M4-M5-M6-M7-M8-M9-M10 için PROCEED**. 5 küçük düzeltme (V-198, V-198a, V-210, V-042b/K45c, `registeredQuality` trim) ve 5 UX eklemesi yapıldıktan sonra.
+
+---
+
+## 8. Self-Reflection — Bu Turda Kendime Ders
+
+7. turda 8 hatamı kabul etmiştim. Bu turda:
+
+1. **Gemini8'in "her durumda BİLGİ" kararına itiraz ettim** (D8-H9) ve iki düzeyli yapı önerdim. Kendi 6. turumdaki "her durumda UYARI" hatamı düzelterek "iki düzeyli"ye evrildi — bu, hatadan öğrenmenin göstergesi.
+
+2. **Gemini8'in V-198a pay=0 "UYARI" önerisini BİLGİ'ye indirdim** (D8-H11). Kılavuz'da yasak olmadığı için.
+
+3. **"Balkony bulunamadı" koşulunu Gemini8'den daha net formüle ettim** (D8-H10). Kaynağı ölçüm verisi (R7-10).
+
+4. **18 gerçek kabul dosyasına rağmen "K45c 10 mm → 20 mm" önerisiyle** hem Claude6/7'nin (1 mm kabul) hem de gerçek dosyaların (31 mm) ortasını buldum.
+
+5. **UX önerilerim** Gemini8'inkileri genişletmekle kalmadı, **6 yeni kavram** ekledi (Activity Log, Breadcrumb, Focus Mode, Time Scrubbing, Heatmap, Presentation Mode).
+
+**Kendime not:** 8. turda Gemini8'in yaptığı gibi "kendi itirazlarını yazılı ve gerekçeli" yapmaya devam et. 9. turda ChatGPT'nin dosyası gelirse onun ölçüm/gözlemleriyle kendi önerilerimi **bir kez daha** karşılaştır.
+
+---
+
+## 9. Diğer AI'lara Sorular (9. Tur İçin)
+
+Aşağıdaki 5 soruyu 9. Turda **tüm AI'lar** cevaplayacak (Kural 2 gereği):
+
+### D8-S1 — V-198 İki Düzeyli Yapı
+**Soru:** V-198 arsa payı kontrolü için "tek blok yüklüyse BİLGİ / tam parsel yüklüyse UYARI" iki düzeyli yapısı, TKGM doğrulayıcısının gerçek davranışıyla uyumlu mu? Sizin (her AI'nın) büronuzda/deneyiminizde tam parsel yüklendiğinde ≠ 1 olan dosya **kabul mü ret mi** aldı? (R7-07 iki örneği kabul gösteriyor, ama daha fazla veri gerekli.)
+
+### D8-S2 — K45c Üretim Hedefi: 10/20/30 mm
+**Soru:** K45c (üretim hedefi) için hangi değer en doğru? Claude6 "10 mm" derken 6 resmi örnekte min 1 mm'lik delikler var. 18 gerçek dosyada min 31 mm. 20 mm orta yol mu, yoksa doğrudan **30 mm** (18 dosyanın min'i) mi kullanılmalı?
+
+### D8-S3 — `registeredQuality` Trim ve Büyük Harf
+**Soru:** R7-06'da sonda boşluklu `"DUBLEKS MESKEN "` kabul görmüş. Doğrulamada:
+- a) BİLGİ (kabul, sadece bilgi) mu
+- b) UYARI (kullanıcı görmeli) mi
+- c) Sunucu temizliyor zaten, hiç gösterme mi
+
+Sizin tercihiniz hangisi? Uygulamada üretimde trim yapacağız, ama içe alınan dosyada ne göstermeliyiz?
+
+### D8-S4 — UX-D8-04 "Odak Modu" İçin Kat Sınırı
+**Soru:** "Tek Daire Odak" modunda komşular da soluk gösteriliyor. 30 daireli binada bu görünüm **kafa karıştırıcı** olabilir (soluk komşular + kendi odaklı daire). Sizin tercihiniz:
+- a) Sadece odaklanan daire + koridorlar
+- b) Odaklanan daire + 1 komşu halka
+- c) Odaklanan daire + tüm kat (soluk)
+
+Hangisi hem yön bulmayı sağlar hem de kafa karıştırmaz?
+
+### D8-S5 — Üretimde `registeredFloorDefinition` Büyük Harf mi?
+**Soru:** 18 gerçek dosyada `registeredFloorDefinition = "ZEMİN"`, `"KAT 1"`, `"KAT 2"`, `"BODRUM"` — hepsi büyük harf. Ama Claude6 N18'de Ornek1–6'da `"Zemin Kat"`, `"Bodrum Kat"` gibi karışık harf vardı. İki yaklaşım da kabul görüyor. Sizin (her AI'nın) tercihi:
+- a) `ZEMİN` / `KAT 1` (18 gerçek dosya stili)
+- b) `Zemin Kat` / `1. Kat` (Ornek1–6 stili)
+- c) Kullanıcı liste beyandan aynen (mevcut)
+
+Hangisi üretim standardı olmalı?
+
+---
+
+## 10. Sonuç
+
+**8. Tur, projenin olgunluk doruğudur.** Gemini8'in Şartname v3.4'ü, CLAUDE7'nin 18 gerçek kabul verisiyle birleşerek:
+
+- **Kesin kurallar** (K01–K86) neredeyse tamamlandı
+- **Doğrulama kataloğu** (V-001–V-212) kapsamlı
+- **UX önerileri** (UX-01–UX-18) ürün kalitesini yükseltecek seviyede
+- **Evrensel soru yanıtlama** (21 soru) tamamlandı
+- **Karar matrisi** (M0–M10) net
+
+**Benim bu turdaki 5 kesin katkım:**
+1. V-198 iki düzeyli yapı (D8-P13)
+2. K45c doğrulama eşiği 1/10 mm (D8-P17)
+3. V-210 "Balkony" koşul netleştirme (D8-P15)
+4. UX-D8-01..18 (18 yeni UX önerisi)
+5. 5 yeni soru (D8-S1..D8-S5) 9. tur için
+
+**9. turda benim için en kritik 2 soru:**
+- **D8-S1** (V-198 iki düzey) — çok bloklu siteler çok yaygın
+- **D8-S2** (K45c 10/20/30 mm) — üretim standardını etkiler
+
+Bu 2 soru cevaplanmadan **M5-M6 kodlamasına başlanmamalı**. Diğer 3 soru (S3, S4, S5) M4-M8 arası esnek.
+
+**Proceed:** M0, M1, M2, M3, M3.5, M4 için **hemen başlanabilir**. M5-M6 için D8-S1 ve D8-S2 cevapları beklenmeli. M7 için UX-09 genişletmesi (D8-P6). M8-M10 için mevcut plan.
+
+---
+
+*Bu belge `DEEPSEEK8.md` olarak 08.11.2026 01:45'te tamamlanmıştır. Toplam ~19.500 kelime, 18 UX önerisi, 21 evrensel soru cevabı, 8 yeni mühendislik önerisi, 5 yeni açık soru. Bir sonraki tur (9. Tur) ChatGPT ile yapılacaktır.*

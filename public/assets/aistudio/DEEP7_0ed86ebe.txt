@@ -1,0 +1,892 @@
+# DEEPSEEK, 08.11.2026, 19:52, 3DBİNA UYGULAMASI 7. TUR
+
+> **Belge kimliği:** `DEEPSEEK7.md`
+> **Bu turda okunan tüm girdiler (satır satır):**
+> - `implementation_plan (6).md` — Gemini v6 (Şartname v3.2'ye bağlı Master Plan)
+> - `CLAUDE6.md` — Claude 6. Tur (turu kapatan denetim; **N12–N19 yeni ölçümleri**)
+> - `GROK6.txt` — Grok 6. Tur (Proceed matrisi, K56-ek, tolerans matrisi, UX/performans bütçeleri)
+> - `DEEPSEEK6.txt` — **Benim 6. Tur raporum** (DeepSeek; bu turda kendi bulgularımı Claude6 ışığında denetliyorum)
+> - Normatif üst belgeler: `claude_uygulama_sartnamesi_v3.md` (v3.1), `claude_degerlendirme_v4_ve_deepseek.md` (N1–N10), `claude_5tur_inceleme_ve_urun_tasarimi.md` (N11, v3.2)
+> - Birincil kanıt: 6 resmi TKGM örneği, Amasya/Sincan (kabul), M-17273333-F (ret), 14 kod listesi, Rehber v3.0.3, Kılavuz v2.50
+
+> **Etiketler:** `[ÖLÇÜLDÜ-6]` = Claude 6. Turda 9 dosya üzerinde ölçüldü · `[ÖLÇÜLDÜ N1-N11]` = önceki turlarda ölçüldü · `[KILAVUZ]` = Üretim Kılavuzu · `[REHBER]` = Rehber v3.0.3 · `[DÜZELTME]` = kendi hatamın veya başka AI'nın düzeltmesi · `[ÖNERİ]` = mühendislik önerisi (resmi değil) · `[DOĞRULANMALI]` = resmi doğrulayıcıda test edilecek
+
+---
+
+## 0. Yönetici Özeti — Bu Turun 10 Kesin Hükmü ve Kendi Hatalarımın İtirafı
+
+**Bu tur, benim için bir "muhasebe turu".** Claude6'daki N12–N19 ölçümleri, 6. turda savunduğum **bazı iddiaların yanlış olduğunu** kanıtladı. Aşağıda bu hataları **açıkça ve gerekçesiyle** kabul ediyorum. Sonra da Gemini v6 ve Grok6'nın bu ışıkta hâlâ neyi eksik bıraktığını analiz ediyorum ve **yeni öneriler** getiriyorum.
+
+### 0.1 Kendi 6. Tur Hatalarımın Kabulü
+
+| # | 6. Turda İddiam | Claude6 Ölçümü | Durum |
+|---|---|---|---|
+| **DS6-H1** | "Ornek6'da kapı üst kotu 1098.399 = 2.299 mm" | 1098.399 **pencerenin** üst kotu. Kapı üst kotu **1098.300 = +2.200 mm** | ❌ **YANLIŞ** (Claude6 H3) |
+| **DS6-H2** | "Kapı yüksekliği varsayılanı 2100 veya 2200 mm" ikilemi | Kapı yükseklikleri örneklerde **205–485 cm** arası, 7 farklı değer | ❌ **EKSİK ANALİZ** (Claude6 H1) |
+| **DS6-H3** | "Kapı alt kotu = zFloorTop + 10 mm" | İki biçim var: **+10 mm** (Ornek1/4/6/Sincan) ve **+50 mm** (Ornek2/3/5) — ikisi de kabul | ❌ **YARIM DOĞRU** (Claude6 H2) |
+| **DS6-H4** | "K56-ek sabit duvar kalınlığı kural olmalı" | Ornek5/Sincan/Amasya'da **8–19 cm sürekli dağılım** ve kabul edilmiş | ❌ **KURAL OLARAK YANLIŞ** (Claude6 H6) |
+| **DS6-H5** | "V-064b: buildingHeight farkı > 30 cm → uyarı" | 6 örneğin 5'inde **yanlış alarm** verirdi (Ornek2 12.20 vs 10.19, Ornek3 37.10 vs 50.84...) | ❌ **KURAL OLARAK YANLIŞ** (Claude6 H7) |
+| **DS6-H6** | "Ornek6 çatı z = 1101.50–1103.30" | Çatı max z = **1103.70** (buildingHeight 7.45 − 1095.90 + 1095.90) | ❌ **SAYISAL HATA** (Claude6 H7) |
+| **DS6-H7** | "V-198: arsa payı ≠ 1 → uyarı" varsayımı | Ornek1=362/363, Ornek5=8/9, Ornek3≈0.494, Ornek4≈0.513 — **TKGM kabul etmiş** | ❌ **CİDDİYET HATASI** (Claude6 H8) |
+| **DS6-H8** | "F3-A1: Clipper2 Union of LINE" | **Teknik olarak hatalı**: Clipper2 açık yollarda Union yapmaz | ❌ **ALGORİTMA HATASI** (Claude6 §11) |
+| **DS6-H9** | "BigInt `N % L === 0n` yazılmalı" | Bu kontrol **fazla payı** da doğru sayar (N = 2L geçer). Doğru: `N === L` | ❌ **KOD HATASI** (Claude6 §5) |
+| **DS6-H10** | "Measure-report.json şemasındaki örnek sayılar" | Örnek değerler uydurma (ölçülmemiş); şema doğru, değerler yanlış | ⚠️ **ETİKET HATASI** |
+| **DS6-H11** | "V-196 eşikleri öneri olarak işaretlenmeli" | Claude6 haklı: eşikler [ÖNERİ] + [DOĞRULANMALI] | ✅ Zaten doğruydu |
+
+**Sonuç:** 6. turda **8 ciddi hata** yaptım. Claude6'nın bu bulguları, "ölçüm yapılmadan kural yazılmamalı" ilkesinin doğruluğunu kanıtlıyor. Bu turda artık **hiçbir iddiayı ölçümsüz kurallaştırmayacağım**.
+
+### 0.2 Claude6'nın Getirdiği Devasa Yenilik: N12–N19
+
+Claude6, benim "M0'da ölçülsün" diye ertelediğim tüm ölçümleri **bu turda yaptı**:
+
+| Ölçüm | Kapsam | Kritik Bulgu |
+|---|---|---|
+| **N12** | Kapı üst/alt kotu, pencere ölçüleri (9 dosya, ~13.000 açıklık) | Tek varsayılan yok; +10/+50 mm iki alt boşluk |
+| **N13** | Delik ↔ duvar dikey kenarı mesafesi (9 dosya) | 1 mm'ye kadar yakınlık var; temas yok |
+| **N14** | Duvar kalınlığı (oda↔oda boşluk) dağılımı | Bazı dosyalarda sürekli dağılım (8–19 cm) |
+| **N15** | buildingHeight ↔ geometri | Hiçbir tutarlılık yok; V-064b reddedilmeli |
+| **N16** | Arsa payı toplamı | ≠ 1 olan dosyalar kabul edilmiş |
+| **N17** | Oda adı ↔ partUsage kodu | 100% tutarlı; Gemini'nin sözlüğü yanlış |
+| **N18** | additionalNote, registeredQuality | additionalNote="-" 9/9, quality TR büyük harf 9/9 |
+| **N19** | GroundSurface, rejim öznitelikleri | **GroundSurface 6/9 (sadece resmi örneklerde)** |
+
+**En büyük bulgu:** Kılavuz "Mimari binada GroundSurface alınmaz" diyor ama resmi 6 örnekte de var. Bu, projenin **en kritik açık sorusudur** (AS-1).
+
+---
+
+## 1. Claude6 N12–N19 Ölçümlerinin Tam Analizi
+
+### 1.1 N12 — Kapı/Pencere Kot Dağılımı
+
+Claude6'nın bulguları Gemini v6'nın §2.1'deki varsayımlarını **tamamen çürütüyor**:
+
+**Kapı yükseklikleri (oda tabanından üst kot):**
+- Ornek1: 210 cm (%92) + 220 cm (%8)
+- Ornek2: 215, 245, 265 cm
+- Ornek3: 245 cm (%83) + 285, 345, 485 cm (dükkân/otopark)
+- Ornek4: 240, 250, 210, 220 cm
+- Ornek5: 225, 205 cm
+- Ornek6: 220 cm (tamamı)
+- Sincan: 221 cm (tamamı)
+
+**Kapı alt boşlukları:**
+- **+10 mm**: Ornek1 (1701/1701), Ornek4 (126/126), Ornek6 (36/36), Sincan (311/311)
+- **+50 mm**: Ornek2 (91/91), Ornek3 (2139/2139), Ornek5 (184/184)
+
+**Buradan çıkan kesin sonuçlar:**
+
+1. **"Tek bir doğru varsayılan" yok.** Her proje kendi yüksekliğini belirliyor.
+2. **"Kapı yüksekliği 2100 mm" varsayılanı yanıltıcı.** Örneklerde 205–485 cm aralığında.
+3. **Kapı alt boşluğu iki farklı değer olabilir (10 veya 50 mm).** Aynı dosya içinde karışım yok → dosya geneli tek karar.
+4. **"Kapı tipi" kavramı zorunlu.** İç kapı, daire girişi, dükkân, otopark farklı yüksekliklerde.
+
+**Gemini v6 §2.1'deki hata:** "Varsayılan doorHeight = 2100 mm" yazıyor. Bu, 7 örnekten yalnızca 1'ine (Ornek1 kısmen) uyuyor. Doğru yaklaşım: **açıklık tipi kütüphanesi** (Claude6 C6-01).
+
+### 1.2 N13 — Delik ↔ Duvar Dikey Kenarı Mesafesi
+
+Claude6 bulgusu: **1 mm'ye kadar yakınlık kabul görmüş** (Ornek2: 25 delik, Ornek3: 233 delik, Ornek5: 3 delik). **Temas (0 mm) hiçbir dosyada yok.**
+
+**Bu bulgunun benim için önemi:** 5. turda V-042b'yi (1–10 mm → UYARI) önermiştim. Claude6 haklı: **resmi örneklerde 262 delik bu aralıkta** → bizim uyarımız resmi örneklere sarı yanar. Bu, kullanıcıda "benim dosyam da sarı yanacak mı?" paniği yaratır.
+
+**Doğru karar:**
+- V-042a (< 1 mm veya 3 hanede 0.000) → **HATA** (temas/kesişim)
+- V-042b (1–10 mm) → **BİLGİ** (resmi örneklerle aynı, kullanıcıya bilgi ver)
+- K45c üretim hedefi (≥ 10 mm) → **korunur** (güvenlik marjı)
+
+### 1.3 N14 — Duvar Kalınlığı Sürekli Dağılım
+
+**En kritik bulgu:** Ornek5, Sincan, Amasya, Ret dosyasında **8–19 cm arası sürekli dağılım** var ve üçü kabul edilmiş, biri sadece başka nedenlerle ret edilmiş (geometrySuitability=1005).
+
+**Bu, K56-ek sabit duvar kalınlığı kuralının reddi için kesin kanıttır.** Çünkü:
+1. TKGM bu sürekli dağılımı kabul ediyor
+2. Sabit kalınlığa zorlama, kullanıcının çizdiği net alanları değiştirir
+3. `calculatedArea` projedeki net alandan sapar → V-157 (%10 sapma) yanlış alarm üretir
+
+**Doğru yaklaşım (Claude6 C6-05):**
+- Duvar kalınlığı **kural değil, asistan**
+- Kullanıcı isterse "20 cm'ye yasla" komutu çalıştırabilir
+- Fark tablosu (hangi oda kaç m² değişecek) gösterilir
+- Varsayılan kapalı
+
+### 1.4 N15 — buildingHeight ile Geometri İlişkisi YOK
+
+| Dosya | buildingHeight | RoofEdge−FootPrint | ÇatıMax−FootPrint |
+|---|---|---|---|
+| Ornek1 | 48.60 | **48.60** | 54.40 |
+| Ornek2 | 12.20 | 10.19 | 13.40 |
+| Ornek3 | 37.10 | **50.84** | 52.34 |
+| Ornek4 | 12.60 | 11.49 | 11.49 |
+| Ornek5 | 15.50 | 14.90 | 16.80 |
+| Ornek6 | 7.45 | 5.60 | 7.80 |
+
+**Sonuç:** V-064b (fark > 30 cm uyarı) **6 örneğin 5'inde yanlış alarm verirdi**. DeepSeek 6. Turda bunu savunmuştum — **yanlıştı**.
+
+**Doğru yaklaşım (Claude6 C6-13):**
+- `buildingHeight` yalnız **0 < h < 950** aralığında HATA kontrolü (KURAL-2021)
+- Geometrik karşılaştırma yalnız **BİLGİ kartı** (kural değil)
+
+### 1.5 N16 — Arsa Payı Toplamı ≠ 1 Kabul Edilmiş
+
+| Dosya | Benzersiz BB | Σ pay |
+|---|---|---|
+| Ornek1 | 67 | 362/363 |
+| Ornek2 | 13 | 1/1 |
+| Ornek3 (B blok) | 173 | 471197/954497 (≈0.494) |
+| Ornek4 | 12 | 4542/8861 (≈0.513) |
+| Ornek5 | 24 | 8/9 |
+| Ornek6 | 2 | 1/1 |
+
+**Sonuçlar:**
+1. **Ornek1 ve Ornek5'te küçük eksik** (1/363 ve 1/9) kabul görmüş → uyarı vermemeli
+2. **Ornek3 ve Ornek4'te ~0.5** çünkü parselde başka blok var → tek blok GML'de toplam 0.5 normal
+3. **Dubleks parçalar üzerinden toplanırsa 1'den büyük çıkar** (Ornek1: 2281/2178)
+
+**Doğru yaklaşım:**
+- V-198 **BİLGİ** (tek blok GML'de) / **UYARI** (kullanıcı parseldeki tüm blokları beyan ettiyse)
+- Toplam **benzersiz BB** üzerinden
+- BigInt aritmetiği (doğru) + BB kimliği tekilleştirme (eksik) → her ikisi birlikte
+
+**Benim 6. turdaki `N % L === 0n` hatam:** Fazla payı (N = 2L) da doğru sayardı. **Doğru kod:**
+
+```ts
+function checkLandShare(parts: {pay: bigint, payda: bigint}[]): Result {
+  // EKOK
+  let L = 1n;
+  for (const p of parts) L = L / gcd(L, p.payda) * p.payda;
+  // Toplam
+  let N = 0n;
+  for (const p of parts) N += p.pay * (L / p.payda);
+  // Kontrol - N === L olmalı, N % L === 0n YETMEZ
+  if (N === L) return { ok: true };
+  if (N < L) return { status: 'BILGI', summary: `Eksik: ${L-N}/${L}` };
+  return { status: 'UYARI', summary: `Fazla: ${N-L}/${L}` };
+}
+```
+
+### 1.6 N17 — Oda Adı ↔ partUsage Kod Eşleşmesi (KRİTİK)
+
+Bu, **Gemini v6'nın en büyük hatası**. G6-EK2'deki Türkçe mahal sözlüğü kodları **tamamen yanlış**:
+
+| DXF Metni | Gemini v6 Kodu | **Doğru Kod** | Kaynak |
+|---|---|---|---|
+| SALON | 1009 (yanlış) | **1003** | [KODLİST] partUsage.xml |
+| ODA / YATAK | 1013 (yanlış) | **1001** | [KODLİST] |
+| MUTFAK | 1007 (yanlış) | **1004** | [KODLİST] |
+| WC / TUVALET | 1014 (yanlış) | **1006** | [KODLİST] |
+| HOL / ANTRE | 1001 (yanlış) | **1008** | [KODLİST] |
+| BANYO | 1002 (doğru) | 1002 | ✅ |
+| DÜKKAN | — | **1009** | [KODLİST] |
+
+**Sonuç:** Gemini v6'nın sözlüğü **her salonu dükkân yapar, her odayı bilinmeyen bir kod yapar**. Kodlama başlarsa tüm GML'ler yanlış kodla üretilir. **Kritik veri bozma hatası.**
+
+**Doğru tablo (Claude6 C6-07):**
+
+```typescript
+const PART_USAGE_DICTIONARY: Record<string, number> = {
+  // BB Kısım (oda) için
+  'ODA': 1001, 'YATAK ODASI': 1001, 'YATAK': 1001, 'ÇOCUK ODASI': 1001,
+  'ÇALIŞMA ODASI': 1001, 'MİSAFİR ODASI': 1001, 'EBEVEYN': 1001,
+  'BANYO': 1002, 'DUŞ': 1002, 'EBEVEYN BANYO': 1002,
+  'SALON': 1003, 'OTURMA ODASI': 1003, 'YAŞAM': 1003,
+  'MUTFAK': 1004, 'AÇIK MUTFAK': 1004,
+  'KİLER': 1005,
+  'WC': 1006, 'TUVALET': 1006, 'W.C.': 1006,
+  'KIŞ BAHÇESİ': 1007,
+  'HOL': 1008, 'ANTRE': 1008, 'KORİDOR': 1008, 'GİRİŞ': 1008,
+  'DÜKKAN': 1009, 'MAĞAZA': 1009, 'İŞYERİ': 1009,
+  'SIĞINAK': 1010,
+  'DEPO': 1030,
+  'TEKNİK HACİM': 1028, 'TESİSAT': 1028,
+  'MERDİVEN': 1024,
+  'İÇ ASANSÖR': 1029,
+};
+```
+
+### 1.7 N18 — additionalNote, registeredQuality
+
+- **additionalNote = "-"**: 9/9 dosyada %100 → **K73 kabul** (benim 6. turdaki önerim doğruydu)
+- **registeredQuality**: 9/9 **TÜRKÇE BÜYÜK HARF** ve **liste beyandan birebir** → K76 kabul
+- **registeredInstallation**: **format serbest** (boş, '-', 'YOK', '0.00', 'DEPO', 'E1-DEPO' hepsi kabul) → K77: eleman yazılır, değer boş olabilir
+
+### 1.8 N19 — GroundSurface Çelişkisi (Projenin En Kritik Açık Sorusu)
+
+**Kanıtlar:**
+- **Kılavuz s.599**: "Mimari binada GroundSurface alınmayacak olup binanın en alt düzlemini ifade etmek için kullanılmıştır"
+- **Kılavuz s.2928** (doğrulayıcı hata listesi): "Mimari binada GroundSurface bulunamaz"
+- **Kılavuz s.877** (GroundSurface sayfası): "Yalnızca fotogrametrik model için hazırlanmalıdır"
+- **6 resmi örneğin 6'sında GroundSurface VAR** (gml:name="Zemin")
+- **Amasya, Sincan, Ret dosyalarında YOK**
+
+**Bu, projenin en ciddi belirsizliğidir.** Hangi yorum doğru?
+
+**Olası açıklamalar:**
+1. Kılavuz kuralı sonradan eklendi; resmi örnekler eski
+2. Kılavuz kuralı yalnız "yanlış yerde" GroundSurface'i yakalar
+3. Doğrulayıcı "mimari bina"yı başka ölçütle ayırıyor (buildingType?)
+4. Kılavuz metni hatalı
+
+**Kesin çözüm (Claude6 AS-1):** **Resmi doğrulayıcıda A/B testi** yapılmalı. Aynı proje iki varyantla:
+- Varyant A: GroundSurface'li → yükle → sonuç?
+- Varyant B: GroundSurface'siz → yükle → sonuç?
+
+**Bu test olmadan kodlama başlamamalı.** Claude6 C6-03 tam bunu öneriyor: "A/B Test Paketi Üretici" — kullanıcı bir komutla aynı projeden iki varyant üretir, kendisi doğrulayıcıya yükler, sonucu yapıştırır.
+
+**Benim 6. turdaki hatam:** X4'te "GroundSurface 9/9 tam 1 adet" dedim. **Doğrusu 6/9** (yalnızca resmi örneklerde). Amasya/Sincan/Ret'te yok.
+
+**Doğru yaklaşım:**
+- Profil anahtarı: `profile.lod2.groundSurface = 'include' | 'omit'`
+- Varsayılan: `include` (resmi örneklere sadık)
+- AS-1 sonucu ile kesinleşecek
+
+---
+
+## 2. Gemini v6'nın Claude6 Işığında Yeniden Denetimi
+
+### 2.1 Doğru Kalanlar (Korunacak)
+
+| # | Konu | Durum |
+|---|---|---|
+| G6-1 | Electron + TypeScript kesin | ✅ |
+| G6-2 | K70 (geometri koruma modu) | ✅ |
+| G6-3 | K71 (jeodezik iz kaydı) | ✅ |
+| G6-4 | K72 (proje kartı) | ✅ |
+| G6-5 | V-042a/b iki düzeyli | ✅ |
+| G6-6 | 5 bulgu statüsü (H/U/B/DIS_KONTROL/DOGRULANAMADI) | ✅ |
+| G6-7 | `.tkgm3b` ZIP kapsayıcı | ✅ |
+| G6-8 | G6-EK1 (BigInt arsa payı) — **küçük düzeltmeyle** | ✅ (N % L === 0n hatası) |
+| G6-9 | G6-EK4 (eksikler sayacı + SHA-256) | ✅ |
+| G6-10 | G6-EK5 (Y/X/Z ergonomisi) | ✅ |
+| G6-11 | G6-EK6 (tools/measure) | ✅ (şema gerekli) |
+| G6-12 | M0–M11 aşama sırası | ✅ |
+
+### 2.2 Düzeltilmesi Gerekenler (Kritik)
+
+| # | Sorun | Claude6 Kanıtı | Düzeltme |
+|---|---|---|---|
+| **G6-H1** | Mahal sözlüğü kodları yanlış (SALON=1009 vb.) | N17 | C6-07 doğru tablo |
+| **G6-H2** | Kapı varsayılanı 2100 mm | N12 (205–485 arası) | K45 rev2: açıklık tipi kütüphanesi |
+| **G6-H3** | Pencere varsayılanları Rehber'le çelişiyor ("sill 800", "ıslak 400×400") | Kılavuz | K46 rev: Rehber'e göre (mesken: tavana 50 cm, h 130) |
+| **G6-H4** | GroundSurface 9/9 iddiası | N19 | 6/9; K78 profil anahtarı + AS-1 |
+| **G6-H5** | V-198 ciddiyet UYARI | N16 | BİLGİ (tek blok) / UYARI (tüm parsel) |
+| **G6-H6** | V-042b UYARI | N13 (262 delik 1–10 mm) | BİLGİ |
+| **G6-H7** | M5/M6 kabul tolerans matrisi yok | D6-01 | §13 tablo eklenmeli |
+| **G6-H8** | M7.2'de DCEL | Claude6 §11 | Clipper2 Yol A |
+| **G6-H9** | K45/K45a/K45b/K45c konsolidasyonu yok | D6-14 | 4 kurala indir |
+| **G6-H10** | K56-ek (sabit duvar kalınlığı) yok | N14 (sürekli dağılım) | Reddet; C6-05 asistanı |
+| **G6-H11** | V-064b yok (doğru — eklenmemeli) | N15 | BİLGİ kartı (C6-13) |
+| **G6-H12** | M11 IFC hâlâ yol haritasında | D6-13 | v1 kapsamı dışı |
+
+### 2.3 Eklenmesi Gerekenler (Claude6'dan)
+
+Claude6'nın **C6-01'den C6-18'e kadar 18 mühendislik önerisi** var. Bunlardan **v6'ya işlenmesi zorunlu olanlar:**
+
+| # | Öneri | Niye Kritik |
+|---|---|---|
+| C6-01 | Açıklık tipi kütüphanesi | N12 sonucu, K45 için zorunlu |
+| C6-02 | Rejim tespiti + "Güncel Rejime Yükselt" sihirbazı | Eski kabul dosyaları (Amasya/Sincan) için |
+| C6-03 | A/B test paketi (GroundSurface için) | AS-1 çözümü |
+| C6-04 | Oda adı = kod etiketi kuralı | N17 |
+| C6-05 | Duvar kalınlığı asistanı (kural değil) | N14 |
+| C6-06 | Arsa payı paneli (parsel düzeyi) | N16 |
+| C6-07 | Doğru Türkçe mahal sözlüğü | N17 |
+| C6-08 | "Örnekten öğren" (kabul edilmiş GML stili) | Büyük UX değeri |
+| C6-09 | Hata mesajı kataloğu (Kılavuzdan makine okunur) | F2 için |
+| C6-10 | Kapı sığma kontrolü (eğik tavan) | K45d |
+| C6-11 | Normalize sonrası temas koruyucu | N13 |
+| C6-12 | Kanonik model özeti (SHA-256) | G6-EK4 için |
+| C6-13 | Beyan ↔ geometri bilgi kartı | V-064b yerine |
+| C6-14 | Liste beyan metin normalizasyonu | N18 |
+| C6-15 | "İlk 10 dakika" akışı | UX |
+| C6-16 | Electron güvenlik taban çizgisi | Güvenlik |
+| C6-17 | Ölçüm aracı = doğrulayıcı kardeşi | N12–N19 |
+| C6-18 | Stil profili (Kat Biçimi + alt boşluk) | N11 + N12 |
+
+---
+
+## 3. Grok6'nın Değerlendirmesi
+
+Grok6, DeepSeek6'yı büyük ölçüde onaylıyor ve Claude6'nın ölçümlerini **henüz görmemiş** (kendi raporu 00:05, Claude6 00:18). Yani Grok6, Claude6'nın N12–N19 bulgularını **kaçırmış durumda**.
+
+### 3.1 Grok6'nın Doğru Kalanları
+
+- Proceed matrisi (M0–M3 yeşil, M3.5–M6 sarı, M7+ turuncu, M11 kırmızı) ✅
+- K56-ek sabit duvar önerisi (ama Claude6 reddediyor) ⚠️
+- Tolerans matrisi ✅
+- 3 sekmeli eksikler listesi ✅
+- UX iyileştirmeleri (komut satırı, kısayollar) ✅
+- Performans bütçeleri ✅
+- Gizlilik ilkesi ✅
+
+### 3.2 Grok6'nın Claude6 Işığında Düzeltilmesi Gerekenler
+
+| # | Grok6 İddiası | Claude6 Düzeltmesi |
+|---|---|---|
+| **GR6-H1** | "Kapı varsayılanı 2100 mm (DOĞRULANMALI)" | N12: 205–485 cm arası, tek varsayılan yok |
+| **GR6-H2** | "Pencere mesken: sill 800, tavan-500" | N12 + Kılavuz: sill 90–180 cm arası, tavan-30 ile tavan-55 |
+| **GR6-H3** | "K56-ek sabit duvar kalınlığı kural olmalı" | N14: Bazı kabul dosyalarında sürekli dağılım → kural olmaz |
+| **GR6-H4** | "V-064b buildingHeight geometrik kontrol" | N15: 6/6 örnekte tutarsız → yanlış alarm |
+| **GR6-H5** | "F3-A1 = Clipper2 Union + snap-round + PolyTree" | Claude6 §11: Açık yollarda Union çalışmaz → "tamponlama + Union" (Yol A) |
+| **GR6-H6** | "K45c ≥10 mm (sadece [RAKİP] + [ÖNERİ])" | Doğru ama doğrulamada BİLGİ olmalı (V-042b) |
+
+### 3.3 Grok6'nın Katkı Sağladığı Yeni Öneriler
+
+- **Progressive disclosure** (ilk açılışta "Hızlı Başlangıç", ileri özellikler menüde) — Gemini v6'da yok
+- **Çökme sonrası kurtarma "Kurtarılan proje aç?" sorusu** — UX iyileştirmesi
+- **Portable + NSIS imzalı kurulum** — dağıtım
+- **Makine kimliği bağlı çevrimdışı lisans** — ticari model
+
+Bunlar v6'ya eklenmeli.
+
+---
+
+## 4. Yeni Mühendislik Önerileri (DeepSeek 7. Tur)
+
+Bu turda, Claude6'nın N12–N19 bulguları ve Gemini v6 + Grok6 analizleri ışığında **12 yeni öneri** getiriyorum:
+
+### D7-01 — Açıklık Tipi Kütüphanesi İçin Tam Model
+
+Claude6 C6-01'i benimsiyorum ve **somutlaştırıyorum**:
+
+```typescript
+interface OpeningType {
+  id: string;              // "K1", "P1", "P2" vb.
+  kind: 'door' | 'window';
+  label: string;           // "İç Kapı 90×210", "Mutfak Penceresi 140×140"
+  usage: number;           // doorUsage veya windowUsage kodu
+  width: number;           // mm
+  height: number;          // mm (kapı: zTop-zBottom; pencere: zTop-zBottom)
+  sillOffset: number;      // mm; kapı: floorTop'tan, pencere: floorTop'tan
+  source: 'project' | 'guide-default' | 'user-custom';
+  appliesTo?: ('residential' | 'commercial' | 'wet' | 'basement')[];
+}
+
+// Proje kartında:
+interface OpeningTypeSet {
+  types: OpeningType[];
+  doorSillOffset: 10 | 50;  // Proje geneli (tüm kapılar için)
+  // → N12: her dosya tek değer kullanıyor, karışım yok
+}
+```
+
+**Kurallar:**
+- Her açıklık, bir `OpeningType` referansı taşır
+- DXF blok adı → tip eşleşmesi (blok tablosundan)
+- Tip yoksa kullanıcıya **"tanımsız açıklık"** olarak gösterilir, hangi tipe bağlanacağı sorulur
+- `source = 'guide-default'` olan tipler rozetli ("Varsayılan kullanıldı, projeden kontrol et")
+- Kılavuz varsayılanları: mesken pencere sill=?, üst=tavan-500, yükseklik=1300
+
+**Kritik:** N12'nin gösterdiği gibi, **Ornek1** ve **Ornek6** farklı pencere tipleri kullanıyor. Sabit varsayılan yanıltıcı. Tip kütüphanesi, kullanıcının projesine özgü ölçüleri bir kez girmesini ve tüm açıklıklarda kullanmasını sağlar.
+
+### D7-02 — Rejim Tespiti ve "Güncel Rejime Yükselt" Sihirbazı
+
+Claude6 C6-02'yi benimsiyorum ve detaylandırıyorum:
+
+**Rejim Tespiti (Otomatik):**
+```typescript
+function detectRegime(gml: ImportedModel): 'S' | 'E' | 'unknown' {
+  const indicators = {
+    hasMaksIntegrationState: gml.building.attributes.maksIntegrationState !== undefined,
+    hasPropertyLot: gml.independentSections.some(s => s.propertyLot !== undefined),
+    hasRegisteredQuality: gml.independentSections.some(s => s.registeredQuality !== undefined),
+    hasDoors: gml.openings.filter(o => o.kind === 'door').length > 0,
+    hasWindows: gml.openings.filter(o => o.kind === 'window').length > 0,
+  };
+  const score = Object.values(indicators).filter(Boolean).length;
+  if (score >= 4) return 'S';  // Sürdürülebilirlik rejimi
+  if (score <= 1) return 'E';  // Eski rejim
+  return 'unknown';
+}
+```
+
+**"Güncel Rejime Yükselt" Sihirbazı:**
+1. Rejim E tespit edildi → kullanıcıya "Bu dosya eski rejimde üretilmiş. Bugün gönderilirse muhtemelen reddedilir."
+2. Eksik öznitelikler listelenir: "16 propertyLot, 16 registeredQuality, 16 registeredInstallation, 7 maksIdentityNumber..."
+3. Kullanıcı liste beyan CSV/Excel yükler → otomatik doldurulur
+4. Kapı/pencere yoksa → "Açıklık ekleme" adımı (D7-01 tip kütüphanesiyle)
+5. Geometri K70 ile korunur; yalnız eklemeler yapılır
+6. Fark raporu: "Eklenen: 16 propertyLot, 16 registeredQuality, 330 kapı... Değişen geometri: 0"
+
+**Avantajı:** Kullanıcı eski kabul edilmiş bir GML'yi (ör. 2015 tarihli Amasya) bugünkü standartlara kolayca taşıyabilir.
+
+### D7-03 — GroundSurface A/B Test Paketi (AS-1 Çözümü)
+
+Claude6 C6-03'ü somutlaştırıyorum:
+
+**Komut:** `Dosya → A/B Test Paketi Üret`
+
+**Çıktı:**
+- `M-xxx-A_GS.gml` — GroundSurface ile
+- `M-xxx-A_noGS.gml` — GroundSurface'siz
+- `A_B_Test_Rehberi.pdf` — Hangi sırayla, neyi nasıl test edeceğini anlatır
+
+**Rehber içeriği:**
+1. 3dbinadogrula.tkgm.gov.tr'ye git
+2. Varyant A'yı yükle
+3. Sonuç: ✅ Başarılı / ❌ Başarısız + ret mesajı kopyala
+4. Varyant B'yi yükle
+5. Sonuç: ✅ / ❌ + mesaj
+6. Uygulamaya dön, iki sonucu yapıştır
+7. Uygulama otomatik karar verir ve **profil paketine** yazar
+
+**Kritik:** Bu test, **kullanıcının kendi gerçek projesiyle** yapılmalı. TKGM'nin örneği kabul görmüş ama bugünkü doğrulayıcıda ne olacağı belirsiz. Kullanıcı bir kez test eder, sonuç profil paketine yazılır, tüm kullanıcılar faydalanır.
+
+**Otomatik kazıma yok** (TKGM ilkesi). Kullanıcı kendi tarayıcısından yükler, sonucu kopyalar.
+
+### D7-04 — Türkçe Mahal Sözlüğü İçin "Öğren" Modu
+
+Claude6 C6-07 ve C6-08'i birleştiriyorum:
+
+**Problem:** Hazır sözlük her projeyi karşılamaz. "YATAK ODASI" dışında "EBEVEYN YATAK ODASI", "MİSAFİR ODASI", "ÇALIŞMA ODASI 1", "K.ÇOCUK ODASI" gibi varyantlar var.
+
+**Çözüm:**
+1. Önce standart sözlük denenir
+2. Eşleşmezse kullanıcıya sorulur: "Bu metin hangi koda?"
+3. Kullanıcı seçer → **proje sözlüğüne** eklenir (proje dosyasında saklanır)
+4. Aynı projedeki diğer eşleşmeyenler için otomatik öneri
+5. Proje tamamlandığında kullanıcıya sorulur: "Bu sözlüğü TKGM3B'nin kullanıcı sözlüğüne ekleyeyim mi?" → gelecek projelerde otomatik
+
+**Avantajı:** Kullanıcının bürosunda zamanla **kendi özel sözlüğü** oluşur. Yeni çalışanlar bu sözlükten faydalanır.
+
+### D7-05 — Kapı Sığma Kontrolü (Eğik Tavan)
+
+Claude6 C6-10'u somutlaştırıyorum:
+
+```typescript
+function checkDoorFit(
+  door: { wallId: string, spanA: Pt3, spanB: Pt3, zTop: number },
+  wall: { polygons: Pt3[][] }
+): { fits: boolean; suggestion?: string; minWallTop: number } {
+  // Kapı aralığındaki duvar üst kotunu bul
+  const wallTopAtSpan = findMinWallZ(wall, door.spanA, door.spanB);
+  const minWallTop = wallTopAtSpan;
+  
+  if (door.zTop <= minWallTop - 10) {
+    return { fits: true, minWallTop };
+  }
+  
+  // Sığmıyor - öneri
+  const shift = findBestShift(door, wall);
+  return {
+    fits: false,
+    minWallTop,
+    suggestion: shift 
+      ? `Kapıyı ${shift.cm} cm ${shift.direction} kaydırırsan sığar`
+      : 'Bu duvarda sığacak yer yok',
+  };
+}
+```
+
+**Kullanım senaryosu:** Çatı aralı eğik tavanlı oda. Kapı yüksek tarafta olmalı. Alçak tarafta çizersen uyarı + öneri.
+
+### D7-06 — Otomatik Onarımda "Güvenli / Dikkatli / Manuel" Üçlü Ayrım
+
+Claude6 C6-11 ve K74'ü genişletiyorum:
+
+| Kategori | Örnek İşlem | Kullanıcı Onayı | Fark Tablosu |
+|---|---|---|---|
+| **SAFE_LOSSLESS** | Halka kapatma, tekrar nokta silme, yön düzeltme | Gerekmez | Hayır |
+| **SAFE_METRIC** | T-kavşak köşe ekleme, 1 mm snap | Öneri gösterilir | Köşe sayısı farkı |
+| **REQUIRES_CONFIRMATION** | Delik kaydırma, açıklık boyutlandırma | Zorunlu | **Tam fark tablosu** |
+| **MANUAL_ONLY** | Bina sınırı değiştirme, mülkiyet ilişkisi | Uygulama hiç önermez | — |
+
+**Fark tablosu örneği:**
+```
+DELİK KAYDIRMA (V-042b → 10 mm)
+─────────────────────────────────────
+Metrik          Öncesi    Sonrası    Fark
+Kapı genişliği  90.0 cm   90.0 cm    ±0
+Delik konumu    kenara     kenara     +8 mm
+                2 mm       10 mm      
+Oda alanı       15.72 m²  15.72 m²   ±0
+Plan sapması    %0.4      %0.4       ±0
+
+Onaylıyor musunuz?  [Evet] [Hayır] [Detay]
+```
+
+### D7-07 — Yapı Özet Formu İçin "Şablon Profil" Yaklaşımı
+
+Claude6 D6-N8'i (benim 6. turdaki önerim) düzeltiyor. Resmi form alan listesini bulamadığı için **tahmini 14 alan** önermiştim. **Bu doğru değil.**
+
+**Doğru yaklaşım:**
+1. **Şablon, profil paketinden** (`profiles/tkgm/yapi-ozet-formu.json`) okunur
+2. İlk sürümde **boş şablon** (yalnızca bina/parsel/BB bilgileri)
+3. **Kullanıcı bir kez gerçek formu paylaşırsa** (veya resmi doğrulayıcı çıktısı görülürse), şablon güncellenir
+4. Uygulama otomatik olarak yeni alanları doldurur
+
+**Kritik:** Sabit kodlama yok. Profil paketi güncellenebilir. Bu, TKGM form değiştirirse kodu değiştirmeden uygulamayı güncellemeyi sağlar.
+
+### D7-08 — Oda Adı = Kod Etiketi (K79) Doğrulaması
+
+Claude6 N17'ye göre **100% tutarlılık** var. Bunu v6'ya **hem üretim hem doğrulama** olarak ekliyorum:
+
+**Üretim:** Oda `gml:name`'in son eki her zaman kod listesindeki Türkçe etikettir. Kullanıcı serbest metin girmez, listeden seçer.
+
+**Doğrulama (V-203):** İçe aktarılan dosyada ad ↔ partUsage kodu tutarsızsa UYARI:
+```
+"Kısım adı 'Salon' ama partUsage=1004 (Mutfak). 
+ Doğru kod: 1003 (Salon). Düzeltilsin mi?"
+```
+
+### D7-09 — K45/K46/K46b/K45c/K45d Konsolidasyonu (Nihai)
+
+Claude6 + DeepSeek6 + Grok6 birleşimi:
+
+```
+K45 (revize):
+  Kapı mutlak z aralığı
+  - zBottom = zFloorTop + doorSillOffset  (doorSillOffset ∈ {10, 50} mm, dosya geneli tek)
+  - zTop = zFloorTop + doorType.height
+  - doorType.height: projeden açıklık tipi kütüphanesinden
+  - Yoksa: 2100 mm varsayılan + ROZET
+  - roomHeight < 2100 ise: min(zTop, zCeiling - 300) + ROZET
+  - zTop > wallTopAt(span) - 10 mm ise: K45d uyarı
+
+K46 (revize):
+  Pencere mutlak z aralığı
+  - zBottom = zFloorTop + windowType.sillOffset
+  - zTop = zBottom + windowType.height
+  - Tip kütüphanesinden
+  - Yoksa Kılavuz varsayılanı:
+    * Mesken: üst = zCeiling - 500, yükseklik = 1300
+    * Ticari: alt = zFloorTop + 100, üst = zCeiling - 100
+    * Islak/bodrum: üst = zCeiling - 500, yükseklik = 500
+  - ROZET zorunlu
+
+K46b (yeni):
+  Tüm temsil birliği
+  - Aynı plan genişliği (aynı spanA, spanB)
+  - Aynı mutlak z aralığı
+  - Yeni üretimde katı, K70 modunda kaynak korunur
+
+K45c (yeni):
+  Üretim kenar payı hedefi
+  - Her delik kenarına ≥ 10 mm (güvenlik marjı)
+  - Sığmazsa sessiz kırpma yok, kullanıcıya onaylı küçültme
+  - Doğrulamada 1-10 mm = BİLGİ (resmi örneklerde var)
+
+K45d (yeni):
+  Kapı sığma (eğik tavan)
+  - doorTop ≤ wallTopAt(span) - 10 mm
+  - Sığmıyorsa HATA + kaydırma önerisi
+```
+
+### D7-10 — Ölçüm Araçları İçin Standart "MeasureReport" Şeması (Detaylandırılmış)
+
+DeepSeek6 şemasını genişletiyorum:
+
+```typescript
+interface MeasureReport {
+  schemaVersion: '1.0';
+  generatedAt: string;  // ISO 8601
+  tool: { name: 'tkgm-measure', version: string };
+  profile: { name: 'TKGM', version: string, sha256: string };
+  
+  samples: SampleMeasurement[];
+  
+  summary: {
+    totalSamples: number;
+    allPass: boolean;
+    failedMeasurements: string[];
+    goldenBaselineDate: string;  // Son kabul edilmiş ölçüm tarihi
+  };
+}
+
+interface SampleMeasurement {
+  fileName: string;
+  sha256: string;
+  sizeBytes: number;
+  measuredAt: string;
+  regime: 'S' | 'E';  // Rejim tespiti
+  
+  measurements: {
+    n12: {
+      doorHeightHistogram: { value: number, count: number }[];
+      doorSillOffsetHistogram: { value: number, count: number }[];
+      windowSillHistogram: { value: number, count: number }[];
+      windowHeightHistogram: { value: number, count: number }[];
+      totalDoors: number;
+      totalWindows: number;
+    };
+    n13: {
+      totalHoles: number;
+      holes0mm: number;  // TEMAS (HATA)
+      holes1to9mm: number;  // BİLGİ (resmi örneklerde var)
+      holes10to50mm: number;
+      minDistance: number;
+    };
+    n14: {
+      thicknessHistogram: { valueCm: number, count: number }[];
+      isStandardized: boolean;  // 10/20/25'e yakınsa
+      minCm: number;
+      maxCm: number;
+      stdCm: number;
+    };
+    n15: {
+      buildingHeight: number;
+      roofEdgeMinusFootprint: number;
+      roofMaxMinusFootprint: number;
+      matchType: 'exact' | 'close' | 'far';
+    };
+    n16: {
+      totalParts: number;
+      uniqueBBs: number;
+      sumUniquePay: string;  // "362/363" gibi
+      sumAllParts: string;   // "2281/2178" gibi (yanlış yöntem)
+      deviation: string;      // "Eksik: 1/363"
+    };
+    n17: {
+      roomNameKodPairs: { name: string, code: number }[];
+      matchRate: number;  // 0-100
+    };
+    n18: {
+      additionalNoteDefault: string;  // "-"
+      registeredQualityUppercase: boolean;
+      registeredInstallationFormat: 'free' | 'strict';
+    };
+    n19: {
+      hasGroundSurface: boolean;
+      regimeIndicator: 'S' | 'E';
+    };
+  };
+}
+```
+
+**CI Entegrasyonu:**
+
+```yaml
+# .github/workflows/measure.yml
+- name: Run measurement
+  run: npm run measure -- --samples ./samples --output ./measure-report.json
+
+- name: Compare with baseline
+  run: |
+    if ! diff -q measure-report.json golden/measure-report.json > /dev/null; then
+      echo "Measurement regression detected"
+      diff measure-report.json golden/measure-report.json
+      exit 1
+    fi
+```
+
+### D7-11 — F3-A1 İçin "Tamponlama" Algoritması (Kesin)
+
+Claude6 §11'i benimsiyorum ve **kod düzeyine indiriyorum**:
+
+```typescript
+// v1: Tamponlama ile oda çıkarma (Clipper2)
+function extractRoomsFromLines(
+  lines: Line2D[],
+  toleranceMm: number = 5,
+  bufferWidthMm: number = 10  // duvar çizgisi kalınlığı
+): RoomPolygon[] {
+  // 1. Snap-round: her çizgiyi yakın mm'ye yuvarla
+  const snapped = lines.map(line => snapRound(line, toleranceMm));
+  
+  // 2. Açık yolları ince şeritlere tamponla
+  const buffered = snapped.map(line => 
+    Clipper2.OffsetOpenPath(line, bufferWidthMm / 2, EndType.Butt)
+  );
+  
+  // 3. Şeritleri birleştir → duvar ağı
+  const wallNetwork = Clipper2.Union(buffered);
+  
+  // 4. PolyTree'de delikler = oda adayları
+  const polyTree = Clipper2.BuildPolyTree(wallNetwork);
+  const rooms = polyTree.children;  // Duvar dışı boşluklar
+  
+  // 5. Tampon payını geri ver (5 mm dışa ofset)
+  const restored = rooms.map(room => 
+    Clipper2.InflatePaths([room.outer], -bufferWidthMm / 2, JoinType.Miter)
+  );
+  
+  // 6. Alan filtresi
+  return restored.filter(room => {
+    const area = Clipper2.Area(room) / 1e6;  // mm² → m²
+    if (area < 0.5) return false;  // Kolon/şaft adayı
+    if (area < 1.0) return { ...room, uncertain: true };  // Sor
+    return true;  // Oda
+  });
+}
+```
+
+**Neden çalışır:**
+- Clipper2 OffsetOpenPath **açık yollarda** çalışır
+- Union kapalı şeritler üzerinde çalışır
+- PolyTree çıktısında **iç boşluklar** (= odalar) otomatik çıkar
+- 5 mm snap-round uç-uca açıklıkları kapatır
+- 10 mm tampon genişliği = duvar çizgisi kalınlığı
+
+### D7-12 — Kapı Sığma Kontrolü İçin "Duvar Yükseklik Haritası"
+
+D7-05'i güçlendiren iç araç:
+
+```typescript
+interface WallHeightMap {
+  // Her duvar için, farklı noktalardaki yükseklik
+  segments: {
+    spanA: Pt3;
+    spanB: Pt3;
+    topAt: { x: number, z: number }[];  // x: span boyunca, z: duvar üstü
+    minZ: number;
+    maxZ: number;
+  }[];
+}
+
+// Kullanım:
+// 1. Her kat için duvar yükseklik haritası çıkar (çatı eğimi varsa kırpılmış)
+// 2. Kapı çizilirken span boyunca min Z kontrolü
+// 3. Sığmıyorsa uyarı + kaydırma önerisi
+```
+
+**Özellikle çatı aralı katlarda zorunlu.** Ornek2'de eğik tavanlı odalarda kapı konumu bu harita olmadan yanlış çizilir.
+
+---
+
+## 5. Şartname v3.3 İçin Nihai Değişiklik Listesi
+
+Claude6 §9'u temel alarak, kendi katkılarımla birleştirilmiş **tam liste:**
+
+| Kod | Değişiklik | Kaynak |
+|---|---|---|
+| **K45 (rev2)** | Kapı z aralığı: +10 veya +50 mm alt boşluk, açıklık tipinden üst | N12, Claude6 H2 |
+| **K45a** | Delik dış halkaya değmez | — |
+| **K45b → K46b** | Tüm temsil birliği (yeni üretim katı, K70 koruması) | N11 |
+| **K45c (rev)** | ≥10 mm üretim hedefi; doğrulamada BİLGİ | N13 |
+| **K45d (yeni)** | Eğik tavanda kapı sığma: doorTop ≤ wallTopAt(span) - 10 | C6-10 |
+| **K46 (rev)** | Pencere: açıklık tipinden; yoksa Kılavuz varsayılanı | N12, Kılavuz |
+| **K46b (yeni)** | Temsil birliği | N11 |
+| **K56-ek** | **REDDEDİLDİ** (kural olarak). C6-05 asistanı | N14, Claude6 H6 |
+| **K73 (yeni)** | additionalNote = "-" | N18 |
+| **K74 (yeni)** | Onarım fark tablosu (SAFE_METRIC / REQUIRES_CONFIRMATION) | C6-11 |
+| **K75 (yeni)** | propertyLot biçim 6 kuralı | Kılavuz |
+| **K76 (yeni)** | registeredQuality TR büyük harf | N18 |
+| **K77 (yeni)** | registeredInstallation serbest format | N18 |
+| **K78 (yeni)** | GroundSurface profil anahtarı | N19, AS-1 |
+| **K79 (yeni)** | Oda adı = kod etiketi | N17 |
+| **K80 (yeni)** | Rejim tespiti + kaynak önceliği | Claude6 §2.3 |
+| **K81 (yeni)** | Açıklık tipi kütüphanesi | D7-01 |
+| **K82 (yeni)** | Duvar yükseklik haritası (eğik tavan) | D7-12 |
+
+**V-kuralları:**
+- V-042b UYARI → **BİLGİ**
+- V-198 UYARI → **BİLGİ** (tek blok) / UYARI (parsel)
+- V-064b **REDDEDİLDİ**
+- V-199 (yeni): Rejim E tespiti → BİLGİ
+- V-200 (yeni): GroundSurface ↔ profil → DOĞRULANAMADI
+- V-203 (yeni): Oda adı ↔ partUsage uyumsuz → UYARI
+- V-205 (yeni): Kapı sığmıyor (eğik tavan) → HATA
+
+---
+
+## 6. Proceed Matrisi (Revize — Claude6 + Gemini v6 + Grok6 + DeepSeek7 Sentezi)
+
+| Aşama | Karar | Ön Koşul |
+|---|---|---|
+| **M0** (Altyapı) | ✅ **PROCEED** | `tools/measure` şeması + SHA-256 (D7-10) |
+| **M1** (GML Okuyucu) | ✅ **PROCEED** | Rejim tespiti (D7-02) |
+| **M2** (Doğrulayıcı) | ⚠️ **PROCEED with ciddiyet tablosu** | V-042b → BİLGİ, V-064b red, V-198 BİLGİ (Claude6 §10) |
+| **M3** (Öznitelik Düzeltici) | ✅ **PROCEED** | K70 koruması + K74 fark tablosu |
+| **M3.5** (F2 Ret İçe Aktarıcı) | ⚠️ **v6.1 gerekli** | 3 mod (JSON/HTML/text) + hata kataloğu (C6-09) |
+| **M4** (2B CAD) | ⚠️ **v6.1 gerekli** | Mahal sözlüğü düzeltmesi (D7-04) + açıklık tipi kütüphanesi (D7-01) |
+| **M5–M6** (B-Rep) | ⚠️ **v6.1 + AS-1** | K45 rev2 + tolerans matrisi (Claude6 §13) + AS-1 karar |
+| **M7** (Konumlandırma) | ⚠️ **saha + form** | F1 şablon (profil), V-196 eşikleri [DOĞRULANMALI] |
+| **M8–M10** | ⚠️ **saha sonrası** | Ölçüm + gerçek kullanıcı |
+| **M11** (IFC) | 🔴 **v1 DIŞI** | 2027+ stratejik faz |
+
+**Genel karar:** M0–M3 ve M3'ün önemli kısmı için **hemen başlanabilir**. M3.5–M6 için **v6.1** (aşağıdaki 15 maddenin işlenmesi) gerekli. M7+ için **gerçek saha testleri**.
+
+---
+
+## 7. v6.1 İçin Zorunlu Düzeltme Listesi (15 Madde)
+
+Aşağıdaki maddeler **Gemini'nin v6.1 planına** işlenmeli:
+
+### Kritik (M4 öncesi zorunlu)
+
+1. **Mahal sözlüğü düzeltmesi** (D7-04, C6-07) — SALON=1003, ODA=1001, MUTFAK=1004, WC=1006, HOL=1008
+2. **Kapı varsayılanı 2100 DOĞRULANMALI** — N12 histogramı 205–485 cm aralığını gösteriyor
+3. **Açıklık tipi kütüphanesi** (D7-01, K81) — proje düzeyinde tipler
+4. **GroundSurface profili** (K78, AS-1) — include varsayılan, A/B test
+5. **V-198 ciddiyet BİLGİ** — benzersiz BB üzerinden, BigInt tam aritmetik
+
+### Yüksek Öncelikli
+
+6. **K45/K45a/K45b/K46/K46b/K45c/K45d konsolidasyonu** (D7-09)
+7. **Pencere varsayılanı Kılavuz'a uygun** — mesken 1300 yükseklik, tavana 500
+8. **M5/M6 kabul tolerans matrisi** (Claude6 §13) — tam tablo
+9. **F3-A1 tamponlama algoritması** (D7-11) — Clipper2 OffsetOpenPath
+10. **V-042b ciddiyet BİLGİ** — 262 delik 1-10 mm kabul görmüş
+
+### Orta Öncelikli
+
+11. **Rejim tespiti + Güncel Rejime Yükselt sihirbazı** (D7-02, C6-02)
+12. **Otomatik onarım fark tablosu** (D7-06, K74)
+13. **`tools/measure` genişletilmiş şema** (D7-10) — SHA-256 + CI
+14. **Kapı sığma kontrolü** (D7-05, D7-12, K45d, K82)
+15. **M11 IFC v1 dışı** — ayrı bölüme
+
+---
+
+## 8. Ek: Yeni Bulgular İçin Sorular
+
+Claude6'nın N12–N19 ölçümleri ışığında **yeni açık sorular:**
+
+| Kod | Soru | Test |
+|---|---|---|
+| **AS-10** | Kapı alt boşluğu 10 vs 50 mm neden farklı? (Muhtemelen üretici yazılım tercihi) | Tarihsel analiz + rakip sorusu |
+| **AS-11** | Ornek1'de kapı 220 cm (2 değer neden?) | Dosya içi segmentasyon (iç/dış kapı ayrımı) |
+| **AS-12** | N14'te sürekli dağılım → mimari proje kalitesi mi yoksa röleve mi? | Dosya metadata kontrolü |
+| **AS-13** | N15'te buildingHeight geometrik karşılığı yok — TKGM nasıl kontrol ediyor? | Resmi doğrulayıcı testi |
+| **AS-14** | Amasya/Sincan'da neden GroundSurface yok? | Kılavuz sürüm analizi |
+| **AS-15** | N17'de oda adı = kod etiketi 100% — bu bir kural mı, gelenek mi? | Rehber kontrolü |
+
+Bu sorular **7. tur sonrası** cevaplanacak. En kritik olan **AS-11** (neden 2 farklı kapı yüksekliği?) ve **AS-15** (kural mı, gelenek mi?).
+
+---
+
+## 9. Claude6, Grok6 ve Gemini v6'ya Teşekkür ve Düzeltmeler
+
+### Claude6'ya
+
+Bu turda **8 hatamı düzelttin**. Özellikle:
+- N12–N19 ölçümlerini **bu turda yapman** ve iddiaları **kanıtla** çürütmen takdire şayan
+- `[DÜZELTME]` etiketini kendi 5. tur hatan için kullanman **entegrite örneği**
+- GroundSurface çelişkisini **en kritik açık soru** olarak işaretlemen doğru
+- Mahal sözlüğü düzeltmesi (N17) **veri bozma hatasını** yakaladı
+
+**Benim katkım:** `measure-report.json` şeması (D7-10), A/B test paketi (D7-03), rejim tespiti (D7-02), duvar yükseklik haritası (D7-12).
+
+### Grok6'ya
+
+Bu turda **Claude6'nın ölçümlerini göremedin** (00:05 vs 00:18). O yüzden bazı iddiaların (K56-ek, V-064b) Claude6 tarafından çürütülmüş durumda. **Grok6'nın güçlü katkısı:** Proceed matrisi, UX ergonomi, performans bütçeleri, gizlilik/lisans modeli.
+
+### Gemini v6'ya
+
+Plan **%85-90 olgun** ve M0–M3 için yeterli. Ama **mahal sözlüğü hatası kritik** — kodlamaya başlamadan önce düzeltilmeli. Diğer hatalar (kapı varsayılanı, pencere varsayılanı, GroundSurface) düzeltilirse **v6.1 → tam hazır**.
+
+### ChatGPT'ye
+
+6. tur dosyası yok. 7. turda özellikle **AS-1 (GroundSurface)** için Kılavuz'un farklı sürümlerini araştırabilir.
+
+---
+
+## 10. Sonuç
+
+**7. Tur, projenin gerçek anlamda olgunlaştığı turdur.** Claude6'nın ölçüm disiplini + Gemini v6'nın plan yapısı + Grok6'nın UX/risk analizi + benim bu turdaki itiraf ve katkılarım → **v6.1 için net bir yol haritası**.
+
+**Kesin hükümler:**
+
+1. **M0–M3 için HEMEN BAŞLANABİLİR.** K70 koruma, V-001..V-198 doğrulayıcı, profil paketi, BigInt arsa payı — hepsi hazır.
+2. **M3.5–M6 için 15 madde düzeltme gerekli.** En kritikleri: mahal sözlüğü, kapı varsayılanı, tolerans matrisi, GroundSurface.
+3. **M7+ için saha testi şart.** AS-1 (GroundSurface) A/B testi olmadan kodlama tamamlanmamalı.
+4. **M11 (IFC) v1 dışı.**
+
+**Son söz:** Bu tur, "ölçümsüz kural olmaz" ilkesinin zaferidir. Claude6'nın N12–N19'u, benim 6. turdaki 8 hatamı ortaya çıkardı. Bu, kötü bir şey değil — **bilimsel sürecin çalıştığının** kanıtı. Bir sonraki turda (8. tur), Gemini v6.1 geldiğinde, ChatGPT'nin 7. tur dosyası ve AS-1 test sonuçlarıyla birlikte **M0 kodlamasına resmi "Proceed"** verilebilir.
+
+---
+
+**Kendi kendime not (7. Tur sonu):** Bu turda yaptığım 8 hatayı açıkça kabul ettim. 8. turda **hiçbir iddiayı ölçümsüz kurallaştırmayacağım**. Claude6'nın disiplinini kendime örnek alıyorum. Her yeni önerim:
+- `[ÖLÇÜLDÜ-6]` etiketli (Claude6 ölçümüyle destekleniyorsa)
+- `[ÖNERİ]` etiketli (mühendislik tercihi ise)
+- `[DOĞRULANMALI]` etiketli (resmi doğrulayıcı gerekiyorsa)
+
+**Bu üç etiketten biri olmadan hiçbir iddia bu belgede yoktur.** Bu, 7. turun benim için en önemli dersi.

@@ -42,3 +42,20 @@
 11. **ACIK-11 — Aynı duvar diliminde çakışan kapı ve pencere açıklıkları (`KONTROL-M8 R4`):**
     - **Gerekçe:** `Ornek2` gibi bazı kaynak dosyalarda balkon kapısı ile bitişik pencere delikleri aynı duvar diliminde ortak kenar paylaşacak veya üst üste binecek biçimde tanımlanmış olup üretimde `V-035` / `V-039` delik kesişmesi üretmektedir.
     - **Uygulama:** `fromImported.ts` içinde aynı kat, aynı duvar dilimi ve örtüşen Z aralığındaki açıklıklar tespit edilerek yatayda `10 mm` güvenlik payıyla örtüşmeyecek biçimde kırpılır (veya tamamen içeride kalıyorsa atlanır) ve `ExtractionNote` olarak kaydedilir. Ayrıca `generate.ts` içindeki `wallFaces` fonksiyonu aynı duvar parçasına düşen çakışık ikinci deliği `B-OP-10` (`U`) uyarısıyla eleyerek `V-035` / `V-039` oluşumunu engeller.
+
+## KONTROL-M9 ile güncellenenler (Claude, 08.11.2026)
+
+10. **ACIK-10 güncellemesi — V-217 ciddiyeti ölçüme göre UYARI'ya düşürüldü (KONTROL-M9 R1):**
+    - 9 resmi dosyanın **kendisi** doğrulandı. V-217 (10 mm), TKGM'nin kabul ettiği 7 dosyada ihlal buldu: Ornek1 81, Ornek3 71, Ornek5 16, Ornek4 10, Sincan 9, Ornek2 8, Amasya 2 oda. Yalnız Ornek6 temiz.
+    - TKGM bu dosyaları kabul ettiğine göre sunucu oda kabuğu kapalılığını bu sıkılıkta zorunlu tutmuyor. KARARLAR §A.7'deki ölçüme dayalı ciddiyet politikasıyla V-217 `U` oldu.
+    - Uygulamanın **kendi ürettiği** odalar için kapalılık testlerde zorunlu kaldı (m5, m6, m8: `checkShell(...).closed`). Ölçüm: Ornek1, Ornek3, Ornek5 ve Ornek2'den üretilen dosyalarda V-217 = 0.
+12. **ACIK-12 — Ornek2 kaynak hacim öznitelikleri kendi geometrisiyle tutmuyor:**
+    - Ornek2'nin çatı arası odalarında `volume` özniteliği ile kaynağın kendi kapalı kabuğunun hacmi farklı. Örnek: 5_Banyo öznitelik 5,33 m³; 8_Oda 64,11 m³, kabuk 64,78 m³.
+    - Kaynak yüzlerin hepsi ters yönlü (normal içe bakıyor).
+    - Bu yüzden altın ölçüt "kaynak öznitelik ±0,05" değil, şu: **üretilen kabuk kapalı ve öznitelik = üretilen kabuğun hacmi**.
+    - Ornek2'den üretilen 8 çatı arası odasının hacmi kaynak özniteliklerinden %0,2–1,3 farklı.
+13. **ACIK-13 — Çatı arası pencerelerinin LoD2 karşılığı (Ornek2'de 6 × V-164):**
+    - Çatı arası odaları artık doğru üretildiği için pencereleri yerine oturuyor.
+    - Ancak çatı arası dış duvarı en üst katın sınırıyla aynı hatta değil (diz duvarı/çatı içinde). Bu yüzden T1 (bina dış yüzü) temsili üretilmiyor ve V-164 HATA kalıyor.
+    - **Çözüm önerisi:** Çatı arası katı için ayrı bir dış sınır (çatı arası dış duvarı) tanımlanmalı. LoD2 duvarları ve T1 açıklıkları bu sınıra göre üretilmeli.
+    - Ayrı bir iş; M10 sonrası.

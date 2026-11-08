@@ -295,3 +295,16 @@
 - **Çevrimdışı HTML Raporları (`generateSubmissionReportHtml`, `generateMalikIrtifakReportHtml`, `K88-yeni`, `K99`):**
   - Belediye ve Kadastro idaresine sunulacak teknik teslim raporunda hiçbir malik / kişisel veri yer almaz (`K99`).
   - Kat irtifakı ve malik listesi raporunda `BigInt` tabanlı tam hisse toplamı (`pay/payda`) ve bağımsız bölüm tablosu üretilir (`K88-yeni`).
+
+## A.15 KONTROL-M9 Düzeltmeleri (Claude, 08.11.2026)
+
+- **V-217 (oda kabuğu kapalılığı):**
+  - Ölçüme dayalı **UYARI**: 9 resmi dosyanın 7'sinde ihlal var ve TKGM kabul etmiş (§A.7 politikası).
+  - Uygulamanın ürettiği odalar için kapalılık testlerde **zorunlu**.
+- **İçe aktarılan tavan yüzleri (`ceilingFaces`):** Duvarla birleştirilmeden önce dört işlem uygulanır:
+  1. yukarı yönlendirme (Newell z < 0 ise ters çevrilir);
+  2. < 5 mm (plan) ve ≤ 2 mm (kot) yakın köşelerin birleştirilmesi;
+  3. alanı < 100 mm² kalan parçaların atılması.
+  4. Duvar halkalarında aynı doğru üzerindeki geri dönüşler silinir.
+- **BB küveti kapağı:** Kısım izleri birbirine değiyorsa kapak "sınır − ⋃ kısımlar" Boolean farkıyla üretilir (`B-BB-05`, BİLGİ).
+- **Çatı arası hacim ölçütü:** Kaynak öznitelik değil, üretilen kapalı kabuğun hacmi (ACIK-12).

@@ -134,9 +134,13 @@ export const EXTRA_RULES: readonly RuleDefinition[] = [
   },
   {
     id: 'V-217',
-    severity: 'H',
+    // Ölçüme dayalı ciddiyet (KARARLAR §A.7, KONTROL-M9 R1): 9 resmi dosyanın 7'sinde (Ornek1 81, Ornek3 71, Ornek5 16,
+    // Ornek4 10, Sincan 9, Ornek2 8, Amasya 2 oda) ihlal var ve TKGM bu dosyaları kabul etmiş. H → U.
+    // Uygulamanın kendi ürettiği odalar için kapalılık testlerde zorunludur (m5/m6/m8: checkShell(...).closed).
+    severity: 'U',
     source: 'Şartname §5.5 madde 6, KONTROL-M8 R3 (ACIK-10; val3dity 3B oda kabuğu kapalılığı)',
     status: 'uygulandi',
+    note: 'Ölçüme dayalı UYARI (H\'den düşürüldü): 9 resmi dosyanın 7\'sinde açık oda kabuğu var, TKGM kabul etmiş (KONTROL-M9 R1).',
     run: (ctx, emit) => {
       for (const r of [...ctx.byPrefix('BBK_'), ...ctx.byPrefix('OA_')]) {
         const fl = r.surfaces.some((s) => s.tag === 'FloorSurface');

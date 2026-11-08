@@ -2,7 +2,24 @@
 // kot motoru, kısım (oda) kabukları, iç yapılar (BBKIY/OAIY), iç kısımlar (K71), BB parçası küvetleri,
 // kat kabukları, açıklıklar (T1–T5, sahanlık penceresi spansStoreys) ve çatı arası kesimi (§5.9).
 // Saf TS: DOM/Node yok, rastgelelik yok. Kimlikler uuidv5 ile tasarım nesnesine bağlı (§5.1 madde 1).
-import { pointInPoly, polyAreaM2, ringInsidePoly, signedArea2x } from '../design/geometry2d.ts';
+import { pointInPoly, polyAreaM2, ringInsidePoly, segIntersect, signedArea2x } from '../design/geometry2d.ts';
+import { subtractPolygons2D } from './polyBoolean2d.ts';
+
+/** Delik halkalarından herhangi ikisi kesişiyor veya değiyor mu (kapak için V-035 riski)? */
+function holesTouch(holes: readonly Ring2[]): boolean {
+  for (let i = 0; i < holes.length; i++) {
+    for (let j = i + 1; j < holes.length; j++) {
+      const a = holes[i];
+      const b = holes[j];
+      for (let p = 0; p < a.length; p++) {
+        for (let q = 0; q < b.length; q++) {
+          if (segIntersect(a[p], a[(p + 1) % a.length], b[q], b[(q + 1) % b.length]) !== 'none') return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 import type { DesignBuilding, DesignProject, Opening, Part, Poly2, Pt2, Ring2, SectionPart, Storey } from '../design/types.ts';
 import { uuidv5 } from '../hash/canonical.ts';
 import {
@@ -205,6 +222,29 @@ export function wallFaces(
     }
     if (outer.length > 1 && outer[0].x === outer[outer.length - 1].x && outer[0].y === outer[outer.length - 1].y && outer[0].z === outer[outer.length - 1].z) {
       outer.pop();
+    }
+    // Aynı doğru üzerinde ileri-geri giden "diken" köşeleri sil (V-034). Çatı arası tavan profillerinde aynı noktada
+    // 1 mm farklı iki kot olabiliyor (Ornek2 OA: 962 974 → 962 973), bu da duvar halkasını kendini kesen hale getiriyordu.
+    for (let changed = true; changed && outer.length > 3; ) {
+      changed = false;
+      for (let i = 0; i < outer.length && outer.length > 3; i++) {
+        const p0 = outer[(i - 1 + outer.length) % outer.length];
+        const p1 = outer[i];
+        const p2 = outer[(i + 1) % outer.length];
+        const v1 = { x: p1.x - p0.x, y: p1.y - p0.y, z: p1.z - p0.z };
+        const v2 = { x: p2.x - p1.x, y: p2.y - p1.y, z: p2.z - p1.z };
+        const cx = v1.y * v2.z - v1.z * v2.y;
+        const cy = v1.z * v2.x - v1.x * v2.z;
+        const cz = v1.x * v2.y - v1.y * v2.x;
+        const l1 = Math.hypot(v1.x, v1.y, v1.z);
+        const l2 = Math.hypot(v2.x, v2.y, v2.z);
+        const backtrack = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z < 0;
+        if (l1 > 0 && l2 > 0 && Math.hypot(cx, cy, cz) / Math.max(l1, l2) <= 0.5 && backtrack) {
+          outer.splice(i, 1);
+          changed = true;
+          break;
+        }
+      }
     }
     polygons.push({
       id: idOf(`${k}`),
@@ -836,7 +876,9 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
     }
     // Duvar malzemesi W = outline − ⋃ kısımlar (§5.3 madde 3).
     // K71 iç kısım durumunda: başka bir kısmın dış halkası içinde kalan iç kısımlar ana delik listesine (mainWHoles) eklenmez (V-039 iç içe delik yasağı).
-    const myParts = ctx.parts.filter((p) => p.kind === 'BBK' && !p.remote && p.sectionPartIds.includes(sp.id));
+    // Yalnız bu küvetin kot aralığında tabanı olan kısımlar (çatı arası odası alt kattaki parçaya bağlıysa, tabanı bu
+    // küvetin tavanının üstündedir; onun izi alt küvetin kapağında delik olursa diğer odaların delikleriyle kesişir, Ornek2).
+    const myParts = ctx.parts.filter((p) => p.kind === 'BBK' && !p.remote && p.sectionPartIds.includes(sp.id) && partFloorZ(p, ctx.lv) < zC - 1);
     const topLevelParts = myParts.filter(
       (q) => !myParts.some((p) => p.id !== q.id && (p.zFloorOverride ?? null) === (q.zFloorOverride ?? null) && ringInsidePoly(q.polygon.outer, { outer: p.polygon.outer, holes: [] })),
     );
@@ -894,6 +936,15 @@ export function generateBrep(project: DesignProject, building: DesignBuilding = 
       wallPolys.push(...clipCapPolygonToRoof({ outer: spCapOutline.outer, holes: mainWCapHoles }, ctx.roofEnv, zFT + 1, 'Wall_', (role) => pid('Wall_', `kapak:${role}`), zC));
       innerIslands.forEach((isl, ii) => {
         wallPolys.push(...clipCapPolygonToRoof(isl, ctx.roofEnv!, zFT + 1, 'Wall_', (role) => pid('Wall_', `kapak_ada:${ii}:${role}`), zC));
+      });
+    } else if (holesTouch(mainWHoles)) {
+      // Kısım izleri birbirine değiyor/kesişiyorsa (Ornek2: komşu odalar köşede ve kısa bir kenarda değiyor, T-06'da
+      // ≤ 0,1 m² toleransla kabul) "dış sınır + delikler" geçersiz kapak verir (V-035). Kapak = sınır − ⋃ kısımlar (Boolean).
+      const capPolys = subtractPolygons2D([spOutline], topLevelParts.map((p) => ({ outer: p.polygon.outer, holes: [] })));
+      capPolys.forEach((cp, ci) => wallPolys.push({ id: pid('Wall_', `kapak:bool:${ci}`), kind: 'Wall_', outer: cp.outer.map((p) => at(p, zC)), holes: cp.holes.map((h) => h.map((p) => at(p, zC))) }));
+      issues.push({ code: 'B-BB-05', severity: 'B', elementId: sp.id, message: `Kısım izleri birbirine değiyor; BB küveti kapağı Boolean farkla ${capPolys.length} poligon olarak üretildi.` });
+      innerIslands.forEach((isl, ii) => {
+        wallPolys.push({ id: pid('Wall_', `kapak_ada:${ii}`), kind: 'Wall_', outer: isl.outer.map((p) => at(p, zC)), holes: isl.holes.map((h) => h.map((p) => at(p, zC))) });
       });
     } else {
       wallPolys.push({ id: pid('Wall_', 'kapak'), kind: 'Wall_', outer: spOutline.outer.map((p) => at(p, zC)), holes: mainWHoles.map((h) => h.map((p) => at(p, zC))) });

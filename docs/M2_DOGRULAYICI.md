@@ -278,6 +278,6 @@ Toplam 176 kural: Uygulandı 137, Ertelendi 16, Kısmi (K) 3, Okuyucuda 13, Sunu
 | V-214 | B | Okuyucuda | KONTROL-M1 G5 | gmlReader.parseGenericAttributesFromNode |
 | V-215 | B | Okuyucuda | K55, K79, K87 | gmlReader.resolveProducerProfileFromFormAndOffset |
 | V-216 | U | Uygulandı | K68, Ek-A §A.3 |  |
-| V-217 | H | Uygulandı | Şartname §5.5 madde 6, KONTROL-M8 R3 (ACIK-10; val3dity 3B oda kabuğu kapalılığı) |  |
+| V-217 | U | Uygulandı | Şartname §5.5 madde 6, KONTROL-M8 R3 (ACIK-10; val3dity 3B oda kabuğu kapalılığı) | Ölçüme dayalı UYARI (H'den düşürüldü): 9 resmi dosyanın 7'sinde açık oda kabuğu var, TKGM kabul etmiş (KONTROL-M9 R1). |
 
 <!-- KAPSAM-TABLOSU:BITIR -->

@@ -386,3 +386,67 @@ function readinessForHash(xml: string): string {
   return sha256Hex(xml);
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// KONTROL-M9 R3: WGS84 → TUREF TM mutlak doğruluğu. Gidiş-dönüş testi aynı hatayı iki yönde yapan dönüşümü yakalamaz;
+// burada iki bağımsız ölçüt kullanılır:
+//  (1) GRS80 meridyen yayı: ekvatordan 45°'ye 4 984 944.378 m, çeyrek meridyen (90°) 10 001 965.729 m (jeodezi sabitleri).
+//  (2) Karney (2011) / Krüger n-serisi (6. derece, mikrometre doğruluğu) ile bağımsız TM hesabı.
+const GRS80 = { a: 6378137.0, f: 1 / 298.257222101 };
+function krugerTm(lonDeg: number, latDeg: number, lon0Deg: number): { e: number; n: number } {
+  const { a, f } = GRS80;
+  const n = f / (2 - f);
+  const n2 = n * n, n3 = n2 * n, n4 = n3 * n, n5 = n4 * n, n6 = n5 * n;
+  const A = (a / (1 + n)) * (1 + n2 / 4 + n4 / 64 + n6 / 256);
+  const al = [
+    0,
+    n / 2 - (2 * n2) / 3 + (5 * n3) / 16 + (41 * n4) / 180 - (127 * n5) / 288 + (7891 * n6) / 37800,
+    (13 * n2) / 48 - (3 * n3) / 5 + (557 * n4) / 1440 + (281 * n5) / 630 - (1983433 * n6) / 1935360,
+    (61 * n3) / 240 - (103 * n4) / 140 + (15061 * n5) / 26880 + (167603 * n6) / 181440,
+    (49561 * n4) / 161280 - (179 * n5) / 168 + (6601661 * n6) / 7257600,
+    (34729 * n5) / 80640 - (3418889 * n6) / 1995840,
+    (212378941 * n6) / 319334400,
+  ];
+  const phi = (latDeg * Math.PI) / 180;
+  const dl = ((lonDeg - lon0Deg) * Math.PI) / 180;
+  const e = (2 * Math.sqrt(n)) / (1 + n);
+  const t = Math.sinh(Math.atanh(Math.sin(phi)) - e * Math.atanh(e * Math.sin(phi)));
+  const xi1 = Math.atan2(t, Math.cos(dl));
+  const eta1 = Math.atanh(Math.sin(dl) / Math.sqrt(1 + t * t));
+  let xi = xi1;
+  let eta = eta1;
+  for (let j = 1; j <= 6; j++) {
+    xi += al[j] * Math.sin(2 * j * xi1) * Math.cosh(2 * j * eta1);
+    eta += al[j] * Math.cos(2 * j * xi1) * Math.sinh(2 * j * eta1);
+  }
+  return { e: 500000 + A * eta, n: A * xi };
+}
+
+describe('KONTROL-M9 R3 — WGS84 → TUREF TM mutlak doğruluk (bağımsız ölçütler)', () => {
+  it('GRS80 meridyen yayı: orta meridyende E = 500000, N(45°) = 4 984 944.378 m (±5 mm)', () => {
+    const p = wgs84ToTurefTm(30, 45, 5254);
+    expect(Math.abs(p.e - 500000)).toBeLessThan(0.001);
+    expect(Math.abs(p.n - 4984944.378)).toBeLessThan(0.005);
+    // Bağımsız seri de aynı sabiti vermeli (testin kendisinin doğrulaması)
+    expect(Math.abs(krugerTm(30, 45, 30).n - 4984944.378)).toBeLessThan(0.005);
+    expect(Math.abs(krugerTm(30, 90 - 1e-9, 30).n - 10001965.729)).toBeLessThan(0.005);
+  });
+  it('Türkiye dilimlerinde 1,5°\'ye kadar doğu/batı uzaklıkta Krüger serisiyle ±5 mm aynı', () => {
+    const pts: [number, number, 5253 | 5254 | 5255 | 5256 | 5257 | 5258 | 5259, number][] = [
+      [26.6, 41.7, 5253, 27], // Edirne
+      [28.98, 41.01, 5254, 30], // İstanbul
+      [31.45, 40.2, 5254, 30], // dilim kenarı
+      [32.85, 39.93, 5255, 33], // Ankara
+      [35.33, 37.0, 5256, 36], // Adana
+      [39.72, 41.0, 5257, 39], // Trabzon
+      [42.5, 39.5, 5258, 42], // Ağrı batısı
+      [44.05, 39.92, 5259, 45], // Iğdır
+    ];
+    for (const [lon, lat, epsg, dom] of pts) {
+      const p = wgs84ToTurefTm(lon, lat, epsg);
+      const k = krugerTm(lon, lat, dom);
+      expect(Math.abs(p.e - k.e), `${lon},${lat} E`).toBeLessThan(0.005);
+      expect(Math.abs(p.n - k.n), `${lon},${lat} N`).toBeLessThan(0.005);
+    }
+  });
+});

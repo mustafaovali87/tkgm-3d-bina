@@ -5,6 +5,22 @@
 
 ---
 
+## KONTROL-M9 DÜZELTMELERİ (Claude, 08.11.2026, kullanıcının isteğiyle)
+
+| Madde | Durum |
+|---|---|
+| R1 — V-217 resmi dosyalarda yanlış HATA | YAPILDI. Ölçüme dayalı `U` (7/9 resmi dosyada ihlal, TKGM kabul etmiş). **8 kabul dosyasında yeniden 0 HATA**; ret dosyasında V-202 korunuyor. Üretici için kapalılık testlerde zorunlu. |
+| R2 — Ornek2 çatı arası odaları | YAPILDI. **8/8 kapalı kabuk.** Hacim kaynak özniteliğinden %0,2–1,3 farklı (kaynağın kendi özniteliği de geometrisiyle tutmuyor, ACIK-12). |
+| R2 nedenleri | (1) Kaynak tavan yüzleri ters yönlü → yukarı çevriliyor. (2) Komşu yüzlerde 3 mm kaymış aynı köşe → < 5 mm köşeler birleştiriliyor. (3) Birleşince sıfır alanlı kalan ince parça → atılıyor. (4) Duvar tepesinde 1 mm geri dönen diken → siliniyor (V-034). (5) Birbirine değen oda izleri → BB küveti kapağı Boolean farkla. |
+| R2 testi | YAPILDI. `m8.test.ts`: ters yönlü + 3 mm kaymış + ince parçalı beşik tavanlı çatı arası odası; kapalı kabuk, analitik hacim 64,80 m³ ±0,05. Düzeltme geri alınınca test başarısız oluyor (doğrulandı). |
+| R3 — WGS84 → TUREF mutlak doğruluk | YAPILDI. `m9.test.ts`: GRS80 meridyen yayı sabitleri (45°: 4 984 944,378 m) ve bağımsız Krüger/Karney 6. derece serisi; 8 noktada ±5 mm. |
+| R4 — Ornek2 kalan V-035 | YAPILDI. BB küveti kapağında birbirine değen oda delikleri; kapak Boolean farkla üretiliyor. |
+| Ornek2 üretim | 60 (M8) → 12 (M9) → **6 HATA**. Kalan 6'sı V-164 (çatı arası pencereleri, ACIK-13). |
+| Gerileme | Ornek1, Ornek5, Ornek6 (A ve B) 0 HATA; M7 konum korunumu sağlam. |
+| Komutlar | `typecheck` 0 hata ✔, `npm test` **175/175** ✔ |
+
+---
+
 ## M9 — RESMÎ TEST, ÖN-KONTROL (PRE-FLIGHT), KML/GEOJSON PARSEL VE TESLİM RAPORU (`§7.1`, `§8.3`, `§9.5`, `§10.6`, `§11`) (08.11.2026)
 
 > Ayrıntı: `docs/M9_RESMI_TEST_VE_TESLIM.md`.

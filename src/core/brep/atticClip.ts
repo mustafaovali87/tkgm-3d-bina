@@ -574,10 +574,61 @@ export function prepareExplicitCeilingForPoly(
     return out;
   };
 
-  let snappedFaces = faces.map((f) => ({
-    outer: dedup3(f.outer.map(snapPt3)),
-    holes: f.holes.map((h) => dedup3(h.map(snapPt3))),
-  }));
+  // Tavan yüzleri oda dışına (yukarı) bakmalı (§5.1 madde 4). Bazı kaynak dosyalarda (Ornek2) tüm yüzler ters
+  // yönlü yazılmış; ters yüzün sınır kenarları duvar kenarıyla aynı yönde ilerlemediği için tepe profili bulunamıyor
+  // ve kabuk açık kalıyordu (KONTROL-M9 R2). Newell normalinin z bileşeni negatifse halkalar ters çevrilir.
+  const newellZ = (r: readonly Pt3[]) => {
+    let z = 0;
+    for (let i = 0; i < r.length; i++) {
+      const a = r[i];
+      const b = r[(i + 1) % r.length];
+      z += (a.x - b.x) * (a.y + b.y);
+    }
+    return z;
+  };
+  const orientedFaces = faces.map((f) =>
+    newellZ(f.outer) < 0 ? { outer: [...f.outer].reverse(), holes: f.holes.map((h) => [...h].reverse()) } : { outer: [...f.outer], holes: f.holes.map((h) => [...h]) },
+  );
+  // Komşu tavan yüzlerinde aynı köşe kaynakta birkaç mm farkla yazılmış olabilir (Ornek2 8_Oda: 3 mm). Oturtmadan önce
+  // < 5 mm (plan) ve ≤ 2 mm (kot) yakın köşeler tek temsilciye birleştirilir; yoksa iki yüz arasında ince yarık kalır.
+  // 5 mm, en kısa kenar sınırının (10 mm, V-038) yarısıdır; gerçekten ayrı iki köşe bu kadar yakın olamaz.
+  const reps: Pt3[] = [];
+  const unify = (v: Pt3): Pt3 => {
+    for (const r of reps) if (Math.hypot(v.x - r.x, v.y - r.y) < 5 && Math.abs(v.z - r.z) <= 2) return r;
+    reps.push(v);
+    return v;
+  };
+  const unifiedFaces = orientedFaces.map((f) => ({ outer: f.outer.map(unify), holes: f.holes.map((h) => h.map(unify)) }));
+  const snapCache = new Map<Pt3, Pt3>();
+  const snapOnce = (v: Pt3): Pt3 => {
+    let s = snapCache.get(v);
+    if (!s) {
+      s = snapPt3(v);
+      snapCache.set(v, s);
+    }
+    return s;
+  };
+  // Birleştirme sonrası çizgiye dönüşen (alanı ~0) ince tavan parçaları atılır: kenarları komşu yüzlerin kenarıyla
+  // üst üste biner ve kabukta "fazla kullanılan kenar" üretir (Ornek2 8_Oda). Eşik 100 mm² (1 cm²).
+  const area3 = (r: readonly Pt3[]) => {
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    for (let i = 0; i < r.length; i++) {
+      const a = r[i];
+      const b = r[(i + 1) % r.length];
+      x += (a.y - b.y) * (a.z + b.z);
+      y += (a.z - b.z) * (a.x + b.x);
+      z += (a.x - b.x) * (a.y + b.y);
+    }
+    return Math.hypot(x, y, z) / 2;
+  };
+  let snappedFaces = unifiedFaces
+    .map((f) => ({
+      outer: dedup3(f.outer.map(snapOnce)),
+      holes: f.holes.map((h) => dedup3(h.map(snapOnce))).filter((h) => h.length >= 3 && area3(h) >= 100),
+    }))
+    .filter((f) => f.outer.length >= 3 && area3(f.outer) >= 100);
 
   // Oda köşeleri veya diğer tavan köşeleri bir tavan kenarının (u → w) ortasına düşüyorsa o kenarı böl
   const allCeilVerts = new Map<string, Pt3>();

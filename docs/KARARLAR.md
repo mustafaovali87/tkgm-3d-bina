@@ -209,3 +209,20 @@
 - **Yazıcı güvenliği:**
   - Beyaz liste dışı öznitelik yazılmaz (K99). Malik alanları bu yüzden GML'e yazılamaz.
   - Var olan özniteliğin tipi değiştirilmez; tekrar eden öznitelik düzenlenmez.
+
+---
+
+## A.9 M4 Tasarım Modeli ve 2B Editör (Claude, 08.11.2026)
+
+- **Tasarım modeli:** Şartname §4.2; mm tamsayı; köken tam metre.
+  - **Eklenen alanlar:**
+    - `idSeq`: deterministik kimlik sayacı; `randomUUID` kullanılmaz (Mutlak Kural 6).
+    - `zFloorOverride`: asma kat (§5.2 ÖNERİ).
+    - `remote`: uzak kısım (§4.2).
+- **Snap sırası (§7.4):** köşe > kenar orta > kenar üzeri > dik > paralel > ızgara 1 cm. Tolerans ekranda 8 piksel.
+- **Çizim anı denetimleri (§5.3):**
+  - Alan tabanlıdır: kesişim ≤ 0,1 m²; kat sınırı için boşluk ≤ çevre × 1 mm.
+  - Yalnız aynı kottaki elemanlar karşılaştırılır; delikler dahildir.
+  - Uzak kısım içerme denetiminden muaftır.
+  - Çatı arası (usage 1004) için içerme ihlali UYARI'dır (§5.9).
+- **Proje dosyası `.tkgm3b`:** JSON, deterministik. Malik listesi yalnız burada tutulur, GML'e yazılmaz (K88-yeni).

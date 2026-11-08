@@ -41,6 +41,7 @@ import {
 } from './core/gml/gmlWriter.ts';
 import type { GenericAttributeType } from './core/model/index.ts';
 import { FloorPlanPreview2D } from './viewer3d/FloorPlanPreview2D.tsx';
+import { DesignEditor2D } from './editor2d/DesignEditor2D.tsx';
 import { parseCityGmlInWorker } from './workers/gmlWorkerClient.ts';
 
 interface WorkerReadState {
@@ -53,6 +54,8 @@ interface WorkerReadState {
 
 export function App() {
   const [model, setModel] = useState<ImportedModel>(() => getDefaultOrnek6Model());
+  // M4: 2B panel kipi — içe aktarılan GML izdüşümü veya tasarım editörü (§7.4).
+  const [cad2dMode, setCad2dMode] = useState<'izdusum' | 'tasarim'>('izdusum');
   // M3: Düzelticinin üzerinde çalıştığı kaynak metin, dosya adı, geri alma geçmişi ve son işlem özeti.
   const [sourceXml, setSourceXml] = useState<string>(ORNEK6_RAW_XML);
   const [currentFileName, setCurrentFileName] = useState<string>('M-70125626-A.gml');
@@ -463,8 +466,30 @@ export function App() {
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
           <span className="text-xs font-semibold tracking-wide text-slate-200 truncate">
-            2B ÇİZİM & KAT İZDÜŞÜMÜ (M4 Yer Tutucu)
+            2B ÇİZİM
           </span>
+          {/* M4: GML izdüşümü (içe aktarılan dosya) ile tasarım editörü (§7.4) arasında geçiş */}
+          <div className="flex items-center gap-0.5 ml-1" role="tablist" aria-label="2B panel kipi">
+            {(
+              [
+                { id: 'izdusum', label: 'GML İzdüşümü' },
+                { id: 'tasarim', label: 'Tasarım Editörü' },
+              ] as const
+            ).map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={cad2dMode === m.id}
+                onClick={() => setCad2dMode(m.id)}
+                className={`px-1.5 py-0.5 text-[11px] rounded ${
+                  cad2dMode === m.id ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
         <button
           type="button"
@@ -476,16 +501,20 @@ export function App() {
         </button>
       </div>
       <div className="flex-1 min-h-0">
-        <FloorPlanPreview2D
-          model={model}
-          selectedGmlId={selectedGmlId}
-          activeStoreyGmlId={activeStoreyId}
-          onSelectGmlId={(id) => {
-            setSelectedGmlId(id);
-            setHighlightedRulePolygonId(null);
-          }}
-          onSelectStoreyGmlId={setActiveStoreyId}
-        />
+        {cad2dMode === 'tasarim' ? (
+          <DesignEditor2D key={model.canonicalHash} model={model} codelists={getOfflineCodelistRegistry()} />
+        ) : (
+          <FloorPlanPreview2D
+            model={model}
+            selectedGmlId={selectedGmlId}
+            activeStoreyGmlId={activeStoreyId}
+            onSelectGmlId={(id) => {
+              setSelectedGmlId(id);
+              setHighlightedRulePolygonId(null);
+            }}
+            onSelectStoreyGmlId={setActiveStoreyId}
+          />
+        )}
       </div>
     </div>
   );

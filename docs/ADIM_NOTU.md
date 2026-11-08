@@ -5,6 +5,20 @@
 
 ---
 
+## M4 — TASARIM MODELİ VE 2B EDİTÖR (Claude, 08.11.2026)
+
+> Ayrıntı: `docs/M4_TASARIM_EDITORU.md`.
+
+| Madde | Durum |
+|---|---|
+| `src/core/design/` (types, geometry2d, snap, editor, checks, projectFile, fromImported) | YAPILDI |
+| Kabul: Ornek6 planı çizilebiliyor | YAPILDI. Gürültülü tıklamalarla editör komutları; snap köşeleri mm düzeyinde oturtuyor; 0 HATA |
+| Ornek6 alanları ve kotları | YAPILDI. 16/16 kısım ±0,01 m²; kotlar ±1 mm |
+| 9 dosyadan tasarım çıkarma | YAPILDI. 9/9 dosya çizim denetiminde 0 HATA |
+| Arayüz | YAPILDI. 2B panelde "Tasarım Editörü"; tarayıcıda gerçek fareyle kat sınırı çizildi (91,34 m², altlıkla mm düzeyinde aynı) |
+| Komutlar | `typecheck` 0 hata ✔, `npm test` 95/95 ✔ |
+---
+
 ## M3 — ÖZNİTELİK DÜZELTİCİ VE GML YAZICISI (Claude, 08.11.2026)
 
 > Ayrıntı: `docs/M3_DUZELTICI.md`.

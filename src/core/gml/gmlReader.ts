@@ -213,6 +213,16 @@ function resolveAttributeCodelistKey(
   }
 }
 
+export interface GmlReadProgress {
+  readonly percent: number;
+  readonly phase: string;
+  readonly detail?: string;
+}
+
+export interface ParseCityGmlOptions {
+  readonly onProgress?: (progress: GmlReadProgress) => void;
+}
+
 function getIdPrefix(gmlId: string): string {
   const idx = gmlId.indexOf('_');
   return idx >= 0 ? gmlId.slice(0, idx + 1) : '';
@@ -221,6 +231,46 @@ function getIdPrefix(gmlId: string): string {
 function asArray<T>(val: T | T[] | undefined | null): T[] {
   if (val === undefined || val === null) return [];
   return Array.isArray(val) ? val : [val];
+}
+
+/**
+ * G8: Ad alanı önekine (core:, bldg:, gml:, grp:, gen:, xlink: vb.) bağımlılığı ortadan kaldıran hızlı erişim yardımcısı.
+ * Önce standart önekli anahtarı, ardından önsüz yerel adı, son olarak da '*:localName' eşleşmesini kontrol eder.
+ */
+function getNodeByLocalName(
+  record: Record<string, unknown> | undefined | null,
+  stdPrefixedKey: string,
+  localName: string
+): unknown {
+  if (!record) return undefined;
+  if (stdPrefixedKey in record) return record[stdPrefixedKey];
+  if (localName in record) return record[localName];
+  const suffix = `:${localName}`;
+  for (const k of Object.keys(record)) {
+    if (k.endsWith(suffix)) return record[k];
+  }
+  return undefined;
+}
+
+function getAttrByLocalName(
+  record: Record<string, unknown> | undefined | null,
+  stdAttrKey: string,
+  localAttrKey: string
+): string {
+  if (!record) return '';
+  if (stdAttrKey in record && record[stdAttrKey] !== undefined) {
+    return String(record[stdAttrKey]).trim();
+  }
+  if (localAttrKey in record && record[localAttrKey] !== undefined) {
+    return String(record[localAttrKey]).trim();
+  }
+  const suffix = `:${localAttrKey.replace(/^@_/, '')}`;
+  for (const k of Object.keys(record)) {
+    if (k.startsWith('@_') && k.endsWith(suffix) && record[k] !== undefined) {
+      return String(record[k]).trim();
+    }
+  }
+  return '';
 }
 
 function extractText(node: unknown): string {
@@ -241,11 +291,11 @@ function parseLinearRingNode(
   ringNode: Record<string, unknown>,
   readerIssues: ValidationIssue[]
 ): ImportedLinearRing | null {
-  const gmlId = String(ringNode['@_gml:id'] ?? ringNode['@_id'] ?? '').trim();
+  const gmlId = getAttrByLocalName(ringNode, '@_gml:id', '@_id');
   const prefix = getIdPrefix(gmlId);
 
-  const posListNode = ringNode['gml:posList'] ?? ringNode.posList;
-  const posNodes = asArray(ringNode['gml:pos'] ?? ringNode.pos);
+  const posListNode = getNodeByLocalName(ringNode, 'gml:posList', 'posList');
+  const posNodes = asArray(getNodeByLocalName(ringNode, 'gml:pos', 'pos'));
 
   let rawTokens: string[] = [];
   let rawPosText = '';
@@ -310,15 +360,15 @@ function parsePolygonNode(
   lodLevel: ImportedPolygon['lodLevel'],
   readerIssues: ValidationIssue[]
 ): ImportedPolygon | null {
-  const gmlId = String(polyNode['@_gml:id'] ?? polyNode['@_id'] ?? '').trim();
+  const gmlId = getAttrByLocalName(polyNode, '@_gml:id', '@_id');
   const prefix = getIdPrefix(gmlId);
 
-  const extNode = (polyNode['gml:exterior'] ?? polyNode.exterior) as
+  const extNode = getNodeByLocalName(polyNode, 'gml:exterior', 'exterior') as
     | Record<string, unknown>
     | undefined;
   if (!extNode) return null;
 
-  const extRingRaw = (extNode['gml:LinearRing'] ?? extNode.LinearRing) as
+  const extRingRaw = getNodeByLocalName(extNode, 'gml:LinearRing', 'LinearRing') as
     | Record<string, unknown>
     | undefined;
   if (!extRingRaw) return null;
@@ -326,12 +376,12 @@ function parsePolygonNode(
   const exteriorRing = parseLinearRingNode(extRingRaw, readerIssues);
   if (!exteriorRing || exteriorRing.vertices.length < 3) return null;
 
-  const intNodes = asArray(polyNode['gml:interior'] ?? polyNode.interior) as Array<
-    Record<string, unknown>
-  >;
+  const intNodes = asArray(
+    getNodeByLocalName(polyNode, 'gml:interior', 'interior')
+  ) as Array<Record<string, unknown>>;
   const interiorRings: ImportedLinearRing[] = [];
   for (const intNode of intNodes) {
-    const ringRaw = (intNode['gml:LinearRing'] ?? intNode.LinearRing) as
+    const ringRaw = getNodeByLocalName(intNode, 'gml:LinearRing', 'LinearRing') as
       | Record<string, unknown>
       | undefined;
     if (ringRaw) {
@@ -443,19 +493,18 @@ function collectMultiSurfacePolygonsAndXlinks(
   readerIssues: ValidationIssue[]
 ): void {
   if (!msContainer) return;
-  const msNode = (msContainer['gml:MultiSurface'] ??
-    msContainer.MultiSurface ??
+  const msNode = (getNodeByLocalName(msContainer, 'gml:MultiSurface', 'MultiSurface') ??
     msContainer) as Record<string, unknown>;
-  const members = asArray(msNode['gml:surfaceMember'] ?? msNode.surfaceMember) as Array<
-    Record<string, unknown>
-  >;
+  const members = asArray(
+    getNodeByLocalName(msNode, 'gml:surfaceMember', 'surfaceMember')
+  ) as Array<Record<string, unknown>>;
 
   for (const mem of members) {
-    const href = mem['@_xlink:href'] ?? mem['@_href'];
-    if (typeof href === 'string' && href.trim().length > 0) {
-      outXlinks.push(href.trim());
+    const href = getAttrByLocalName(mem, '@_xlink:href', '@_href');
+    if (href.length > 0) {
+      outXlinks.push(href);
     }
-    const polyRaw = (mem['gml:Polygon'] ?? mem.Polygon) as
+    const polyRaw = getNodeByLocalName(mem, 'gml:Polygon', 'Polygon') as
       | Record<string, unknown>
       | undefined;
     if (polyRaw) {
@@ -483,18 +532,24 @@ function parseGenericAttributesFromNode(
   readerIssues: ValidationIssue[]
 ): ImportedGenericAttribute[] {
   const result: ImportedGenericAttribute[] = [];
-  const attrTypes: ReadonlyArray<{ tag: string; type: GenericAttributeType }> = [
-    { tag: 'gen:stringAttribute', type: 'string' },
-    { tag: 'gen:intAttribute', type: 'int' },
-    { tag: 'gen:doubleAttribute', type: 'double' },
-    { tag: 'gen:dateAttribute', type: 'date' },
+  const attrTypes: ReadonlyArray<{
+    tag: string;
+    localTag: string;
+    type: GenericAttributeType;
+  }> = [
+    { tag: 'gen:stringAttribute', localTag: 'stringAttribute', type: 'string' },
+    { tag: 'gen:intAttribute', localTag: 'intAttribute', type: 'int' },
+    { tag: 'gen:doubleAttribute', localTag: 'doubleAttribute', type: 'double' },
+    { tag: 'gen:dateAttribute', localTag: 'dateAttribute', type: 'date' },
   ];
 
-  for (const { tag, type } of attrTypes) {
-    const rawList = asArray(objNode[tag]) as Array<Record<string, unknown>>;
+  for (const { tag, localTag, type } of attrTypes) {
+    const rawList = asArray(getNodeByLocalName(objNode, tag, localTag)) as Array<
+      Record<string, unknown>
+    >;
     for (const item of rawList) {
       const name = String(item['@_name'] ?? '').trim();
-      const valNode = item['gen:value'] ?? item.value;
+      const valNode = getNodeByLocalName(item, 'gen:value', 'value');
       const rawValue = extractText(valNode);
       const cleanValue = rawValue.trim();
       const hasWhitespaceOrTabWarning =
@@ -503,12 +558,13 @@ function parseGenericAttributesFromNode(
         rawValue !== cleanValue;
 
       if (hasWhitespaceOrTabWarning) {
+        // G5: TKGM'nin resmi kabul örneği Ornek6 içinde TAB ("\t5129820196") mevcuttur; okumada BİLGİ ('B') üretilir, yazmada trim uygulanır.
         readerIssues.push({
           ruleId: 'V-214',
-          severity: 'U',
+          severity: 'B',
           message: `${ownerGmlId} nesnesindeki "${name}" (${type}) özniteliğinde baştan/sondan boşluk veya TAB karakteri bulundu: ${JSON.stringify(
             rawValue
-          )}.`,
+          )}. Okumada BİLGİ olarak kabul edilir; üretimde (GMLWriter) trim uygulanır.`,
           targetGmlId: ownerGmlId,
         });
       }
@@ -580,15 +636,70 @@ const SURFACE_TAG_KEYS = [
 ] as const;
 
 /**
+ * G2: Kat biçimi (`A`/`B`/`C`) ve ölçülen kapı alt ofseti (`mm`) birleşiminden üretici profilini belirler.
+ * - `A` + `10` -> `'A10'`
+ * - `B` + `50` -> `'B50'`
+ * - `C` + `50` -> `'C50'`
+ * - `doorOffsetMm === null` -> `'biçim <Form>, ofset bilinmiyor'` (örn. Amasya: `'biçim A, ofset bilinmiyor'`)
+ * - Tanımlı profillere uymayan birleşim (örn. Sincan `B` + `10 mm`) -> `'B10 (biçim B, ofset 10 mm)'` ve `V-215 BİLGİ`: `"profil dışı birleşim"`.
+ */
+export function resolveProducerProfileFromFormAndOffset(
+  form: StoreyGeometryForm,
+  doorOffsetMm: number | null,
+  targetGmlId?: string
+): {
+  readonly profile: ProducerProfile;
+  readonly issue: ValidationIssue | null;
+} {
+  if (doorOffsetMm === null) {
+    return {
+      profile: `biçim ${form}, ofset bilinmiyor`,
+      issue: {
+        ruleId: 'V-215',
+        severity: 'B',
+        message: 'Kapı alt ofseti ölçülemedi (dosyada oda tabanı ile eşleşen kapı bulunamadı).',
+        targetGmlId,
+      },
+    };
+  }
+  if (form === 'A' && doorOffsetMm === 10) {
+    return { profile: 'A10', issue: null };
+  }
+  if (form === 'B' && doorOffsetMm === 50) {
+    return { profile: 'B50', issue: null };
+  }
+  if (form === 'C' && doorOffsetMm === 50) {
+    return { profile: 'C50', issue: null };
+  }
+  return {
+    profile: `${form}${doorOffsetMm} (biçim ${form}, ofset ${doorOffsetMm} mm)`,
+    issue: {
+      ruleId: 'V-215',
+      severity: 'B',
+      message: `Profil dışı birleşim: kat biçimi ${form}, kapı alt ofseti ${doorOffsetMm} mm (tanımlı profiller: A10, B50, C50).`,
+      targetGmlId,
+    },
+  };
+}
+
+/**
  * Bir TKGM CityGML 2.0 dosyasını (`Ornek1..6`, `Amasya`, `Sincan` vb.) çevrimdışı ayrıştırarak
  * nesne ağacını, poligon + delik geometrilerini, kod listesi açıklamalarını, `BigInt` arsa payı analizini
- * ve `K89` kanonik model özetini içeren `ImportedModel` nesnesini üretir (`M1`).
+ * ve `K89` kanonik model özetini içeren `ImportedModel` nesnesini üretir (`M1`, `G1–G8`).
  */
 export function parseCityGmlModel(
   xmlContent: string,
   fileName: string,
-  codelists: CodelistRegistry
+  codelists: CodelistRegistry,
+  options?: ParseCityGmlOptions
 ): ImportedModel {
+  const onProgress = options?.onProgress;
+  onProgress?.({
+    percent: 5,
+    phase: 'XML önişleme ve kodlama kontrolü',
+    detail: fileName,
+  });
+
   const readerIssues: ValidationIssue[] = [];
   const hasUtf8Bom = xmlContent.charCodeAt(0) === 0xfeff;
   const cleanXml = hasUtf8Bom ? xmlContent.slice(1) : xmlContent;
@@ -601,6 +712,12 @@ export function parseCityGmlModel(
   const firstLineMatch = /^<\?xml[^>]*\?>/.exec(cleanXml.trimStart());
   const xmlDeclaration = firstLineMatch ? firstLineMatch[0] : '';
 
+  onProgress?.({
+    percent: 15,
+    phase: 'XML ağacı ayrıştırılıyor (fast-xml-parser)',
+    detail: `${(cleanXml.length / (1024 * 1024)).toFixed(2)} MB`,
+  });
+
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
@@ -609,21 +726,24 @@ export function parseCityGmlModel(
   });
 
   const root = parser.parse(cleanXml) as Record<string, unknown>;
-  const cityModel = (root['core:CityModel'] ??
-    root.CityModel ??
+  const cityModel = (getNodeByLocalName(root, 'core:CityModel', 'CityModel') ??
     root['gml:CityModel']) as Record<string, unknown> | undefined;
 
   if (!cityModel) {
     throw new Error(`"${fileName}" içinde core:CityModel kök elemanı bulunamadı.`);
   }
 
-  // Envelope
-  const boundedByRoot = (cityModel['gml:boundedBy'] ?? cityModel.boundedBy) as
-    | Record<string, unknown>
-    | undefined;
-  const envNode = (boundedByRoot?.['gml:Envelope'] ?? boundedByRoot?.Envelope) as
-    | Record<string, unknown>
-    | undefined;
+  // Envelope (G8: ad alanı önekinden bağımsız)
+  const boundedByRoot = getNodeByLocalName(
+    cityModel,
+    'gml:boundedBy',
+    'boundedBy'
+  ) as Record<string, unknown> | undefined;
+  const envNode = getNodeByLocalName(
+    boundedByRoot,
+    'gml:Envelope',
+    'Envelope'
+  ) as Record<string, unknown> | undefined;
   const srsName = String(envNode?.['@_srsName'] ?? '').trim();
   const srsDimension = String(envNode?.['@_srsDimension'] ?? '3').trim();
 
@@ -631,8 +751,12 @@ export function parseCityGmlModel(
     const parts = str.trim().split(/\s+/).map(Number.parseFloat);
     return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
   };
-  const lowerCorner = parseCorner(extractText(envNode?.['gml:lowerCorner'] ?? envNode?.lowerCorner));
-  const upperCorner = parseCorner(extractText(envNode?.['gml:upperCorner'] ?? envNode?.upperCorner));
+  const lowerCorner = parseCorner(
+    extractText(getNodeByLocalName(envNode, 'gml:lowerCorner', 'lowerCorner'))
+  );
+  const upperCorner = parseCorner(
+    extractText(getNodeByLocalName(envNode, 'gml:upperCorner', 'upperCorner'))
+  );
 
   const envelope: BoundingBox3D = {
     minE: lowerCorner[0],
@@ -646,17 +770,20 @@ export function parseCityGmlModel(
   const objects: ImportedCityObject[] = [];
   const polygons: ImportedPolygon[] = [];
   const ticLineStrings: Array<{ vertices: readonly Point3D[]; isClosed: boolean }> = [];
+  const storeyHasKatElemaniRole = new Set<string>();
 
   const registerObject = (
     objNode: Record<string, unknown>,
     tagName: string,
     parentGmlId: string | null
   ): ImportedCityObject => {
-    const gmlId = String(objNode['@_gml:id'] ?? objNode['@_id'] ?? '').trim();
+    const gmlId = getAttrByLocalName(objNode, '@_gml:id', '@_id');
     const prefix = getIdPrefix(gmlId);
-    const gmlName = extractText(objNode['gml:name'] ?? objNode.name).trim();
+    const gmlName = extractText(
+      getNodeByLocalName(objNode, 'gml:name', 'name')
+    ).trim();
     const classValue = extractText(
-      objNode['bldg:class'] ?? objNode['grp:class'] ?? objNode['gen:class'] ?? objNode.class
+      getNodeByLocalName(objNode, 'bldg:class', 'class')
     ).trim();
 
     const attributes = parseGenericAttributesFromNode(
@@ -677,29 +804,50 @@ export function parseCityGmlModel(
     const xlinkPolygonHrefs: string[] = [];
     const groupMemberHrefs: string[] = [];
 
-    // groupMember & parent
-    const grpMembers = asArray(objNode['grp:groupMember'] ?? objNode.groupMember) as Array<
-      Record<string, unknown>
-    >;
+    // groupMember & parent (G8: ad alanı önekinden bağımsız + Biçim B role="kat elemani" desteği)
+    const grpMembers = asArray(
+      getNodeByLocalName(objNode, 'grp:groupMember', 'groupMember')
+    ) as Array<Record<string, unknown>>;
     for (const gm of grpMembers) {
-      const href = String(gm['@_xlink:href'] ?? gm['@_href'] ?? '').trim();
+      const href = getAttrByLocalName(gm, '@_xlink:href', '@_href');
       if (href) groupMemberHrefs.push(href);
+
+      const roleAttr = getAttrByLocalName(gm, '@_role', '@_role').toLowerCase();
+      if (prefix === 'K_' && roleAttr.includes('kat')) {
+        storeyHasKatElemaniRole.add(gmlId);
+      }
+
+      // Biçim B'de grp:groupMember içinde doğrudan bldg:Room bulunabilir
+      const inlineRooms = asArray(
+        getNodeByLocalName(gm, 'bldg:Room', 'Room')
+      ) as Array<Record<string, unknown>>;
+      for (const rNode of inlineRooms) {
+        if (prefix === 'K_') {
+          storeyHasKatElemaniRole.add(gmlId);
+        }
+        registerObject(rNode, 'bldg:Room', gmlId);
+      }
     }
 
-    const grpParentNode = (objNode['grp:parent'] ?? objNode.parent) as
+    const grpParentNode = getNodeByLocalName(objNode, 'grp:parent', 'parent') as
       | Record<string, unknown>
       | undefined;
     const grpParentHref = grpParentNode
-      ? String(grpParentNode['@_xlink:href'] ?? grpParentNode['@_href'] ?? '').trim()
+      ? getAttrByLocalName(grpParentNode, '@_xlink:href', '@_href')
       : '';
     const resolvedParentId = grpParentHref
       ? grpParentHref.replace(/^#/, '')
       : parentGmlId;
 
     // 1. LoD0 FootPrint & RoofEdge
-    if (objNode['bldg:lod0FootPrint']) {
+    const lod0FootPrintNode = getNodeByLocalName(
+      objNode,
+      'bldg:lod0FootPrint',
+      'lod0FootPrint'
+    ) as Record<string, unknown> | undefined;
+    if (lod0FootPrintNode) {
       collectMultiSurfacePolygonsAndXlinks(
-        objNode['bldg:lod0FootPrint'] as Record<string, unknown>,
+        lod0FootPrintNode,
         gmlId,
         prefix,
         'lod0FootPrint',
@@ -710,9 +858,14 @@ export function parseCityGmlModel(
         readerIssues
       );
     }
-    if (objNode['bldg:lod0RoofEdge']) {
+    const lod0RoofEdgeNode = getNodeByLocalName(
+      objNode,
+      'bldg:lod0RoofEdge',
+      'lod0RoofEdge'
+    ) as Record<string, unknown> | undefined;
+    if (lod0RoofEdgeNode) {
       collectMultiSurfacePolygonsAndXlinks(
-        objNode['bldg:lod0RoofEdge'] as Record<string, unknown>,
+        lod0RoofEdgeNode,
         gmlId,
         prefix,
         'lod0RoofEdge',
@@ -724,23 +877,38 @@ export function parseCityGmlModel(
       );
     }
 
-    // 2. LoD1 Solid
-    const lod1Solid = objNode['bldg:lod1Solid'] as Record<string, unknown> | undefined;
-    if (lod1Solid) {
-      const compSolid = (lod1Solid['gml:CompositeSolid'] ?? lod1Solid.CompositeSolid) as
-        | Record<string, unknown>
-        | undefined;
-      const solidMembers = asArray(compSolid?.['gml:solidMember'] ?? compSolid?.solidMember) as Array<
-        Record<string, unknown>
-      >;
+    // 2. LoD1 / LoD4 Solid (CompositeSolid veya doğrudan Solid)
+    for (const solidKey of [
+      { pref: 'bldg:lod1Solid', local: 'lod1Solid', lod: 'lod1Solid' as const },
+      { pref: 'bldg:lod4Solid', local: 'lod4Solid', lod: 'lod4' as const },
+    ]) {
+      const solidContainer = getNodeByLocalName(
+        objNode,
+        solidKey.pref,
+        solidKey.local
+      ) as Record<string, unknown> | undefined;
+      if (!solidContainer) continue;
+
+      const compSolid = getNodeByLocalName(
+        solidContainer,
+        'gml:CompositeSolid',
+        'CompositeSolid'
+      ) as Record<string, unknown> | undefined;
+      const solidMembers = asArray(
+        getNodeByLocalName(compSolid, 'gml:solidMember', 'solidMember')
+      ) as Array<Record<string, unknown>>;
       for (const sm of solidMembers) {
-        const solid = (sm['gml:Solid'] ?? sm.Solid) as Record<string, unknown> | undefined;
-        const ext = (solid?.['gml:exterior'] ?? solid?.exterior) as
+        const solid = getNodeByLocalName(sm, 'gml:Solid', 'Solid') as
           | Record<string, unknown>
           | undefined;
-        const compSurf = (ext?.['gml:CompositeSurface'] ?? ext?.CompositeSurface) as
+        const ext = getNodeByLocalName(solid, 'gml:exterior', 'exterior') as
           | Record<string, unknown>
           | undefined;
+        const compSurf = getNodeByLocalName(
+          ext,
+          'gml:CompositeSurface',
+          'CompositeSurface'
+        ) as Record<string, unknown> | undefined;
         if (compSurf) {
           collectMultiSurfacePolygonsAndXlinks(
             compSurf,
@@ -748,7 +916,37 @@ export function parseCityGmlModel(
             prefix,
             'Solid',
             'LoD1Solid',
-            'lod1Solid',
+            solidKey.lod,
+            inlinePolygons,
+            xlinkPolygonHrefs,
+            readerIssues
+          );
+        }
+      }
+
+      // Doğrudan gml:Solid (örn. Room lod4Solid)
+      const directSolid = getNodeByLocalName(
+        solidContainer,
+        'gml:Solid',
+        'Solid'
+      ) as Record<string, unknown> | undefined;
+      if (directSolid) {
+        const ext = getNodeByLocalName(directSolid, 'gml:exterior', 'exterior') as
+          | Record<string, unknown>
+          | undefined;
+        const compSurf = getNodeByLocalName(
+          ext,
+          'gml:CompositeSurface',
+          'CompositeSurface'
+        ) as Record<string, unknown> | undefined;
+        if (compSurf) {
+          collectMultiSurfacePolygonsAndXlinks(
+            compSurf,
+            gmlId,
+            prefix,
+            'FloorSurface',
+            'RoomSolid',
+            solidKey.lod,
             inlinePolygons,
             xlinkPolygonHrefs,
             readerIssues
@@ -758,22 +956,26 @@ export function parseCityGmlModel(
     }
 
     // 3. TIC (lod2TerrainIntersection)
-    const ticNode = objNode['bldg:lod2TerrainIntersection'] as
-      | Record<string, unknown>
-      | undefined;
+    const ticNode = getNodeByLocalName(
+      objNode,
+      'bldg:lod2TerrainIntersection',
+      'lod2TerrainIntersection'
+    ) as Record<string, unknown> | undefined;
     if (ticNode) {
-      const mc = (ticNode['gml:MultiCurve'] ?? ticNode.MultiCurve) as
+      const mc = getNodeByLocalName(ticNode, 'gml:MultiCurve', 'MultiCurve') as
         | Record<string, unknown>
         | undefined;
-      const curveMembers = asArray(mc?.['gml:curveMember'] ?? mc?.curveMember) as Array<
-        Record<string, unknown>
-      >;
+      const curveMembers = asArray(
+        getNodeByLocalName(mc, 'gml:curveMember', 'curveMember')
+      ) as Array<Record<string, unknown>>;
       for (const cm of curveMembers) {
-        const ls = (cm['gml:LineString'] ?? cm.LineString) as
+        const ls = getNodeByLocalName(cm, 'gml:LineString', 'LineString') as
           | Record<string, unknown>
           | undefined;
         if (ls) {
-          const posText = extractText(ls['gml:posList'] ?? ls.posList).trim();
+          const posText = extractText(
+            getNodeByLocalName(ls, 'gml:posList', 'posList')
+          ).trim();
           const toks = posText ? posText.split(/\s+/) : [];
           const verts: Point3D[] = [];
           for (let i = 0; i + 2 < toks.length; i += 3) {
@@ -794,24 +996,28 @@ export function parseCityGmlModel(
       }
     }
 
-    // 4. Doğrudan Geometri kapları (lod2MultiSurface, lod4MultiSurface, gen:lod2Geometry, grp:geometry, bldg:lod2Geometry, bldg:lod4Geometry)
+    // 4. Doğrudan Geometri kapları (G8: ad alanı önekinden bağımsız)
     const directContainers: ReadonlyArray<{
       key: string;
+      localKey: string;
       lod: ImportedPolygon['lodLevel'];
       surfTag: string;
     }> = [
-      { key: 'bldg:lod2MultiSurface', lod: 'lod2', surfTag: 'MultiSurface' },
-      { key: 'bldg:lod4MultiSurface', lod: 'lod4', surfTag: tagName },
-      { key: 'gen:lod2Geometry', lod: 'lod2', surfTag: 'BagimsizBolum' },
-      { key: 'bldg:lod2Geometry', lod: 'lod2', surfTag: 'BalkonTeras' },
-      { key: 'bldg:lod4Geometry', lod: 'lod4', surfTag: 'IcYapi' },
-      { key: 'grp:geometry', lod: 'group', surfTag: 'Kat' },
+      { key: 'bldg:lod2MultiSurface', localKey: 'lod2MultiSurface', lod: 'lod2', surfTag: 'MultiSurface' },
+      { key: 'bldg:lod4MultiSurface', localKey: 'lod4MultiSurface', lod: 'lod4', surfTag: tagName },
+      { key: 'gen:lod2Geometry', localKey: 'lod2Geometry', lod: 'lod2', surfTag: 'BagimsizBolum' },
+      { key: 'bldg:lod2Geometry', localKey: 'lod2Geometry', lod: 'lod2', surfTag: 'BalkonTeras' },
+      { key: 'bldg:lod4Geometry', localKey: 'lod4Geometry', lod: 'lod4', surfTag: 'IcYapi' },
+      { key: 'grp:geometry', localKey: 'geometry', lod: 'group', surfTag: 'Kat' },
     ];
 
     for (const dc of directContainers) {
-      if (objNode[dc.key]) {
+      const dcNode = getNodeByLocalName(objNode, dc.key, dc.localKey) as
+        | Record<string, unknown>
+        | undefined;
+      if (dcNode) {
         collectMultiSurfacePolygonsAndXlinks(
-          objNode[dc.key] as Record<string, unknown>,
+          dcNode,
           gmlId,
           prefix,
           dc.surfTag,
@@ -825,18 +1031,27 @@ export function parseCityGmlModel(
     }
 
     // 5. boundedBy (*Surface) ve içindeki opening (bldg:Door / bldg:Window)
-    const boundedByList = asArray(objNode['bldg:boundedBy'] ?? objNode.boundedBy) as Array<
-      Record<string, unknown>
-    >;
+    const boundedByList = asArray(
+      getNodeByLocalName(objNode, 'bldg:boundedBy', 'boundedBy')
+    ) as Array<Record<string, unknown>>;
     for (const bbNode of boundedByList) {
       for (const sKey of SURFACE_TAG_KEYS) {
-        const surfNodes = asArray(bbNode[sKey]) as Array<Record<string, unknown>>;
+        const shortSurfTag = sKey.replace(/^bldg:/, '');
+        const surfNodes = asArray(
+          getNodeByLocalName(bbNode, sKey, shortSurfTag)
+        ) as Array<Record<string, unknown>>;
         for (const sNode of surfNodes) {
-          const shortSurfTag = sKey.replace(/^bldg:/, '');
-          const surfName = extractText(sNode['gml:name'] ?? sNode.name).trim();
-          if (sNode['bldg:lod2MultiSurface']) {
+          const surfName = extractText(
+            getNodeByLocalName(sNode, 'gml:name', 'name')
+          ).trim();
+          const lod2Ms = getNodeByLocalName(
+            sNode,
+            'bldg:lod2MultiSurface',
+            'lod2MultiSurface'
+          ) as Record<string, unknown> | undefined;
+          if (lod2Ms) {
             collectMultiSurfacePolygonsAndXlinks(
-              sNode['bldg:lod2MultiSurface'] as Record<string, unknown>,
+              lod2Ms,
               gmlId,
               prefix,
               shortSurfTag,
@@ -847,9 +1062,14 @@ export function parseCityGmlModel(
               readerIssues
             );
           }
-          if (sNode['bldg:lod4MultiSurface']) {
+          const lod4Ms = getNodeByLocalName(
+            sNode,
+            'bldg:lod4MultiSurface',
+            'lod4MultiSurface'
+          ) as Record<string, unknown> | undefined;
+          if (lod4Ms) {
             collectMultiSurfacePolygonsAndXlinks(
-              sNode['bldg:lod4MultiSurface'] as Record<string, unknown>,
+              lod4Ms,
               gmlId,
               prefix,
               shortSurfTag,
@@ -862,19 +1082,19 @@ export function parseCityGmlModel(
           }
 
           // Açıklıklar (Door / Window)
-          const openings = asArray(sNode['bldg:opening'] ?? sNode.opening) as Array<
-            Record<string, unknown>
-          >;
+          const openings = asArray(
+            getNodeByLocalName(sNode, 'bldg:opening', 'opening')
+          ) as Array<Record<string, unknown>>;
           for (const op of openings) {
-            const doors = asArray(op['bldg:Door'] ?? op.Door) as Array<
-              Record<string, unknown>
-            >;
+            const doors = asArray(
+              getNodeByLocalName(op, 'bldg:Door', 'Door')
+            ) as Array<Record<string, unknown>>;
             for (const dNode of doors) {
               registerObject(dNode, 'bldg:Door', gmlId);
             }
-            const windows = asArray(op['bldg:Window'] ?? op.Window) as Array<
-              Record<string, unknown>
-            >;
+            const windows = asArray(
+              getNodeByLocalName(op, 'bldg:Window', 'Window')
+            ) as Array<Record<string, unknown>>;
             for (const wNode of windows) {
               registerObject(wNode, 'bldg:Window', gmlId);
             }
@@ -885,33 +1105,43 @@ export function parseCityGmlModel(
 
     // 6. Alt nesneler: outerBuildingInstallation (BLKN_ / TRS_), interiorRoom (BBK_ / OA_), roomInstallation (BBKIY_ / OAIY_)
     const outerInstalls = asArray(
-      objNode['bldg:outerBuildingInstallation'] ?? objNode.outerBuildingInstallation
+      getNodeByLocalName(
+        objNode,
+        'bldg:outerBuildingInstallation',
+        'outerBuildingInstallation'
+      )
     ) as Array<Record<string, unknown>>;
     for (const oi of outerInstalls) {
       const biList = asArray(
-        oi['bldg:BuildingInstallation'] ?? oi.BuildingInstallation
+        getNodeByLocalName(oi, 'bldg:BuildingInstallation', 'BuildingInstallation')
       ) as Array<Record<string, unknown>>;
       for (const bi of biList) {
         registerObject(bi, 'bldg:BuildingInstallation', gmlId);
       }
     }
 
-    const intRooms = asArray(objNode['bldg:interiorRoom'] ?? objNode.interiorRoom) as Array<
-      Record<string, unknown>
-    >;
+    const intRooms = asArray(
+      getNodeByLocalName(objNode, 'bldg:interiorRoom', 'interiorRoom')
+    ) as Array<Record<string, unknown>>;
     for (const ir of intRooms) {
-      const roomList = asArray(ir['bldg:Room'] ?? ir.Room) as Array<Record<string, unknown>>;
+      const roomList = asArray(
+        getNodeByLocalName(ir, 'bldg:Room', 'Room')
+      ) as Array<Record<string, unknown>>;
       for (const rNode of roomList) {
         registerObject(rNode, 'bldg:Room', gmlId);
       }
     }
 
     const roomInstalls = asArray(
-      objNode['bldg:roomInstallation'] ?? objNode.roomInstallation
+      getNodeByLocalName(objNode, 'bldg:roomInstallation', 'roomInstallation')
     ) as Array<Record<string, unknown>>;
     for (const ri of roomInstalls) {
       const ibiList = asArray(
-        ri['bldg:IntBuildingInstallation'] ?? ri.IntBuildingInstallation
+        getNodeByLocalName(
+          ri,
+          'bldg:IntBuildingInstallation',
+          'IntBuildingInstallation'
+        )
       ) as Array<Record<string, unknown>>;
       for (const ibi of ibiList) {
         registerObject(ibi, 'bldg:IntBuildingInstallation', gmlId);
@@ -956,38 +1186,60 @@ export function parseCityGmlModel(
     return cityObj;
   };
 
-  // cityObjectMember taraması
+  // cityObjectMember taraması (G8: ad alanı önekinden bağımsız + G1 ilerleme bildirimi)
   const members = asArray(
-    cityModel['core:cityObjectMember'] ?? cityModel.cityObjectMember
+    getNodeByLocalName(cityModel, 'core:cityObjectMember', 'cityObjectMember')
   ) as Array<Record<string, unknown>>;
 
   let storeysAboveGround = 0;
   let storeysBelowGround = 0;
 
-  for (const mem of members) {
-    if (mem['bldg:Building']) {
-      const bNode = mem['bldg:Building'] as Record<string, unknown>;
+  const totalMembers = Math.max(members.length, 1);
+  let lastReportedPercent = 25;
+
+  for (let idx = 0; idx < members.length; idx++) {
+    const mem = members[idx];
+    const currentPercent = 25 + Math.floor(((idx + 1) / totalMembers) * 55);
+    if (currentPercent >= lastReportedPercent + 5 || idx === members.length - 1) {
+      lastReportedPercent = currentPercent;
+      onProgress?.({
+        percent: currentPercent,
+        phase: 'Nesneler ve 3B poligon geometrileri okunuyor',
+        detail: `${idx + 1} / ${members.length} üye (${polygons.length} poligon)`,
+      });
+    }
+
+    const bNode = getNodeByLocalName(mem, 'bldg:Building', 'Building') as
+      | Record<string, unknown>
+      | undefined;
+    if (bNode) {
       storeysAboveGround = Number.parseInt(
-        extractText(bNode['bldg:storeysAboveGround'] ?? bNode.storeysAboveGround) || '0',
+        extractText(
+          getNodeByLocalName(bNode, 'bldg:storeysAboveGround', 'storeysAboveGround')
+        ) || '0',
         10
       );
       storeysBelowGround = Number.parseInt(
-        extractText(bNode['bldg:storeysBelowGround'] ?? bNode.storeysBelowGround) || '0',
+        extractText(
+          getNodeByLocalName(bNode, 'bldg:storeysBelowGround', 'storeysBelowGround')
+        ) || '0',
         10
       );
       registerObject(bNode, 'bldg:Building', null);
     }
-    if (mem['grp:CityObjectGroup']) {
-      const grpNodes = asArray(mem['grp:CityObjectGroup']) as Array<Record<string, unknown>>;
-      for (const gNode of grpNodes) {
-        registerObject(gNode, 'grp:CityObjectGroup', null);
-      }
+
+    const grpNodes = asArray(
+      getNodeByLocalName(mem, 'grp:CityObjectGroup', 'CityObjectGroup')
+    ) as Array<Record<string, unknown>>;
+    for (const gNode of grpNodes) {
+      registerObject(gNode, 'grp:CityObjectGroup', null);
     }
-    if (mem['gen:GenericCityObject']) {
-      const genNodes = asArray(mem['gen:GenericCityObject']) as Array<Record<string, unknown>>;
-      for (const genNode of genNodes) {
-        registerObject(genNode, 'gen:GenericCityObject', null);
-      }
+
+    const genNodes = asArray(
+      getNodeByLocalName(mem, 'gen:GenericCityObject', 'GenericCityObject')
+    ) as Array<Record<string, unknown>>;
+    for (const genNode of genNodes) {
+      registerObject(genNode, 'gen:GenericCityObject', null);
     }
   }
 
@@ -1128,8 +1380,13 @@ export function parseCityGmlModel(
 
   // Kat biçimi (A/B/C) ve kapı alt ofseti (mm) tespiti
   const detectedStoreyForms: StoreyGeometryForm[] = storeyObjects.map((st) => {
+    if (storeyHasKatElemaniRole.has(st.gmlId)) {
+      return 'B';
+    }
     const floorCount = st.inlinePolygons.filter((p) => p.prefix === 'Floor_').length;
-    return floorCount === 1 ? 'A' : floorCount === 2 ? 'C' : 'B';
+    if (floorCount === 2) return 'C';
+    if (floorCount === 1) return 'A';
+    return st.inlinePolygons.length > 0 || st.groupMemberHrefs.length > 0 ? 'A' : 'B';
   });
   const detectedStoreyForm: StoreyGeometryForm =
     detectedStoreyForms.length > 0 ? detectedStoreyForms[0] : 'A';
@@ -1151,14 +1408,28 @@ export function parseCityGmlModel(
     }
   }
 
-  const detectedProducerProfile: ProducerProfile =
-    detectedStoreyForm === 'B'
-      ? 'B50'
-      : detectedStoreyForm === 'C'
-      ? 'C50'
-      : 'A10';
+  const mbObj = enrichedObjects.find((o) => o.prefix === 'MB_');
+  const buildingGmlId = mbObj?.gmlId ?? '';
+  const constructionID = mbObj?.attributesMap.constructionID ?? '';
 
-  // BigInt Arsa Payı Analizi
+  // G2 & G3: Kat biçimi + ölçülen kapı alt ofseti birleşimiyle üretici profili ve V-215 BİLGİ
+  const profileResolution = resolveProducerProfileFromFormAndOffset(
+    detectedStoreyForm,
+    detectedDoorBottomOffsetMm,
+    buildingGmlId || undefined
+  );
+  const detectedProducerProfile: ProducerProfile = profileResolution.profile;
+  if (profileResolution.issue) {
+    readerIssues.push(profileResolution.issue);
+  }
+
+  onProgress?.({
+    percent: 90,
+    phase: 'BigInt arsa payı (K84) ve K89 kanonik özet hesaplanıyor',
+    detail: `${enrichedObjects.length} nesne, ${enrichedPolygons.length} poligon`,
+  });
+
+  // BigInt Arsa Payı Analizi (G4 uyumlu)
   const bbObjects = enrichedObjects.filter((o) => o.prefix === 'BB_');
   const shareInputs: IndependentSectionShareInput[] = bbObjects.map((bb) => ({
     gmlId: bb.gmlId,
@@ -1169,10 +1440,6 @@ export function parseCityGmlModel(
     registeredQuality: bb.attributesMap.registeredQuality ?? '',
   }));
   const landShareAnalysis = analyzeBuildingLandShares(shareInputs);
-
-  const mbObj = enrichedObjects.find((o) => o.prefix === 'MB_');
-  const buildingGmlId = mbObj?.gmlId ?? '';
-  const constructionID = mbObj?.attributesMap.constructionID ?? '';
 
   // K89 Kanonik Model Özeti
   const coordsMm: number[] = [];
@@ -1360,6 +1627,12 @@ export function parseCityGmlModel(
       ]
     : storeyTreeNodes;
 
+  onProgress?.({
+    percent: 100,
+    phase: 'Model okuma tamamlandı',
+    detail: `${enrichedObjects.length} nesne, ${enrichedPolygons.length} poligon`,
+  });
+
   return {
     fileName,
     fileSizeBytes: cleanXml.length,
@@ -1391,3 +1664,139 @@ export function parseCityGmlModel(
     canonicalHash,
   };
 }
+
+/**
+ * G1 (PERF-01): Web Worker'dan ana iş parçacığına (main thread) poligon köşelerini sıfır kopya (`Transferable` `ArrayBuffer`)
+ * ile aktarmak için tüm poligonların dış ve iç halka köşelerini tek bir `Float64Array` içine paketler.
+ * Paket düzeni: her halka için `[vertexCount, e0, n0, z0, e1, n1, z1, ...]`.
+ */
+export function packModelPolygonVerticesFloat64(model: ImportedModel): {
+  readonly strippedModel: ImportedModel;
+  readonly packedBuffer: Float64Array;
+} {
+  let totalDoubles = 0;
+  for (const poly of model.polygons) {
+    totalDoubles += 1 + poly.exteriorRing.vertices.length * 3;
+    for (const ir of poly.interiorRings) {
+      totalDoubles += 1 + ir.vertices.length * 3;
+    }
+  }
+
+  const packed = new Float64Array(totalDoubles);
+  let offset = 0;
+
+  const writeRing = (verts: readonly Point3D[]) => {
+    packed[offset++] = verts.length;
+    for (let i = 0; i < verts.length; i++) {
+      packed[offset++] = verts[i].e;
+      packed[offset++] = verts[i].n;
+      packed[offset++] = verts[i].z;
+    }
+  };
+
+  const emptyVerts: readonly Point3D[] = [];
+  const strippedPolygons: ImportedPolygon[] = model.polygons.map((poly) => {
+    writeRing(poly.exteriorRing.vertices);
+    for (const ir of poly.interiorRings) {
+      writeRing(ir.vertices);
+    }
+    return {
+      ...poly,
+      exteriorRing: { ...poly.exteriorRing, vertices: emptyVerts },
+      interiorRings: poly.interiorRings.map((ir) => ({
+        ...ir,
+        vertices: emptyVerts,
+      })),
+    };
+  });
+
+  const strippedPolygonsById: Record<string, ImportedPolygon> = {};
+  for (const sp of strippedPolygons) {
+    strippedPolygonsById[sp.gmlId] = sp;
+  }
+
+  const strippedObjects: ImportedCityObject[] = model.objects.map((obj) => ({
+    ...obj,
+    inlinePolygons: obj.inlinePolygons.map(
+      (ip) => strippedPolygonsById[ip.gmlId] ?? ip
+    ),
+  }));
+
+  const strippedObjectsById: Record<string, ImportedCityObject> = {};
+  for (const so of strippedObjects) {
+    strippedObjectsById[so.gmlId] = so;
+  }
+
+  return {
+    strippedModel: {
+      ...model,
+      objects: strippedObjects,
+      objectsById: strippedObjectsById,
+      polygons: strippedPolygons,
+      polygonsById: strippedPolygonsById,
+    },
+    packedBuffer: packed,
+  };
+}
+
+/**
+ * G1 (PERF-01): Web Worker'dan `Transferable` olarak gelen `Float64Array` köşe tamponunu
+ * `ImportedModel` içindeki poligon halkalarına geri yükler.
+ */
+export function hydrateModelPolygonVerticesFloat64(
+  strippedModel: ImportedModel,
+  packed: Float64Array
+): ImportedModel {
+  let offset = 0;
+  const readRing = (): Point3D[] => {
+    const count = packed[offset++] || 0;
+    const verts: Point3D[] = new Array(count);
+    for (let i = 0; i < count; i++) {
+      verts[i] = {
+        e: packed[offset++],
+        n: packed[offset++],
+        z: packed[offset++],
+      };
+    }
+    return verts;
+  };
+
+  const hydratedPolygons: ImportedPolygon[] = strippedModel.polygons.map((poly) => {
+    const extVerts = readRing();
+    const intRings: ImportedLinearRing[] = poly.interiorRings.map((ir) => ({
+      ...ir,
+      vertices: readRing(),
+    }));
+    return {
+      ...poly,
+      exteriorRing: { ...poly.exteriorRing, vertices: extVerts },
+      interiorRings: intRings,
+    };
+  });
+
+  const hydratedPolygonsById: Record<string, ImportedPolygon> = {};
+  for (const hp of hydratedPolygons) {
+    hydratedPolygonsById[hp.gmlId] = hp;
+  }
+
+  const hydratedObjects: ImportedCityObject[] = strippedModel.objects.map((obj) => ({
+    ...obj,
+    inlinePolygons: obj.inlinePolygons.map(
+      (ip) => hydratedPolygonsById[ip.gmlId] ?? ip
+    ),
+  }));
+
+  const hydratedObjectsById: Record<string, ImportedCityObject> = {};
+  for (const ho of hydratedObjects) {
+    hydratedObjectsById[ho.gmlId] = ho;
+  }
+
+  return {
+    ...strippedModel,
+    objects: hydratedObjects,
+    objectsById: hydratedObjectsById,
+    polygons: hydratedPolygons,
+    polygonsById: hydratedPolygonsById,
+  };
+}
+

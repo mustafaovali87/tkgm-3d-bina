@@ -43,12 +43,13 @@ export interface ValidationIssue {
 }
 
 /**
- * Üretici uyumluluk profilleri (`K55`, `K79`, `OY-01`, `V-215`).
+ * Üretici uyumluluk profilleri (`K55`, `K79`, `OY-01`, `V-215`, `G2`).
  * - `A10` (Varsayılan): Kat Biçim A + kapı deliği/nesnesi `+10 mm`
  * - `B50`: Kat Biçim B + kapı deliği/nesnesi `+50 mm`
  * - `C50`: Kat Biçim C (iki yatay Floor_ poligonu, dikey döşeme kenar poligonu yok, duvar zFloorBottom'dan başlar) + kapı deliği `+50 mm`, kapı nesnesi `0 mm`
+ * - Tanımlı profillere uymayan birleşimlerde (örn. Sincan `B + 10 mm`) veya ofset ölçülemediğinde (`biçim A, ofset bilinmiyor`) G2 uyarınca açık metin olarak tutulur.
  */
-export type ProducerProfile = 'A10' | 'B50' | 'C50';
+export type ProducerProfile = 'A10' | 'B50' | 'C50' | (string & {});
 
 export type StoreyGeometryForm = 'A' | 'B' | 'C';
 

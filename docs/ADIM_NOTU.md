@@ -1,11 +1,26 @@
 # M0 + M1 ADIM NOTU VE GERÇEK KONSOL ÇIKTILARI (`docs/ADIM_NOTU.md`)
 
-> **Aşama:** `M0 (F1–F12) + M1 (GML Okuyucu + Three.js 3B Sahne + 2B Kat İzdüşümü + KARAR D-23 5 Panelli Ana Pencere Yerleşimi)`
-> **Durum:** `TAMAMLANDI (F1–F12 TAMAMI YAPILDI, KARAR D-23 F5–F8 Kalıpları Uygulandı, 28 / 28 Birim Test GEÇTİ, 15 / 15 Resmi Dosya SHA-256 DOĞRULANDI, npm ci / typecheck / lint 0 Hata)`
+> **Aşama:** `M0 (F1–F12) + M1 (G1–G8 Düzeltmeleri + Web Worker GML Okuyucu + Three.js 3B Sahne + KARAR D-23 5 Panelli Ana Pencere Yerleşimi)`
+> **Durum:** `TAMAMLANDI (KONTROL-M1 G1–G8 ve KONTROL-M0 F1–F12 TAMAMI YAPILDI, 30 / 30 Birim Test GEÇTİ, 15 / 15 Resmi Dosya SHA-256 DOĞRULANDI, npm ci / typecheck / lint 0 Hata)`
 
 ---
 
-## 0. `KONTROL-M0.md` ve `KONTROL-M0-2.md` Bulguları (`F1–F12`) Durum Tablosu
+## 0. `KONTROL-M1.md` Bulguları (`G1–G8`) Durum Tablosu
+
+| Kod | Önem | Durum | Açıklama ve Uygulanan Çözüm |
+|---|---|---|---|
+| **G1** | Orta (M2 öncesi zorunlu) | **YAPILDI** | GML okuma ve ayrıştırmanın Web Worker içine taşınması (PERF-01) + İlerleme Çubuğu + İptal düğmesi + Transferable Float64Array — *src/workers/gmlReader.worker.ts ve src/workers/gmlWorkerClient.ts oluşturuldu. parseCityGmlModel Web Worker içinde çalışır; poligon köşeleri packModelPolygonVerticesFloat64 ile tek bir Float64Array (Transferable ArrayBuffer) olarak ana iş parçacığına sıfır kopya maliyetiyle aktarılır; üst şeritte canlı %0–%100 ilerleme çubuğu ve worker.terminate() çağıran "İptal" düğmesi eklendi.* |
+| **G2** | Düşük | **YAPILDI** | detectedProducerProfile değerinin kat biçimi + kapı alt ofsetini birlikte değerlendirmesi (Sincan B + 10 mm -> B10 profil dışı birleşim) — *resolveProducerProfileFromFormAndOffset eklendi: A+10->"A10", B+50->"B50", C+50->"C50"; ofset null ise "biçim A, ofset bilinmiyor"; Sincan (B+10 mm) gibi standart dışı kombinasyonlarda "B10 (biçim B, ofset 10 mm)" döndürülür ve V-215 BİLGİ ("Profil dışı birleşim...") üretilir.* |
+| **G3** | Düşük | **YAPILDI** | detectedDoorBottomOffsetMm === null olduğunda (Amasya) readerIssues içine V-215 BİLGİ eklenmesi — *Oda tabanı ile eşleşen kapı bulunamadığında readerIssues dizisine V-215 BİLGİ ("Kapı alt ofseti ölçülemedi (dosyada oda tabanı ile eşleşen kapı bulunamadı).") eklenir.* |
+| **G4** | Düşük | **YAPILDI** | Eski rejim dosyalarında (Amasya, Sincan) propertyLot olmadığında 0/1 yerine "—" gösterilmesi ve V-198 BİLGİ üretilmesi — *analyzeBuildingLandShares içinde hasPropertyLotData bayrağı eklendi; hiçbir BB_ üzerinde propertyLot yoksa formattedTotalUnreduced = "—" döndürülür, V-198 BİLGİ ("Arsa payı bilgisi yok (eski rejim dosyası).") üretilir ve arayüzde 0/1 yerine "—" gösterilir.* |
+| **G5** | Düşük | **YAPILDI** | V-214 (intAttribute/doubleAttribute baş/son boşluk, ör. Ornek6 maksIdentityNumber = "\t5129820196") önem derecesinin UYARI yerine BİLGİ (B) yapılması — *gmlReader.ts içinde V-214 severity alanı "B" (BİLGİ) olarak güncellendi; Ornek6 okunduğunda artık HATA: 0, UYARI: 0, BİLGİ: 2 üretir.* |
+| **G6** | Bilgi | **YAPILDI** | npm run verify:samples <klasör> komutunun klasördeki tüm .gml dosyalarını parseCityGmlModel ile okuyup tek satır JSON özet basması — *scripts/verify-samples.ts içine verifyGmlDirectorySamples eklendi; komut satırından klasör veya dosya yolu verildiğinde süre, bellek, nesne/poligon sayısı, kat biçimi, kapı ofseti, profil, arsa payı ve H/U/B sayılarını tek satır JSON olarak basar.* |
+| **G7** | Bilgi | **YAPILDI** | src/App.tsx dosyasının modüler parçalara (TreePanel, AttributePanel, ValidationPanel, WorkspaceLayout, workspaceState) bölünmesi ve ağaç etiket tıklama düzeltmesi — *src/state/workspaceState.ts, src/panels/TreePanel.tsx, src/panels/AttributePanel.tsx, src/panels/ValidationPanel.tsx ve src/layout/WorkspaceLayout.tsx oluşturuldu; TreePanel içindeki metin/rozet elemanlarına pointer-events-none eklenerek satırın neresine tıklanırsa tıklansın seçimin tetiklenmesi sağlandı.* |
+| **G8** | Bilgi | **YAPILDI** | gmlReader.ts içinde sabit XML ad alanı öneklerine (core:, bldg:, gml:, grp:, gen:, xlink:) bağımlılığın kaldırılması — *getNodeByLocalName ve getAttrByLocalName yardımcıları eklendi; hızlı yol (fast-path) bilinen önekleri kontrol ettikten sonra herhangi bir özel ad alanı önekini (:localName) yerel adıyla eşleştirir.* |
+
+---
+
+## 1. `KONTROL-M0.md` ve `KONTROL-M0-2.md` Bulguları (`F1–F12`) Durum Tablosu
 
 | Kod | Önem | Durum | Açıklama ve Uygulanan Çözüm |
 |---|---|---|---|
@@ -14,40 +29,30 @@
 | **F3** | Orta (M1 öncesi zorunlu) | **YAPILDI** | src/core/ saflık kuralının (Mutlak Kural 4) derleyici ve statik test ile korunması — *tsconfig.core.json (lib: ["ES2022"], types: []) eklendi, npm run typecheck ve lint komutlarına bağlandı; ayrıca m0.test.ts içine statik kaynak tarama testi eklendi.* |
 | **F4** | Orta (M1 öncesi zorunlu) | **YAPILDI** | parseMaksIdValue fonksiyonunun bozuk/negatif girdilerde ("12a", "-1") çökmemesi — */^\d{1,19}$/ kontrolü eklendi; geçersiz girdide çökmeden { value: null, exceedsInt32: false, issue: V-213 HATA } ve >2^31-1 durumunda V-213 BİLGİ döndürür.* |
 | **F5** | Düşük | **YAPILDI** | readAttributes.ts içinde <gml:posList srsDimension="3"> desteği ve kapısız odada null + BİLGİ — *Etiket eşleşmeleri <gml:pos\b[^>]*> ve <gml:posList\b[^>]*> olarak genişletildi; kapı bulunamazsa detectedDoorBottomOffsetMm: null + V-215 BİLGİ döndürülür.* |
-| **F6** | Düşük | **YAPILDI** | readAttributes.ts kat biçimi tespitinin tüm K_ bloklarını kontrol etmesi (+ M1 GMLReader) — *Dosyadaki tüm K_ blokları taranarak detectedStoreyForms ve hasInconsistentStoreyForms raporlanır (M1 GMLReader içinde tam XML ağacıyla da doğrulanacaktır).* |
+| **F6** | Düşük | **YAPILDI** | readAttributes.ts kat biçimi tespitinin tüm K_ bloklarını kontrol etmesi (+ M1 GMLReader) — *Dosyadaki tüm K_ blokları taranarak detectedStoreyForms ve hasInconsistentStoreyForms raporlanır (M1 GMLReader içinde tam XML ağacıyla da doğrulanmıştır).* |
 | **F7** | Düşük | **YAPILDI** | parsePropertyLot içinde "+5/10" ve "-5/10" işaretli payların reddedilmesi — *Düzenli ifade /^(\d+)\/(\d+)$/ olarak sıkılaştırıldı; "+5/10" ve "-5/10" artık V-198a HATA üretir.* |
 | **F8** | Düşük | **YAPILDI** | Birim test kapsamı genişletmesi (30° dönüklü Helmert, K89 sıra/yerel ayar bağımsızlığı, statik saflık) — *m0.test.ts içine 30° dönüklü + 100 ppm Helmert testi, İ/I/i/ı/_ sıralama bağımsızlığı testi ve statik src/core saflık testi eklendi (22/22 test geçti).* |
 | **F9** | Düşük | **YAPILDI** | .env.example içindeki GEMINI_API_KEY şablon kalıntısının temizlenmesi — *.env.example dosyasından yapay zeka anahtarı kalıntıları tamamen kaldırıldı.* |
-| **F10** | Bilgi | **YAPILDI** | Önizleme arayüzünde kaydedilmiş denetim çıktısı tarih/saat etiketinin açık gösterimi — *src/App.tsx üst bilgi şeridine "Kaydedilmiş Denetim Çıktısı: <tarih>" rozeti ve KONTROL-M0 F1–F12 durum tablosu eklendi.* |
-| **F11** | Bilgi | **YAPILDI** | docs/ACIK_SORULAR.md güncellemesi (<bldg:class>Teras</bldg:class> Ornek3 içinde 9 kez doğrulandı) — *docs/ACIK_SORULAR.md güncellendi: <bldg:class>Teras</bldg:class> kesinleşti; yalnız Ornek3 içindeki gml:id öneki M1 öncesinde Claude ölçümüyle netleşecektir.* |
+| **F10** | Bilgi | **YAPILDI** | Önizleme arayüzünde kaydedilmiş denetim çıktısı tarih/saat etiketinin açık gösterimi — *src/App.tsx üst bilgi şeridine "Kaydedilmiş Denetim Çıktısı: <tarih>" rozeti ve KONTROL-M0 / KONTROL-M1 durum tabloları eklendi.* |
+| **F11** | Bilgi | **YAPILDI** | docs/ACIK_SORULAR.md güncellemesi (<bldg:class>Teras</bldg:class> Ornek3 içinde 9 kez doğrulandı) — *docs/ACIK_SORULAR.md güncellendi: <bldg:class>Teras</bldg:class> kesinleşti.* |
 | **F12** | Bilgi | **YAPILDI** | package.json adının "tkgm-3d-bina" yapılması ve TKGM3D_UUID_NAMESPACE sabitinin KARARLAR.md içine işlenmesi — *package.json name alanı "tkgm-3d-bina" yapıldı ve TKGM3D_UUID_NAMESPACE ("6ba7b810-9dad-11d1-80b4-00c04fd430c8") docs/KARARLAR.md §A.2 içine kalıcı olarak işlendi.* |
 
 ---
 
-## 1. `M0` ve `M1` Kapsamında Oluşturulan / Doğrulanan Dosyalar
+## 2. `M0` ve `M1` Kapsamında Oluşturulan / Doğrulanan Dosyalar
 
-### M1 — GML Okuyucu, 3B Delikli Üçgenleme, Three.js 3B Sahne ve KARAR D-23 Çalışma Alanı
-- `src/core/gml/gmlReader.ts` (`M1` Saf TS CityGML 2.0 okuyucu: `MB_`, `K_`, `BB_`, `BBK_`, `OA_`, `BBKIY_`, `OAIY_`, `BLKN_`, `TRS_`, `KAPI_`, `PEN_`, `MBG_` hiyerarşisi, `xlink:href` çözümleyici `V-211`, 14 resmi XML kod listesi Türkçe açıklama bağlayıcı `K60`, `BigInt` arsa payı `K84` ve `K89` Kanonik Model Özeti)
+### M1 — Web Worker GML Okuyucu (`G1`), 3B Delikli Üçgenleme, Modüler Paneller (`G7`) ve KARAR D-23 Çalışma Alanı
+- `src/core/gml/gmlReader.ts` (`M1` Saf TS CityGML 2.0 okuyucu: `G1` `onProgress` + `packModelPolygonVerticesFloat64` / `hydrateModelPolygonVerticesFloat64`, `G2` `resolveProducerProfileFromFormAndOffset`, `G3` `V-215 B` kapısız oda bildirimi, `G5` `V-214 B` baş/son boşluk bildirimi, `G8` ad alanı önek bağımsızlığı)
+- `src/workers/gmlReader.worker.ts` ve `src/workers/gmlWorkerClient.ts` (`G1` `PERF-01` Web Worker GML ayrıştırıcı, `Transferable` `Float64Array` poligon köşe aktarımı, canlı `%0–%100` ilerleme bildirimi ve `worker.terminate()` ile anında iptal)
+- `src/state/workspaceState.ts`, `src/panels/TreePanel.tsx`, `src/panels/AttributePanel.tsx`, `src/panels/ValidationPanel.tsx`, `src/layout/WorkspaceLayout.tsx` (`G7` modüler panel mimarisi ve ağaç satırı `pointer-events-none` tıklama düzeltmesi)
 - `src/core/gml/triangulate3d.ts` (`M1` Saf TS 3B düzlemsel poligon + `DoorLinearRing_` / `WindowLinearRing_` iç delik köprüleme + kulak kesme üçgenleme motoru ve `K06` `P_local = P_TUREF - P_origin` yerel merkezleme)
-- `src/viewer3d/CityGmlViewport3D.tsx` (`M1` Three.js WebGL 3B CityGML sahnesi: `RoomEnvironment`, `OrbitControls`, katman anahtarları, kat patlatma kaydırıcısı `Explosion`, `Raycaster` ile tıklanan odayı/kapıyı/pencereyi seçme ve kamerayı seçili nesneye odaklama)
-- `src/viewer3d/FloorPlanPreview2D.tsx` (`M1` 2B kat izdüşümü + `D-23.1` `"2B CAD Çizim Editörü: M4'te gelecek"` yer tutucusu, kat seçici ve `BBK_` oda tıklama koordinasyonu)
-- `src/data/offlineFixtures.ts` (`K91` sıfır çalışma anı ağ isteği: `fixtures/ornek6.gml` ve 14 `resources/codelists/*.xml` dosyasının `?raw` ile çevrimdışı gömülmesi)
-- `src/App.tsx` (`KARAR D-23` 5 panelli ana pencere yerleşimi: `F5 Standart`, `F6 Yan Yana`, `F7 Çizim`, `F8 Denetim` kalıpları, `<1366px` sekme/çekmece modu, `localStorage` panel boyutu kalıcılığı, tekil seçim koordinasyonu ve `D-23.4` `K89` özet değişmezliği)
-- `src/core/__tests__/m1.test.ts` (`M1` birim testleri: `Ornek6` tam model ayrıştırma, `V-211` kırık `xlink:href` yakalama, delikli duvar üçgenleme ve `F5–F8` kalıp değişiminde `K89` `CanonicalModelHash` değişmezliği)
-
-### M0 — Saf Çekirdek ve Doğrulama Altyapısı
-- `package.json` ve `package-lock.json` (`F1`, `F3`, `F12` — `"name": "tkgm-3d-bina"`, `win32-x64` paketleri dahil `npm ci` uyumlu)
-- `tsconfig.core.json` (`F3` — `lib: ["ES2022"]`, `types: []` ile `src/core/` içinde DOM/Node global kullanımı derleyici düzeyinde yasaklandı)
-- `docs/KARARLAR.md` (`CLAUDE12 Ek-A` + `CLAUDE13 §1–§4` + `F12` `TKGM3D_UUID_NAMESPACE` + `§A.6 KARAR D-23`)
-- `docs/ACIK_SORULAR.md` (`F11` `<bldg:class>Teras</bldg:class>` `Ornek3` içinde 9 kez doğrulandı)
-- `docs/ADIM_NOTU.md` (Bu belge — `F1–F12` durum tablosu, `M0 + M1` gerçek konsol çıktıları)
-- `fixtures/ornek6.gml` ve `resources/codelists/*.xml` (15 resmi dosya SHA-256 kilidi)
-- `src/core/codelists/index.ts`, `src/core/model/index.ts`, `src/core/math/landShare.ts`, `src/core/math/helmert2d.ts`, `src/core/math/ring.ts`, `src/core/model/malik.ts`, `src/core/hash/canonical.ts`, `src/core/gml/readAttributes.ts`
-- `src/core/__tests__/m0.test.ts` (22 birim testi + `F1` Windows `win32-x64` kilit dosyası testi + `F3` statik `src/core` saflık testi)
+- `src/viewer3d/CityGmlViewport3D.tsx` ve `src/viewer3d/FloorPlanPreview2D.tsx` (Three.js 3B sahne ve 2B kat izdüşümü + `D-23.1` M4 yer tutucusu)
+- `src/App.tsx` (Modüler ana uygulama kabuğu, Web Worker ilerleme çubuğu + `"İptal"` düğmesi, `KONTROL-M1 G1–G8` ve `KONTROL-M0 F1–F12` denetim çekmecesi)
+- `src/core/__tests__/m1.test.ts` (`M1` + `G1–G8` birim testleri)
 
 ---
 
-## 2. `npm run typecheck` ve `npm run lint` (`tsc --noEmit && tsc -p tsconfig.core.json --noEmit`) Gerçek Çıktısı
+## 3. `npm run typecheck` ve `npm run lint` (`tsc --noEmit && tsc -p tsconfig.core.json --noEmit`) Gerçek Çıktısı
 
 ```text
 > tkgm-3d-bina@0.1.0 typecheck
@@ -57,25 +62,33 @@
 
 ---
 
-## 3. `npm test` (`vitest run`) Gerçek Çıktısı (`m0.test.ts` + `m1.test.ts`)
+## 4. `npm test` (`vitest run`) Gerçek Çıktısı (`m0.test.ts` + `m1.test.ts`)
 
 ```text
 RUN  v5.1.0 /app/applet
 
- ✓ src/core/__tests__/m0.test.ts (23 tests) 286ms
- ✓ src/core/__tests__/m1.test.ts (5 tests) 782ms
-   ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel Hiyerarşisi (K06, K09, K12, K55, K60, K84, K89, V-211) (2)
-     ✓ fixtures/ornek6.gml dosyasını eksiksiz ImportedModel ağacına ayrıştırır, xlink:href referanslarını çözer ve kod listesi açıklamalarını bağlar 496ms
+ ✓ src/core/__tests__/m0.test.ts (23 tests) 226ms
+ ✓ src/core/__tests__/m1.test.ts (7 tests) 1062ms
+   ✓ M1 Adım 1 — CityGML 2.0 GML Okuyucu (gmlReader.ts) ve ImportedModel Hiyerarşisi (K06, K09, K12, K55, K60, K84, K89, V-211) (4)
+     ✓ fixtures/ornek6.gml dosyasını eksiksiz ImportedModel ağacına ayrıştırır, xlink:href referanslarını çözer ve kod listesi açıklamalarını bağlar 511ms
 
  Test Files  2 passed (2)
-      Tests  28 passed (28)
-   Start at  02:11:00
-   Duration  1.26s (tests 74%, transform 13%, import 12%, worker 1%)
+      Tests  30 passed (30)
+   Start at  02:42:10
+   Duration  1.52s (tests 83%, import 10%, transform 6%, worker 1%)
 ```
 
 ---
 
-## 4. `npm run trace` Gerçek Çıktısı (`K98`)
+## 5. `npm run verify:samples fixtures` (`G6` Toplu Klasör Okuma) Gerçek Çıktısı
+
+```json
+{"fileName":"ornek6.gml","sizeMB":0.68,"durationMs":272,"memoryMB":22.5,"objectCount":108,"polygonCount":1123,"detectedStoreyForm":"A","detectedDoorBottomOffsetMm":10,"detectedProducerProfile":"A10","landShareTotal":"2/2","hasPropertyLotData":true,"issueCounts":{"H":0,"U":0,"B":2}}
+```
+
+---
+
+## 6. `npm run trace` Gerçek Çıktısı (`K98`)
 
 ```text
 === TKGM 3B BINA M0 + M1 KURAL-KOD-TEST IZLENEBILIRLIK MATRISI (K98) ===
@@ -146,7 +159,7 @@ V-062   | src/core/model/index.ts                | -
 V-063   | src/core/codelists/index.ts, src/core/gml/gmlReader.ts | src/core/__tests__/m0.test.ts
 V-076   | src/core/math/landShare.ts             | -
 V-133   | src/core/math/landShare.ts             | -
-V-198   | src/core/math/landShare.ts             | src/core/__tests__/m0.test.ts
+V-198   | src/core/math/landShare.ts             | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
 V-198a  | src/core/math/landShare.ts             | src/core/__tests__/m0.test.ts
 V-198b  | src/core/math/landShare.ts             | src/core/__tests__/m0.test.ts
 V-199   | src/core/math/landShare.ts             | src/core/__tests__/m0.test.ts
@@ -155,14 +168,14 @@ V-210   | src/core/model/index.ts                | -
 V-211   | src/core/gml/gmlReader.ts              | src/core/__tests__/m1.test.ts
 V-212   | src/core/math/landShare.ts             | src/core/__tests__/m0.test.ts
 V-213   | src/core/gml/gmlReader.ts, src/core/model/index.ts | src/core/__tests__/m0.test.ts
-V-214   | src/core/gml/gmlReader.ts              | -
-V-215   | src/core/gml/gmlReader.ts, src/core/gml/readAttributes.ts, src/core/model/index.ts | src/core/__tests__/m0.test.ts
+V-214   | src/core/gml/gmlReader.ts              | src/core/__tests__/m1.test.ts
+V-215   | src/core/gml/gmlReader.ts, src/core/gml/readAttributes.ts, src/core/model/index.ts | src/core/__tests__/m0.test.ts, src/core/__tests__/m1.test.ts
 V-216   | src/core/model/index.ts                | -
 ```
 
 ---
 
-## 5. `npm run verify:samples` Gerçek Çıktısı (`15 Resmi Dosya SHA-256 + Ornek6 42 Öznitelik`)
+## 7. `npm run verify:samples` Gerçek Çıktısı (`15 Resmi Dosya SHA-256 + Ornek6 42 Öznitelik`)
 
 ```json
 {

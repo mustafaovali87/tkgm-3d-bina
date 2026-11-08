@@ -235,6 +235,10 @@ export interface BuildingLandShareAnalysis {
   readonly totalPartObjects: number;
   readonly uniqueBbCount: number; // K31, V-076 (5'li birleşik anahtar sayısı)
   readonly uniqueShortBbNoCount: number; // 3'lü (blockName, entrance, bbNo) sayısı
+  readonly hasPropertyLotData: boolean; // G4: En az bir BB'de propertyLot var mı?
+  readonly formattedTotalUnreduced: string; // G4: propertyLot yoksa '—', varsa 'pay/payda'
+  readonly formattedTotalReduced: string; // G4: propertyLot yoksa '—', varsa 'pay/payda'
+  readonly formattedDiffFromOne: string; // G4: propertyLot yoksa '—', varsa 'fark/payda'
   readonly totalShareReduced: BigIntFraction;
   readonly totalShareUnreduced: BigIntFraction; // Ortak payda korunarak toplam (örn. 103500/104683)
   readonly diffFromOneReduced: BigIntFraction; // total - 1
@@ -245,11 +249,14 @@ export interface BuildingLandShareAnalysis {
 
 /**
  * Binadaki tüm BB parçalarının arsa paylarını ve benzersiz BB sayısını `BigInt` ile analiz eder
- * (`// K31`, `// K84`, `// V-076`, `// V-198`, `// V-198a`, `// V-198b`, `// V-199`, `// V-212`).
+ * (`// K31`, `// K84`, `// V-076`, `// V-198`, `// V-198a`, `// V-198b`, `// V-199`, `// V-212`, `G4`).
  * - Dubleks/tripleks parçalar aynı 5'li anahtarı taşıdığı için arsa payı toplamına **1 kez** katılır (`K30`, `K31`).
  * - `Ornek1 #41` gibi aynı `(blockName, entrance, independentSectionNumber)` altında farklı `propertyLot`
  *   veya farklı `registeredQuality` taşıyan kayıtlar ayrı BB olarak sayılır ve `V-212 UYARI` üretilir (`N32`).
  * - Toplam arsa payı `≠ 1` ise `V-199 BİLGİ` üretilir (`FUA5P9`: `103500/104683`).
+ * - `G4`: Hiçbir bağımsız bölümde `propertyLot` yoksa (örn. `Amasya`, `Sincan` eski rejim dosyaları),
+ *   toplam hesaplanmaz (`formattedTotalUnreduced = '—'`), sahte `V-198a` / `V-199` üretilmez ve
+ *   `"Arsa payı bilgisi yok (eski rejim dosyası)"` `BİLGİ (B)` mesajı üretilir.
  */
 // K31
 // K84
@@ -263,6 +270,46 @@ export function analyzeBuildingLandShares(
   sections: readonly IndependentSectionShareInput[]
 ): BuildingLandShareAnalysis {
   const issues: ValidationIssue[] = [];
+  const hasPropertyLotData = sections.some((s) => s.propertyLot.trim().length > 0);
+
+  if (!hasPropertyLotData) {
+    const shortKeys = new Set<string>();
+    const compositeKeys = new Set<string>();
+    for (const sec of sections) {
+      const block = sec.blockName.trim();
+      const entrance = sec.entrance.trim();
+      const bbNo = sec.independentSectionNumber.trim();
+      const normQuality = normalizeTurkishUpper(sec.registeredQuality);
+      shortKeys.add(`${block}|${entrance}|${bbNo}`);
+      compositeKeys.add(`${block}|${entrance}|${bbNo}||${normQuality}`);
+    }
+
+    if (sections.length > 0) {
+      issues.push({
+        ruleId: 'V-198',
+        severity: 'B',
+        message: 'Arsa payı bilgisi yok (eski rejim dosyası).',
+      });
+    }
+
+    const zeroFrac: BigIntFraction = { numerator: 0n, denominator: 1n };
+    return {
+      totalPartObjects: sections.length,
+      uniqueBbCount: compositeKeys.size,
+      uniqueShortBbNoCount: shortKeys.size,
+      hasPropertyLotData: false,
+      formattedTotalUnreduced: '—',
+      formattedTotalReduced: '—',
+      formattedDiffFromOne: '—',
+      totalShareReduced: zeroFrac,
+      totalShareUnreduced: zeroFrac,
+      diffFromOneReduced: zeroFrac,
+      diffFromOneUnreduced: zeroFrac,
+      isCompleteShareEqualOne: false,
+      issues,
+    };
+  }
+
   const uniqueByComposite = new Map<
     string,
     {
@@ -357,17 +404,15 @@ export function analyzeBuildingLandShares(
   const isCompleteShareEqualOne =
     sumReduced.numerator === 1n && sumReduced.denominator === 1n;
 
+  const formattedTotalUnreduced = formatBigIntFraction(totalShareUnreduced);
+  const formattedTotalReduced = formatBigIntFraction(sumReduced);
+  const formattedDiffFromOne = formatBigIntFraction(diffFromOneUnreduced);
+
   if (!isCompleteShareEqualOne && uniqueByComposite.size > 0) {
     issues.push({
       ruleId: 'V-199',
       severity: 'B',
-      message: `Benzersiz bağımsız bölümlerin arsa payı toplamı 1 tam değil: ${formatBigIntFraction(
-        totalShareUnreduced
-      )} (sadeleşmiş: ${formatBigIntFraction(
-        sumReduced
-      )}, fark: ${formatBigIntFraction(
-        diffFromOneUnreduced
-      )}). Çok bloklu parselde blok toplamının < 1 olması normaldir.`,
+      message: `Benzersiz bağımsız bölümlerin arsa payı toplamı 1 tam değil: ${formattedTotalUnreduced} (sadeleşmiş: ${formattedTotalReduced}, fark: ${formattedDiffFromOne}). Çok bloklu parselde blok toplamının < 1 olması normaldir.`,
     });
   }
 
@@ -375,6 +420,10 @@ export function analyzeBuildingLandShares(
     totalPartObjects: sections.length,
     uniqueBbCount: uniqueByComposite.size,
     uniqueShortBbNoCount: compositeKeysByShortKey.size,
+    hasPropertyLotData: true,
+    formattedTotalUnreduced,
+    formattedTotalReduced,
+    formattedDiffFromOne,
     totalShareReduced: sumReduced,
     totalShareUnreduced,
     diffFromOneReduced,
